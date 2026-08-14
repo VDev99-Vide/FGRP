@@ -81,11 +81,19 @@ export function useInventory() {
     })
 
     const diff = totalAct - totalIsc
-    const diffPercentNum = totalIsc !== 0 ? ((diff / totalIsc) * 100).toFixed(2) : '0'
+    let diffPercentFormatted = '0%'
+    if (totalIsc > 0) {
+      const pct = (diff / totalIsc) * 100
+      diffPercentFormatted = (pct > 0 ? '+' : '') + pct.toFixed(2) + '%'
+    } else if (totalAct > 0) {
+      diffPercentFormatted = '+100%'
+    } else {
+      diffPercentFormatted = '0%'
+    }
 
     kpi.totalActual = totalAct
     kpi.diff = diff
-    kpi.diffPercent = diffPercentNum + '%'
+    kpi.diffPercent = diffPercentFormatted
     kpi.noData = noDataCount
     kpi.move = moveCount
     

@@ -86,21 +86,22 @@ iscala_by_feature as (
   group by substring(trim(lp_no) from 2 for 4)
 )
 select
-  a.feature,
+  coalesce(a.feature, i.feature)                                 as feature,
   coalesce(a.actual, 0)                                          as actual,
   coalesce(i.iscala, 0)                                          as iscala,
   coalesce(a.actual, 0) - coalesce(i.iscala, 0)                 as diff,
   case
-    when coalesce(i.iscala, 0) = 0 then 0::numeric
+    when coalesce(i.iscala, 0) = 0 then
+      case when coalesce(a.actual, 0) > 0 then 100::numeric else 0::numeric end
     else round(
       ((coalesce(a.actual, 0) - coalesce(i.iscala, 0)) / i.iscala) * 100,
       2
     )
   end                                                            as diff_percent
 from actual_by_feature a
-left join iscala_by_feature i
+full outer join iscala_by_feature i
   on a.feature = i.feature
-order by a.feature;
+order by coalesce(a.feature, i.feature);
 
 -- ============================================================
 -- BƯỚC 4: RPC REPLACE_MASTER_DATA
