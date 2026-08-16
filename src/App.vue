@@ -54,8 +54,8 @@
             </button>
           </div>
           <div v-else class="flex items-center gap-2 px-3 py-1.5 bg-[#05C168]/15 border border-[#05C168]/30 backdrop-blur-md rounded-[8px] text-[#14CA74] text-xs font-semibold shadow-sm">
-            <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74]"></span>
-            <span>Supabase Trực Tiếp</span>
+            <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74] animate-pulse"></span>
+            <span>Database kết nối</span>
           </div>
 
           <div class="text-right pl-3 border-l border-white/10">

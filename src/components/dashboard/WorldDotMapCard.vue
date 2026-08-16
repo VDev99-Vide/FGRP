@@ -171,180 +171,41 @@
         </svg>
 
         <!-- ------------------------------------------------------------- -->
-        <!-- CÁC CHẤM TỌA ĐỘ TRẢI ĐỀU 5% TỪ TÂM RA NGOÀI                    -->
+        <!-- CÁC CHẤM TỌA ĐỘ ĐỒNG BỘ 100% THEO SỐ LƯỢNG LỖI VÀ TRÙNG        -->
         <!-- ------------------------------------------------------------- -->
         <div class="absolute inset-0 pointer-events-auto">
 
           <!-- ================= 1. CÁC CHẤM ĐỎ (TAG ID LỖI - TẬP TRUNG TẠI VÙNG TÂM) ================= -->
-          
-          <!-- Red Dot 1: Tâm chính diện (50%, 50%) -->
-          <div class="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FF5A65] shadow-[0_0_10px_#FF5A65]"></span>
+          <div 
+            v-for="dot in dynamicRedDots" 
+            :key="dot.id"
+            :style="{ top: dot.top, left: dot.left }"
+            class="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer transition-all duration-700"
+            :title="`Tag Lỗi: ${dot.tagId} (Bin: ${dot.bin})`"
+          >
+            <span :class="['relative flex', redDotSizeClass]">
+              <span 
+                v-if="dot.isPing"
+                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75"
+              ></span>
+              <span :class="['relative inline-flex rounded-full bg-[#FF5A65] shadow-[0_0_6px_#FF5A65]', redDotSizeClass]"></span>
             </span>
           </div>
 
-          <!-- Red Dot 2: Tâm - Bắc 5% (45%, 50%) -->
-          <div class="absolute top-[45%] left-[50%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75" style="animation-delay: 200ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FF5A65] shadow-[0_0_8px_#FF5A65]"></span>
-            </span>
-          </div>
-
-          <!-- Red Dot 3: Tâm - Nam 5% (55%, 50%) -->
-          <div class="absolute top-[55%] left-[50%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75" style="animation-delay: 400ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FF5A65] shadow-[0_0_8px_#FF5A65]"></span>
-            </span>
-          </div>
-
-          <!-- Red Dot 4: Tâm - Tây 5% (50%, 45%) -->
-          <div class="absolute top-[50%] left-[45%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75" style="animation-delay: 600ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FF5A65] shadow-[0_0_8px_#FF5A65]"></span>
-            </span>
-          </div>
-
-          <!-- Red Dot 5: Tâm - Đông 5% (50%, 55%) -->
-          <div class="absolute top-[50%] left-[55%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75" style="animation-delay: 800ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FF5A65] shadow-[0_0_8px_#FF5A65]"></span>
-            </span>
-          </div>
-
-          <!-- Red Dot 6: Tâm - Tây Bắc 5% (45%, 45%) -->
-          <div class="absolute top-[45%] left-[45%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75" style="animation-delay: 300ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FF5A65] shadow-[0_0_8px_#FF5A65]"></span>
-            </span>
-          </div>
-
-          <!-- Red Dot 7: Tâm - Đông Nam 5% (55%, 55%) -->
-          <div class="absolute top-[55%] left-[55%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75" style="animation-delay: 500ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FF5A65] shadow-[0_0_8px_#FF5A65]"></span>
-            </span>
-          </div>
-
-
-          <!-- ================= 2. CÁC CHẤM VÀNG (TAG ID TRÙNG - TRẢI ĐỀU RA NGOÀI THEO BƯỚC 5%) ================= -->
-
-          <!-- Amber Dot 1: Vòng 1 - Bắc (38%, 50%) -->
-          <div class="absolute top-[38%] left-[50%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 150ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 2: Vòng 1 - Nam (62%, 50%) -->
-          <div class="absolute top-[62%] left-[50%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 350ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 3: Vòng 1 - Tây (50%, 38%) -->
-          <div class="absolute top-[50%] left-[38%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 550ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 4: Vòng 1 - Đông (50%, 62%) -->
-          <div class="absolute top-[50%] left-[62%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 750ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 5: Vòng 2 - Tây Bắc (38%, 38%) -->
-          <div class="absolute top-[38%] left-[38%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 250ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 6: Vòng 2 - Đông Bắc (38%, 62%) -->
-          <div class="absolute top-[38%] left-[62%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 450ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 7: Vòng 2 - Tây Nam (62%, 38%) -->
-          <div class="absolute top-[62%] left-[38%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 650ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 8: Vòng 2 - Đông Nam (62%, 62%) -->
-          <div class="absolute top-[62%] left-[62%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 850ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 9: Vòng 3 - Xa Tây (50%, 26%) -->
-          <div class="absolute top-[50%] left-[26%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 950ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 10: Vòng 3 - Xa Đông (50%, 74%) -->
-          <div class="absolute top-[50%] left-[74%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 1050ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 11: Vòng 3 - Xa Tây Bắc (26%, 26%) -->
-          <div class="absolute top-[26%] left-[26%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 1150ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 12: Vòng 3 - Xa Đông Bắc (26%, 74%) -->
-          <div class="absolute top-[26%] left-[74%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 1250ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 13: Vòng 3 - Xa Tây Nam (74%, 26%) -->
-          <div class="absolute top-[74%] left-[26%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 1350ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
-            </span>
-          </div>
-
-          <!-- Amber Dot 14: Vòng 3 - Xa Đông Nam (74%, 74%) -->
-          <div class="absolute top-[74%] left-[74%] -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-            <span class="relative flex h-3.5 w-3.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75" style="animation-delay: 1450ms;"></span>
-              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#FDB52A] shadow-[0_0_10px_#FDB52A]"></span>
+          <!-- ================= 2. CÁC CHẤM VÀNG (TAG ID TRÙNG - PHÂN BỔ NGOẠI VI) ================= -->
+          <div 
+            v-for="dot in dynamicAmberDots" 
+            :key="dot.id"
+            :style="{ top: dot.top, left: dot.left }"
+            class="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer transition-all duration-700"
+            :title="`Tag Trùng: ${dot.tagId} (Bin: ${dot.bin})`"
+          >
+            <span :class="['relative flex', amberDotSizeClass]">
+              <span 
+                v-if="dot.isPing"
+                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75"
+              ></span>
+              <span :class="['relative inline-flex rounded-full bg-[#FDB52A] shadow-[0_0_6px_#FDB52A]', amberDotSizeClass]"></span>
             </span>
           </div>
 
@@ -357,7 +218,7 @@
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A65] opacity-75"></span>
               <span class="relative inline-flex rounded-full h-2 w-2 bg-[#FF5A65]"></span>
             </span>
-            <span class="text-[#FF5A65] font-bold">Tâm: Tag Lỗi</span>
+            <span class="text-[#FF5A65] font-bold">Tâm: Tag Lỗi ({{ errorTagCount }})</span>
           </div>
           <div class="w-[1px] h-3 bg-white/20"></div>
           <div class="flex items-center gap-1.5">
@@ -365,7 +226,7 @@
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FDB52A] opacity-75"></span>
               <span class="relative inline-flex rounded-full h-2 w-2 bg-[#FDB52A]"></span>
             </span>
-            <span class="text-[#FDB52A] font-bold">Rìa: Tag Trùng</span>
+            <span class="text-[#FDB52A] font-bold">Rìa: Tag Trùng ({{ duplicateTagCount }})</span>
           </div>
         </div>
       </div>
@@ -388,14 +249,14 @@ const props = defineProps<{
 const totalTags = computed(() => props.inventoryData.length)
 
 // Error tags count and percent
-const errorTagCount = computed(() => props.analysis.noData.length)
+const errorTagCount = computed(() => props.analysis.noData.length || (props.kpi?.noData ?? 0))
 const errorTagPercent = computed(() => {
   if (totalTags.value === 0) return '0.0'
   return ((errorTagCount.value / totalTags.value) * 100).toFixed(1)
 })
 
 // Duplicate tags count and percent
-const duplicateTagCount = computed(() => props.analysis.duplicates.length)
+const duplicateTagCount = computed(() => props.analysis.duplicates.length || (props.kpi?.duplicates ?? 0))
 const duplicateTagPercent = computed(() => {
   if (totalTags.value === 0) return '0.0'
   return ((duplicateTagCount.value / totalTags.value) * 100).toFixed(1)
@@ -414,6 +275,103 @@ const safePercent = computed(() => {
   if (totalTags.value === 0) return '100.0'
   const pct = 100 - parseFloat(errorTagPercent.value) - parseFloat(duplicateTagPercent.value)
   return Math.max(0, pct).toFixed(1)
+})
+
+interface MatrixDot {
+  id: string
+  top: string
+  left: string
+  isPing: boolean
+  tagId?: string
+  bin?: string
+}
+
+const tagBinMap = computed(() => {
+  const map = new Map<string, string>()
+  props.inventoryData.forEach(row => {
+    if (row.tag_id) map.set(row.tag_id, row.bin || 'N/A')
+  })
+  return map
+})
+
+// 1. Dynamic Red Dots matching errorTagCount (e.g. 107 dots)
+const dynamicRedDots = computed((): MatrixDot[] => {
+  const count = errorTagCount.value || 0
+  if (count === 0) return []
+
+  const errorItems = props.analysis.noData || []
+  const dots: MatrixDot[] = []
+
+  for (let i = 0; i < count; i++) {
+    // Golden spiral (Fibonacci distribution for even radial dispersion from center)
+    const theta = i * 2.39996323 // golden angle in radians
+    const rNorm = Math.sqrt((i + 0.5) / count)
+    const rY = rNorm * 23 // max 23% vertical spread from 50%
+    const rX = rNorm * 38 // max 38% horizontal spread from 50%
+
+    const left = Math.max(10, Math.min(90, 50 + rX * Math.cos(theta)))
+    const top = Math.max(14, Math.min(86, 50 + rY * Math.sin(theta)))
+
+    const tagId = errorItems[i] || `Tag #${i + 1}`
+    const bin = tagBinMap.value.get(tagId) || 'BR'
+    dots.push({
+      id: `red-dot-${i}`,
+      left: `${left.toFixed(2)}%`,
+      top: `${top.toFixed(2)}%`,
+      isPing: i < 5 || (count > 20 && i % Math.ceil(count / 6) === 0),
+      tagId,
+      bin
+    })
+  }
+
+  return dots
+})
+
+// 2. Dynamic Amber Dots matching duplicateTagCount
+const dynamicAmberDots = computed((): MatrixDot[] => {
+  const count = duplicateTagCount.value || 0
+  if (count === 0) return []
+
+  const dupItems = props.analysis.duplicates || []
+  const dots: MatrixDot[] = []
+
+  for (let j = 0; j < count; j++) {
+    const theta = j * 2.39996323 + 1.25
+    const rNorm = (j + 0.5) / count
+    const rY = 27 + rNorm * 15 // outer ring (27% to 42% from center)
+    const rX = 35 + rNorm * 18 // outer ring horizontal (35% to 53%)
+
+    const left = Math.max(6, Math.min(94, 50 + rX * Math.cos(theta)))
+    const top = Math.max(10, Math.min(90, 50 + rY * Math.sin(theta)))
+
+    const tagId = dupItems[j] || `Dup #${j + 1}`
+    const bin = tagBinMap.value.get(tagId) || 'BR'
+    dots.push({
+      id: `amber-dot-${j}`,
+      left: `${left.toFixed(2)}%`,
+      top: `${top.toFixed(2)}%`,
+      isPing: j < 4 || (count > 10 && j % Math.ceil(count / 4) === 0),
+      tagId,
+      bin
+    })
+  }
+
+  return dots
+})
+
+// Dynamic dot dimensions based on dot count
+const redDotSizeClass = computed(() => {
+  const n = errorTagCount.value
+  if (n > 80) return 'w-1.5 h-1.5'
+  if (n > 40) return 'w-2 h-2'
+  return 'w-3 h-3'
+})
+
+const amberDotSizeClass = computed(() => {
+  const m = duplicateTagCount.value
+  if (m > 80) return 'w-1.5 h-1.5'
+  if (m > 40) return 'w-2 h-2'
+  return 'w-3 h-3'
 })
 </script>
 

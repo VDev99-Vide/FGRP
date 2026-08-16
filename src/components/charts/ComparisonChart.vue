@@ -1,25 +1,17 @@
 <template>
   <div class="glass-card-dark p-6 lg:p-8 flex flex-col justify-between relative overflow-hidden">
     <!-- Header Block with Title & Right Legend -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
-      <!-- Left Metric Info + Header Actual vs iScala & Tỷ Lệ Chênh Lệch -->
-      <div class="flex flex-col sm:flex-row sm:items-baseline gap-4 sm:gap-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
+      <!-- Left Title: Actual vs iScala & Tỷ Lệ Chênh Lệch flush to left with neon highlight -->
+      <div class="flex items-center gap-3">
+        <div class="w-2 h-6 bg-gradient-to-b from-[#00C2FF] to-[#CB3CFF] rounded-full shadow-[0_0_10px_#00C2FF]"></div>
         <div>
-          <div class="flex items-center gap-2 mb-1.5">
-            <span class="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#14CA74] bg-[#05C168]/20 border border-[#05C168]/30 px-2 py-0.5 rounded-[2px]">
-              {{ totalDiffPercent }}
-              <ArrowUpRight class="w-3 h-3 stroke-[2.5]" />
+          <h2 class="text-base sm:text-[17px] font-black text-white tracking-wide uppercase flex items-center gap-2">
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-white via-[#E0F2FE] to-[#CB3CFF] drop-shadow-[0_0_12px_rgba(0,194,255,0.4)]">
+              Actual vs iScala &amp; Tỷ Lệ Chênh Lệch
             </span>
-          </div>
-          <p class="text-xs text-[#AEB9E1] font-medium">Tổng số lượng PCS</p>
-          <h2 class="text-2xl lg:text-3xl font-bold text-white tracking-tight mt-0.5">
-            {{ formattedTotalPcs }}(PCS)
           </h2>
-        </div>
-
-        <div class="sm:pl-8 sm:border-l border-white/10 flex flex-col justify-end">
-          <p class="text-xs font-bold text-[#AEB9E1] uppercase tracking-wider">Actual vs iScala &amp; Tỷ Lệ Chênh Lệch</p>
-          <p class="text-[11px] text-[#AEB9E1]/70 mt-0.5">So sánh chi tiết dữ liệu thực tế và hệ thống iScala theo từng Feature</p>
+          <p class="text-xs text-[#AEB9E1] mt-0.5 font-medium">So sánh chi tiết dữ liệu thực tế và hệ thống iScala theo từng Feature</p>
         </div>
       </div>
 
@@ -48,7 +40,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowUpRight } from 'lucide-vue-next'
 import { SummaryAnalysisRow } from '@/types'
 import { formatNumber } from '@/utils/format'
 
@@ -56,26 +47,7 @@ const props = defineProps<{
   data: SummaryAnalysisRow[]
 }>()
 
-// Format total PCS dynamically
-const formattedTotalPcs = computed(() => {
-  if (!props.data || props.data.length === 0) return '55.000'
-  const total = props.data.reduce((sum, d) => sum + (Number(d.actual) || 0), 0)
-  return total > 0 ? formatNumber(total) : '55.000'
-})
-
-// Calculate total diff percent
-const totalDiffPercent = computed(() => {
-  if (!props.data || props.data.length === 0) return '28.4%'
-  const totalActual = props.data.reduce((sum, d) => sum + (Number(d.actual) || 0), 0)
-  const totalIscala = props.data.reduce((sum, d) => sum + (Number(d.iscala) || 0), 0)
-
-  if (totalIscala === 0) return '+100%'
-  const diff = totalActual - totalIscala
-  const pct = (diff / totalIscala) * 100
-  return (pct > 0 ? '+' : '') + pct.toFixed(1) + '%'
-})
-
-// ECharts Neon Wave Options matching image.png
+// Process chart data from summary rowsOptions matching image.png
 const chartOption = computed(() => {
   // Use real data features or default design sample sequence
   let features = ['1009', '1010', '2072', '2032', '3569', '3565', '3695', '4151', '4152', '4183', '5151', '5152', '5183', '6026', '6072', '8634', '8695']

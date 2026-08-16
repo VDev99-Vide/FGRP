@@ -9,7 +9,7 @@
           </div>
           <span class="text-xs font-semibold text-[#AEB9E1]">Tổng Tồn Thực Tế</span>
         </div>
-        <span class="text-[10px] font-semibold text-[#AEB9E1]/70 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-[4px]">
+        <span class="text-[10px] font-bold text-[#CB3CFF] bg-[#CB3CFF]/15 border border-[#CB3CFF]/40 px-2 py-0.5 rounded-[4px] shadow-[0_0_8px_rgba(203,60,255,0.25)]">
           PCS (Actual)
         </span>
       </div>
@@ -34,7 +34,7 @@
           </div>
           <span class="text-xs font-semibold text-[#AEB9E1]">Chênh Lệch Hệ Thống</span>
         </div>
-        <span class="text-[10px] font-semibold text-[#AEB9E1]/70 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-[4px]">
+        <span class="text-[10px] font-bold text-[#00C2FF] bg-[#00C2FF]/15 border border-[#00C2FF]/40 px-2 py-0.5 rounded-[4px] shadow-[0_0_8px_rgba(0,194,255,0.25)]">
           vs iScala
         </span>
       </div>
@@ -68,7 +68,7 @@
           </div>
           <span class="text-xs font-semibold text-[#AEB9E1]">TagID Không khớp</span>
         </div>
-        <span class="text-[10px] font-semibold text-[#AEB9E1]/70 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-[4px]">
+        <span class="text-[10px] font-bold text-[#FF5A65] bg-[#FF5A65]/15 border border-[#FF5A65]/40 px-2 py-0.5 rounded-[4px] shadow-[0_0_8px_rgba(255,90,101,0.25)]">
           No Data
         </span>
       </div>
@@ -100,7 +100,7 @@
           </div>
           <span class="text-xs font-semibold text-[#AEB9E1]">Cần Chuyển Kho</span>
         </div>
-        <span class="text-[10px] font-semibold text-[#AEB9E1]/70 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-[4px]">
+        <span class="text-[10px] font-bold text-[#2F6FED] bg-[#2F6FED]/15 border border-[#2F6FED]/40 px-2 py-0.5 rounded-[4px] shadow-[0_0_8px_rgba(47,111,237,0.25)]">
           WH 50 &amp; 62
         </span>
       </div>
@@ -124,7 +124,7 @@
           </div>
           <span class="text-xs font-semibold text-[#AEB9E1]">Trùng TagID</span>
         </div>
-        <span class="text-[10px] font-semibold text-[#FDB52A] bg-[#FDB52A]/10 border border-[#FDB52A]/30 px-1.5 py-0.5 rounded-[4px]">
+        <span class="text-[10px] font-bold text-[#FDB52A] bg-[#FDB52A]/15 border border-[#FDB52A]/40 px-2 py-0.5 rounded-[4px] shadow-[0_0_8px_rgba(253,181,42,0.25)]">
           Verify required
         </span>
       </div>

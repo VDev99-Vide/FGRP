@@ -33,11 +33,14 @@
       </div>
     </div>
 
-    <!-- DỮ LIỆU RENDER TRỰC TIẾP TRÊN BẢNG KÍNH MỜ TIÊU CHUẨN (FROSTED GLASS TABLE) -->
-    <div class="overflow-x-auto overflow-y-auto max-h-[640px] custom-scroll rounded-[14px] border border-white/10 glass-table-container">
+    <!-- DỮ LIỆU RENDER TRỰC TIẾP TRÊN BẢNG KÍNH MỜ (RENDER TỪNG ĐỢT 50 DÒNG CHỐNG CRASH) -->
+    <div 
+      @scroll.passive="handleScroll"
+      class="overflow-x-auto overflow-y-auto max-h-[640px] custom-scroll rounded-[14px] border border-white/10 glass-table-container relative"
+    >
       <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
         <!-- Table Header (Sticky) -->
-        <thead class="bg-[#283241]/85 backdrop-blur-md text-[#AEB9E1] font-semibold border-b border-white/10 sticky top-0 z-20">
+        <thead class="bg-[#283241]/90 backdrop-blur-md text-[#AEB9E1] font-semibold border-b border-white/10 sticky top-0 z-20">
           <tr>
             <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">MÃ HÀNG (STOCK CODE)</th>
             <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
@@ -51,7 +54,7 @@
           </tr>
         </thead>
 
-        <!-- Table Body with Feature Groups & Direct Rows -->
+        <!-- Table Body with Feature Groups & Direct Data Rows -->
         <tbody class="divide-y divide-white/[0.06] font-medium">
           <template v-for="item in displayedRows" :key="item._id">
             <!-- 1. GROUP HEADER ROW -->
@@ -194,6 +197,23 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- Progressive Chunk Loading Bottom Bar -->
+      <div 
+        v-if="displayLimit < allDisplayItems.length" 
+        class="py-3 px-5 flex items-center justify-between bg-[#18202D]/90 border-t border-white/10 text-xs text-[#AEB9E1] backdrop-blur-md sticky bottom-0 z-10 shadow-lg"
+      >
+        <span class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-[#00C2FF] animate-pulse"></span>
+          Đang tải trước <b class="text-white">{{ displayedRows.length }}</b> / <b class="text-white">{{ allDisplayItems.length }}</b> dòng (Lăn chuột xuống để tải tiếp 50 dòng)
+        </span>
+        <button 
+          @click="loadMore" 
+          class="px-3.5 py-1 bg-[#CB3CFF]/20 hover:bg-[#CB3CFF]/30 border border-[#CB3CFF]/40 text-[#CB3CFF] hover:text-white rounded-[6px] text-xs font-bold transition cursor-pointer shadow-sm"
+        >
+          + TẢI THÊM 50 DÒNG
+        </button>
+      </div>
     </div>
 
     <!-- Summary footer stats -->
@@ -220,7 +240,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { FileSpreadsheet, Search, Zap, Edit3 } from 'lucide-vue-next'
 import type { InventoryRow } from '@/types'
 import { formatNumber, formatDateTime } from '@/utils/format'
@@ -233,6 +253,16 @@ defineEmits<{
 }>()
 
 const quickFilterText = ref('')
+const displayLimit = ref(50)
+
+// Reset display limit when filter or data length changes
+watch(quickFilterText, () => {
+  displayLimit.value = 50
+})
+
+watch(() => props.data.length, () => {
+  displayLimit.value = 50
+})
 
 // Lọc dữ liệu theo từ khóa tìm kiếm (Bin, Tag, Feature, Warehouse, Stock Code)
 const filteredData = computed(() => {
@@ -290,7 +320,7 @@ interface DisplayItem {
   row?: any
 }
 
-const displayedRows = computed((): DisplayItem[] => {
+const allDisplayItems = computed((): DisplayItem[] => {
   const groups: Record<string, InventoryRow[]> = {}
   const noFeatureRows: InventoryRow[] = []
 
@@ -322,9 +352,9 @@ const displayedRows = computed((): DisplayItem[] => {
     })
 
     // Data rows in group
-    rows.forEach(row => {
+    rows.forEach((row, idx) => {
       result.push({
-        _id: `data-${row.inventory_id || row.tag_id}-${Math.random()}`,
+        _id: `data-${row.inventory_id || row.tag_id || idx}-${feat}`,
         _isGroup: false,
         row
       })
@@ -332,9 +362,9 @@ const displayedRows = computed((): DisplayItem[] => {
   })
 
   // Dòng không có Feature (No Data)
-  noFeatureRows.forEach(row => {
+  noFeatureRows.forEach((row, idx) => {
     result.push({
-      _id: `data-noFeat-${row.inventory_id || row.tag_id}-${Math.random()}`,
+      _id: `data-noFeat-${row.inventory_id || row.tag_id || idx}`,
       _isGroup: false,
       row
     })
@@ -342,4 +372,26 @@ const displayedRows = computed((): DisplayItem[] => {
 
   return result
 })
+
+// Progressive 50-row chunk rendering
+const displayedRows = computed(() => {
+  return allDisplayItems.value.slice(0, displayLimit.value)
+})
+
+// Infinite scroll listener
+const handleScroll = (e: Event) => {
+  const target = e.target as HTMLElement
+  if (!target) return
+  if (target.scrollTop + target.clientHeight >= target.scrollHeight - 70) {
+    if (displayLimit.value < allDisplayItems.value.length) {
+      displayLimit.value += 50
+    }
+  }
+}
+
+const loadMore = () => {
+  if (displayLimit.value < allDisplayItems.value.length) {
+    displayLimit.value += 50
+  }
+}
 </script>
