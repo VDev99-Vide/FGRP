@@ -11,17 +11,54 @@
         </h2>
       </div>
 
-      <!-- Action Buttons & Search Bar -->
+      <!-- Action Buttons, Display Limit Selector & Search Bar -->
       <div class="flex flex-wrap gap-3 w-full sm:w-auto items-center">
+        <!-- Display Chunk Selector -->
+        <div class="flex items-center gap-1 bg-[#18202D]/90 border border-white/15 p-1 rounded-[8px] text-xs">
+          <button 
+            @click="setLimit(50)"
+            :class="[
+              'px-2.5 py-1 rounded-[5px] font-bold transition cursor-pointer',
+              displayLimit === 50 && displayLimit < allDisplayItems.length
+                ? 'bg-[#CB3CFF] text-white shadow-[0_0_8px_#CB3CFF]' 
+                : 'text-[#AEB9E1] hover:text-white'
+            ]"
+          >
+            50 dòng
+          </button>
+          <button 
+            @click="setLimit(100)"
+            :class="[
+              'px-2.5 py-1 rounded-[5px] font-bold transition cursor-pointer',
+              displayLimit === 100 && displayLimit < allDisplayItems.length
+                ? 'bg-[#CB3CFF] text-white shadow-[0_0_8px_#CB3CFF]' 
+                : 'text-[#AEB9E1] hover:text-white'
+            ]"
+          >
+            100 dòng
+          </button>
+          <button 
+            @click="setLimit(allDisplayItems.length)"
+            :class="[
+              'px-2.5 py-1 rounded-[5px] font-bold transition cursor-pointer',
+              displayLimit >= allDisplayItems.length
+                ? 'bg-[#00C2FF] text-white shadow-[0_0_8px_#00C2FF]' 
+                : 'text-[#AEB9E1] hover:text-white'
+            ]"
+          >
+            Tất cả ({{ allDisplayItems.length }})
+          </button>
+        </div>
+
         <button 
           @click="$emit('export')"
-          class="flex-1 sm:flex-none h-[38px] px-4 rounded-[7px] bg-[#05C168]/20 hover:bg-[#05C168]/30 border border-[#05C168]/40 text-[#14CA74] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
+          class="h-[38px] px-4 rounded-[7px] bg-[#05C168]/20 hover:bg-[#05C168]/30 border border-[#05C168]/40 text-[#14CA74] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
         >
           <FileSpreadsheet class="w-4 h-4" />
           <span>XUẤT EXCEL</span>
         </button>
 
-        <div class="relative flex-1 sm:w-72">
+        <div class="relative flex-1 sm:w-64">
           <input 
             type="text" 
             v-model="quickFilterText"
@@ -33,14 +70,14 @@
       </div>
     </div>
 
-    <!-- DỮ LIỆU RENDER TRỰC TIẾP TRÊN BẢNG KÍNH MỜ (RENDER TỪNG ĐỢT 50 DÒNG CHỐNG CRASH) -->
+    <!-- DỮ LIỆU RENDER TRỰC TIẾP TRÊN BẢNG KÍNH MỜ (THANH CUỘN DỌC CHUẨN + TỰ ĐỘNG TẢI TIẾP) -->
     <div 
       @scroll.passive="handleScroll"
-      class="overflow-x-auto overflow-y-auto max-h-[640px] custom-scroll rounded-[14px] border border-white/10 glass-table-container relative"
+      class="w-full h-[580px] max-h-[70vh] overflow-y-scroll overflow-x-auto custom-scroll rounded-[14px] border border-white/12 bg-white/[0.02] glass-table-container relative"
     >
       <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
         <!-- Table Header (Sticky) -->
-        <thead class="bg-[#283241]/90 backdrop-blur-md text-[#AEB9E1] font-semibold border-b border-white/10 sticky top-0 z-20">
+        <thead class="bg-[#202938]/95 backdrop-blur-md text-[#AEB9E1] font-semibold border-b border-white/15 sticky top-0 z-30 shadow-md">
           <tr>
             <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">MÃ HÀNG (STOCK CODE)</th>
             <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
@@ -198,14 +235,14 @@
         </tbody>
       </table>
 
-      <!-- Progressive Chunk Loading Bottom Bar -->
+      <!-- Progressive Scroll Bottom Bar -->
       <div 
         v-if="displayLimit < allDisplayItems.length" 
-        class="py-3 px-5 flex items-center justify-between bg-[#18202D]/90 border-t border-white/10 text-xs text-[#AEB9E1] backdrop-blur-md sticky bottom-0 z-10 shadow-lg"
+        class="py-3 px-5 flex items-center justify-between bg-[#18202D]/95 border-t border-white/15 text-xs text-[#AEB9E1] backdrop-blur-md sticky bottom-0 z-20 shadow-lg"
       >
         <span class="flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-[#00C2FF] animate-pulse"></span>
-          Đang tải trước <b class="text-white">{{ displayedRows.length }}</b> / <b class="text-white">{{ allDisplayItems.length }}</b> dòng (Lăn chuột xuống để tải tiếp 50 dòng)
+          Đang hiển thị <b class="text-white">{{ displayedRows.length }}</b> / <b class="text-white">{{ allDisplayItems.length }}</b> dòng (Lăn chuột xuống để tải thêm 50 dòng)
         </span>
         <button 
           @click="loadMore" 
@@ -254,6 +291,10 @@ defineEmits<{
 
 const quickFilterText = ref('')
 const displayLimit = ref(50)
+
+const setLimit = (val: number) => {
+  displayLimit.value = val
+}
 
 // Reset display limit when filter or data length changes
 watch(quickFilterText, () => {
@@ -373,7 +414,7 @@ const allDisplayItems = computed((): DisplayItem[] => {
   return result
 })
 
-// Progressive 50-row chunk rendering
+// Progressive chunk rendering
 const displayedRows = computed(() => {
   return allDisplayItems.value.slice(0, displayLimit.value)
 })
@@ -382,7 +423,7 @@ const displayedRows = computed(() => {
 const handleScroll = (e: Event) => {
   const target = e.target as HTMLElement
   if (!target) return
-  if (target.scrollTop + target.clientHeight >= target.scrollHeight - 70) {
+  if (target.scrollTop + target.clientHeight >= target.scrollHeight - 60) {
     if (displayLimit.value < allDisplayItems.value.length) {
       displayLimit.value += 50
     }
