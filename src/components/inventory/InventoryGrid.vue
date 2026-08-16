@@ -33,119 +33,240 @@
       </div>
     </div>
 
-    <!-- AG Grid Direct Standard Glass View -->
-    <div class="ag-theme-quartz w-full flex-1 min-h-[520px] rounded-[14px] overflow-hidden">
-      <ag-grid-vue
-        class="w-full h-full"
-        :columnDefs="columnDefs"
-        :rowData="flattenedRowData"
-        :defaultColDef="defaultColDef"
-        :getRowId="getRowId"
-        :getRowHeight="getRowHeight"
-        :getRowClass="getRowClass"
-        :animateRows="true"
-        :gridOptions="gridOptions"
-        @grid-ready="onGridReady"
-        @first-data-rendered="onFirstDataRendered"
-      />
+    <!-- DỮ LIỆU RENDER TRỰC TIẾP TRÊN BẢNG KÍNH MỜ TIÊU CHUẨN (FROSTED GLASS TABLE) -->
+    <div class="overflow-x-auto overflow-y-auto max-h-[640px] custom-scroll rounded-[14px] border border-white/10 glass-table-container">
+      <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+        <!-- Table Header (Sticky) -->
+        <thead class="bg-[#283241]/85 backdrop-blur-md text-[#AEB9E1] font-semibold border-b border-white/10 sticky top-0 z-20">
+          <tr>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">MÃ HÀNG (STOCK CODE)</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">ACTUAL (PCS)</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">KHO (WH)</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">NGÀY NHẬP (STOCK-IN)</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">NGÀY TẠO (CREATE)</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">TAG ID</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">VỊ TRÍ (BIN)</th>
+            <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">THAO TÁC</th>
+          </tr>
+        </thead>
+
+        <!-- Table Body with Feature Groups & Direct Rows -->
+        <tbody class="divide-y divide-white/[0.06] font-medium">
+          <template v-for="item in displayedRows" :key="item._id">
+            <!-- 1. GROUP HEADER ROW -->
+            <tr 
+              v-if="item._isGroup"
+              class="bg-gradient-to-r from-[#CB3CFF]/20 via-[#00C2FF]/10 to-[#283241]/60 border-y border-[#CB3CFF]/30 font-bold"
+            >
+              <td colspan="9" class="py-2.5 px-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-1 h-4 bg-[#CB3CFF] rounded-full shadow-[0_0_8px_#CB3CFF]"></div>
+                  <span class="text-white text-xs font-black tracking-wide">
+                    FEATURE: {{ item.feature }}
+                  </span>
+                  <span class="text-[10px] font-bold text-[#CB3CFF] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30 px-2 py-0.5 rounded-[4px]">
+                    {{ item.kienLabel }}
+                  </span>
+                  <span class="text-[10px] font-bold text-[#14CA74] bg-[#05C168]/15 border border-[#05C168]/30 px-2 py-0.5 rounded-[4px] ml-auto">
+                    Tổng: {{ formatNumber(item.totalQty) }} PCS
+                  </span>
+                </div>
+              </td>
+            </tr>
+
+            <!-- 2. DATA ROW -->
+            <tr 
+              v-else
+              class="transition-colors duration-150 hover:bg-white/[0.08]"
+            >
+              <!-- Stock Code (LP.No) -->
+              <td class="py-3 px-4">
+                <span 
+                  v-if="!item.row.lp_no || item.row.lp_no === 'No data'" 
+                  class="px-2 py-0.5 text-[10px] font-bold text-[#FF5A65] bg-[#FF5A65]/15 border border-[#FF5A65]/30 rounded-[4px]"
+                >
+                  No Data
+                </span>
+                <span v-else class="font-mono text-[#AEB9E1] font-semibold text-xs">
+                  {{ item.row.lp_no }}
+                </span>
+              </td>
+
+              <!-- Feature -->
+              <td class="py-3 px-4 text-center">
+                <span 
+                  v-if="item.row.feature && item.row.feature !== 'No data'"
+                  class="font-mono font-bold text-[#CB3CFF] text-xs"
+                >
+                  F.{{ item.row.feature }}
+                </span>
+                <span 
+                  v-else 
+                  class="px-1.5 py-0.5 text-[9px] font-bold text-[#FF5A65] bg-[#FF5A65]/15 border border-[#FF5A65]/30 rounded"
+                >
+                  No data
+                </span>
+              </td>
+
+              <!-- Actual Qty (PCS) -->
+              <td class="py-3 px-4 text-right font-bold text-white text-xs">
+                <span :class="Number(item.row.qty) > 0 ? 'text-[#14CA74]' : 'text-[#AEB9E1]'">
+                  {{ formatNumber(item.row.qty || 0) }}
+                </span>
+              </td>
+
+              <!-- Warehouse -->
+              <td class="py-3 px-4 text-center">
+                <span 
+                  v-if="item.row.warehouse && item.row.warehouse !== 'No data'"
+                  :class="[
+                    'px-2 py-0.5 rounded-[4px] text-[11px] font-bold border',
+                    (item.row.warehouse === '62' || item.row.warehouse === '50')
+                      ? 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30'
+                      : 'bg-[#00C2FF]/15 text-[#00C2FF] border-[#00C2FF]/30'
+                  ]"
+                >
+                  WH {{ item.row.warehouse }}
+                </span>
+                <span 
+                  v-else 
+                  class="px-1.5 py-0.5 text-[9px] font-bold text-[#FF5A65] bg-[#FF5A65]/15 border border-[#FF5A65]/30 rounded"
+                >
+                  No Data
+                </span>
+              </td>
+
+              <!-- Stock-In Date -->
+              <td class="py-3 px-4 text-[#AEB9E1] text-[11px] font-mono">
+                {{ formatDateTime(item.row.stock_in_date) }}
+              </td>
+
+              <!-- Create Date -->
+              <td class="py-3 px-4 text-[#AEB9E1] text-[11px] font-mono">
+                {{ item.row.create_date || '—' }}
+              </td>
+
+              <!-- Tag ID -->
+              <td class="py-3 px-4">
+                <span class="font-mono font-bold text-[#00C2FF] text-xs">
+                  {{ item.row.tag_id }}
+                </span>
+              </td>
+
+              <!-- Bin -->
+              <td class="py-3 px-4 text-center">
+                <span class="font-mono font-bold text-[#AEB9E1] text-xs bg-white/5 border border-white/10 px-2 py-0.5 rounded-[4px]">
+                  {{ item.row.bin || 'N/A' }}
+                </span>
+              </td>
+
+              <!-- Actions (Xuất Nhanh / Sửa Nhanh) -->
+              <td class="py-3 px-4 text-center">
+                <div class="flex justify-center items-center gap-1.5">
+                  <button 
+                    @click="$emit('quick-out', item.row)"
+                    title="Xuất nhanh" 
+                    class="p-1.5 bg-[#FF5A65]/15 hover:bg-[#FF5A65]/25 text-[#FF5A65] rounded-[6px] border border-[#FF5A65]/30 cursor-pointer transition"
+                  >
+                    <Zap class="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    @click="$emit('edit', item.row)"
+                    title="Sửa nhanh" 
+                    class="p-1.5 bg-[#FDB52A]/15 hover:bg-[#FDB52A]/25 text-[#FDB52A] rounded-[6px] border border-[#FDB52A]/30 cursor-pointer transition"
+                  >
+                    <Edit3 class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </template>
+
+          <!-- Empty Search State -->
+          <tr v-if="displayedRows.length === 0">
+            <td colspan="9" class="text-center py-16 text-[#AEB9E1] italic text-xs">
+              <div class="flex flex-col items-center justify-center gap-2">
+                <Search class="w-6 h-6 text-[#AEB9E1]/40" />
+                <span>Không tìm thấy dòng dữ liệu tồn kho phù hợp với điều kiện lọc!</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Summary footer stats -->
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs">
-      <span class="text-[#AEB9E1]">
-        Tổng cộng <span class="font-bold text-white">{{ props.data.length }}</span> dòng tồn kho
-      </span>
-      <span class="text-[#AEB9E1]/40">|</span>
-      <span class="text-[#AEB9E1]">
-        <span class="font-bold text-[#CB3CFF]">{{ uniqueFeatureCount }}</span> Feature
-      </span>
-      <span class="text-[#AEB9E1]/40">|</span>
-      <span class="text-[#AEB9E1]">
-        Tổng Actual: <span class="font-bold text-[#14CA74]">{{ formatNumber(totalActual) }}</span> PCS
-      </span>
+    <div class="flex flex-wrap items-center justify-between gap-y-2 pt-1 text-xs border-t border-white/[0.08]">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span class="text-[#AEB9E1]">
+          Tổng cộng: <span class="font-bold text-white">{{ filteredData.length }}</span> / <span class="text-[#AEB9E1]">{{ props.data.length }}</span> dòng tồn kho
+        </span>
+        <span class="text-[#AEB9E1]/40">|</span>
+        <span class="text-[#AEB9E1]">
+          <span class="font-bold text-[#CB3CFF]">{{ uniqueFeatureCount }}</span> Feature
+        </span>
+        <span class="text-[#AEB9E1]/40">|</span>
+        <span class="text-[#AEB9E1]">
+          Tổng Actual: <span class="font-bold text-[#14CA74]">{{ formatNumber(totalActual) }}</span> PCS
+        </span>
+      </div>
+
+      <div class="text-[11px] text-[#AEB9E1]/70 font-mono">
+        Bảng chi tiết kết nối trực tiếp vw_kho_thanh_pham
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { AgGridVue } from 'ag-grid-vue3'
-import { 
-  ModuleRegistry, 
-  ClientSideRowModelModule, 
-  QuickFilterModule,
-  ColumnAutoSizeModule,
-  CellStyleModule,
-  ValidationModule,
-  ColDef,
-  GridReadyEvent,
-  type GridOptions,
-} from 'ag-grid-community'
-import { FileSpreadsheet, Search } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
+import { FileSpreadsheet, Search, Zap, Edit3 } from 'lucide-vue-next'
 import type { InventoryRow } from '@/types'
 import { formatNumber, formatDateTime } from '@/utils/format'
 
-// Register AG Grid modules
-ModuleRegistry.registerModules([
-  ClientSideRowModelModule,
-  QuickFilterModule,
-  ColumnAutoSizeModule,
-  CellStyleModule,
-  ValidationModule,
-])
-
-interface GroupHeaderRow {
-  _rowType: 'group'
-  _rowId: string
-  feature: string
-  kienNum: number
-  kienLabel: string
-  totalQty: number
-  lp_no?: string
-  qty?: number
-  warehouse?: string
-  stock_in_date?: string
-  create_date?: string
-  tag_id?: string
-  bin?: string
-  inventory_id?: string
-}
-
-interface DataRow extends InventoryRow {
-  _rowType: 'data'
-  _rowId: string
-  kienLabel: string
-}
-
-type FlatRow = GroupHeaderRow | DataRow
-
 const props = defineProps<{ data: InventoryRow[] }>()
-const emit = defineEmits<{
+defineEmits<{
   (e: 'quick-out', row: InventoryRow): void
   (e: 'edit', row: InventoryRow): void
   (e: 'export'): void
 }>()
 
 const quickFilterText = ref('')
-const gridApi = ref<any>(null)
 
-watch(quickFilterText, () => {
-  if (gridApi.value) {
-    gridApi.value.onFilterChanged()
+// Lọc dữ liệu theo từ khóa tìm kiếm (Bin, Tag, Feature, Warehouse, Stock Code)
+const filteredData = computed(() => {
+  if (!quickFilterText.value.trim()) return props.data
+
+  const query = quickFilterText.value.toLowerCase().trim()
+  let whQuery = ''
+  let generalQuery = query
+
+  if (query.startsWith('w00')) {
+    whQuery = query.replace('w00', '').trim()
   }
-})
 
-const onGridReady = (params: GridReadyEvent) => {
-  gridApi.value = params.api
-}
-const onFirstDataRendered = () => {
-  gridApi.value?.sizeColumnsToFit()
-}
+  return props.data.filter(row => {
+    if (whQuery && row.warehouse) {
+      return row.warehouse.toLowerCase().includes(whQuery)
+    }
+
+    const text = [
+      row.feature,
+      row.bin,
+      row.tag_id,
+      row.lp_no,
+      row.warehouse
+    ].filter(Boolean).join(' ').toLowerCase()
+
+    return text.includes(generalQuery)
+  })
+})
 
 // Tính số kiện theo feature: kien = sum(qty) / 2 / max(qty)
 const featureMetrics = computed(() => {
   const metrics: Record<string, { sum: number; max: number }> = {}
-  props.data.forEach(row => {
+  filteredData.value.forEach(row => {
     const feat = row.feature
     if (!feat || feat === 'No data') return
     if (!metrics[feat]) metrics[feat] = { sum: 0, max: 0 }
@@ -157,14 +278,23 @@ const featureMetrics = computed(() => {
 })
 
 const uniqueFeatureCount = computed(() => Object.keys(featureMetrics.value).length)
-const totalActual = computed(() => props.data.reduce((s, r) => s + (Number(r.qty) || 0), 0))
+const totalActual = computed(() => filteredData.value.reduce((s, r) => s + (Number(r.qty) || 0), 0))
 
-// Flatten rows with groups
-const flattenedRowData = computed((): FlatRow[] => {
+// Gom nhóm dữ liệu theo Feature để hiển thị trên bảng
+interface DisplayItem {
+  _id: string
+  _isGroup: boolean
+  feature?: string
+  kienLabel?: string
+  totalQty?: number
+  row?: any
+}
+
+const displayedRows = computed((): DisplayItem[] => {
   const groups: Record<string, InventoryRow[]> = {}
   const noFeatureRows: InventoryRow[] = []
-  
-  props.data.forEach(row => {
+
+  filteredData.value.forEach(row => {
     const feat = row.feature
     if (!feat || feat === 'No data') {
       noFeatureRows.push(row)
@@ -174,240 +304,42 @@ const flattenedRowData = computed((): FlatRow[] => {
     groups[feat].push(row)
   })
 
-  const result: FlatRow[] = []
+  const result: DisplayItem[] = []
   const sortedFeatures = Object.keys(groups).sort()
 
-  sortedFeatures.forEach(feature => {
-    const rows = groups[feature]
-    const m = featureMetrics.value[feature] || { sum: 0, max: 0 }
+  sortedFeatures.forEach(feat => {
+    const rows = groups[feat]
+    const m = featureMetrics.value[feat] || { sum: 0, max: 0 }
     const kienNum = m.max > 0 ? (m.sum / 2) / m.max : 0
 
+    // Group Header
     result.push({
-      _rowType: 'group',
-      _rowId: `group-${feature}`,
-      feature,
-      kienNum,
+      _id: `group-${feat}`,
+      _isGroup: true,
+      feature: feat,
       kienLabel: `${kienNum.toFixed(2)} Kiện`,
-      totalQty: m.sum,
-    } as GroupHeaderRow)
+      totalQty: m.sum
+    })
 
+    // Data rows in group
     rows.forEach(row => {
       result.push({
-        ...row,
-        _rowType: 'data',
-        _rowId: `data-${row.inventory_id || row.tag_id}`,
-        kienLabel: `${kienNum.toFixed(2)} Kiện`,
-      } as DataRow)
+        _id: `data-${row.inventory_id || row.tag_id}-${Math.random()}`,
+        _isGroup: false,
+        row
+      })
     })
   })
 
+  // Dòng không có Feature (No Data)
   noFeatureRows.forEach(row => {
     result.push({
-      ...row,
-      _rowType: 'data',
-      _rowId: `data-noFeat-${row.inventory_id || row.tag_id}`,
-      kienLabel: '—',
-    } as DataRow)
+      _id: `data-noFeat-${row.inventory_id || row.tag_id}-${Math.random()}`,
+      _isGroup: false,
+      row
+    })
   })
 
   return result
 })
-
-const getRowId = (params: any) => params.data._rowId
-
-const getRowHeight = (params: any) => {
-  return params.data?._rowType === 'group' ? 46 : 44
-}
-
-const getRowClass = (params: any) => {
-  return params.data?._rowType === 'group' ? 'ag-group-header-row' : ''
-}
-
-const defaultColDef: ColDef = {
-  sortable: true,
-  filter: true,
-  resizable: true,
-  floatingFilter: false,
-  suppressMovable: true,
-}
-
-const columnDefs = ref<ColDef[]>([
-  {
-    headerName: 'STOCK CODE',
-    field: 'lp_no',
-    minWidth: 150,
-    cellRenderer: (params: any) => {
-      if (params.data?._rowType === 'group') {
-        const f = params.data.feature
-        const kien = params.data.kienLabel
-        const total = formatNumber(params.data.totalQty)
-        return `
-          <div style="display:flex;align-items:center;gap:10px;height:100%">
-            <div style="width:3px;height:20px;background:#CB3CFF;border-radius:2px;flex-shrink:0;box-shadow:0 0 6px #CB3CFF"></div>
-            <span style="font-size:12px;font-weight:800;color:#FFFFFF;letter-spacing:0.04em">
-              FEATURE: ${f}
-            </span>
-            <span style="font-size:10px;font-weight:700;color:#CB3CFF;background:rgba(203,60,255,0.15);border:1px solid rgba(203,60,255,0.3);padding:2px 8px;border-radius:4px;white-space:nowrap">
-              ${kien}
-            </span>
-            <span style="font-size:11px;font-weight:800;color:#14CA74;background:rgba(5,193,104,0.15);border:1px solid rgba(5,193,104,0.3);padding:2px 8px;border-radius:4px;white-space:nowrap">
-              Tổng ${total} PCS
-            </span>
-          </div>
-        `
-      }
-      const val = params.value
-      if (!val || val === 'No data') {
-        return '<span style="color:#FF5A65;font-size:10px;font-weight:700;background:rgba(255,90,101,0.15);border:1px solid rgba(255,90,101,0.3);padding:2px 6px;border-radius:4px">No Data</span>'
-      }
-      return `<span style="color:#AEB9E1;font-weight:600;font-family:monospace;font-size:12px">${val}</span>`
-    },
-    colSpan: (params: any) => params.data?._rowType === 'group' ? 8 : 1,
-  },
-  {
-    headerName: 'FEATURE',
-    field: 'feature',
-    width: 100,
-    cellStyle: { fontWeight: '700', color: '#CB3CFF', fontSize: '12px' },
-  },
-  {
-    headerName: 'ACTUAL',
-    field: 'qty',
-    width: 110,
-    type: 'numericColumn',
-    valueFormatter: params => {
-      if (params.data?._rowType === 'group') return ''
-      return params.value != null ? formatNumber(params.value) : ''
-    },
-    cellStyle: { fontWeight: '800', color: '#FFFFFF', textAlign: 'right' },
-  },
-  {
-    headerName: 'WAREHOUSE',
-    field: 'warehouse',
-    width: 115,
-    cellRenderer: (params: any) => {
-      if (params.data?._rowType === 'group') return ''
-      const val = params.value
-      if (!val || val === 'No data') {
-        return '<span style="padding:2px 6px;background:rgba(255,90,101,0.15);border:1px solid rgba(255,90,101,0.3);color:#FF5A65;border-radius:4px;font-size:10px;font-weight:700">No Data</span>'
-      }
-      return `<span style="font-weight:700;color:#00C2FF;background:rgba(0,194,255,0.1);border:1px solid rgba(0,194,255,0.25);padding:2px 8px;border-radius:4px">${val}</span>`
-    },
-    cellStyle: { textAlign: 'center' },
-  },
-  {
-    headerName: 'STOCK-UPDATE',
-    field: 'stock_in_date',
-    width: 160,
-    valueFormatter: params => {
-      if (params.data?._rowType === 'group') return ''
-      return formatDateTime(params.value)
-    },
-    cellStyle: { color: '#AEB9E1', fontSize: '11px' },
-  },
-  {
-    headerName: 'CREATEDATE',
-    field: 'create_date',
-    width: 115,
-    valueFormatter: params => params.data?._rowType === 'group' ? '' : (params.value || ''),
-    cellStyle: { color: '#AEB9E1', fontSize: '11px' },
-  },
-  {
-    headerName: 'TAG ID',
-    field: 'tag_id',
-    minWidth: 160,
-    cellRenderer: (params: any) => {
-      if (params.data?._rowType === 'group') return ''
-      if (!params.value) return ''
-      return `<span style="font-family:monospace;font-weight:700;color:#00C2FF;font-size:11px">${params.value}</span>`
-    },
-  },
-  {
-    headerName: 'BIN',
-    field: 'bin',
-    width: 105,
-    valueFormatter: params => params.data?._rowType === 'group' ? '' : (params.value || 'N/A'),
-    cellStyle: { fontFamily: 'monospace', color: '#AEB9E1', fontWeight: '600', fontSize: '11px' },
-  },
-  {
-    headerName: 'HÀNH ĐỘNG',
-    field: 'actions',
-    width: 110,
-    sortable: false,
-    filter: false,
-    cellRenderer: (params: any) => {
-      if (params.data?._rowType === 'group' || !params.data) return ''
-      const container = document.createElement('div')
-      container.style.cssText = 'display:flex;gap:6px;align-items:center;justify-content:center;height:100%'
-
-      const btnOut = document.createElement('button')
-      btnOut.style.cssText = 'color:#FF5A65;padding:5px;background:rgba(255,90,101,0.12);border-radius:6px;border:1px solid rgba(255,90,101,0.3);cursor:pointer;display:flex;align-items:center;transition:all 0.15s'
-      btnOut.title = 'Xuất Nhanh'
-      btnOut.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`
-      btnOut.onmouseenter = () => { btnOut.style.background = 'rgba(255,90,101,0.25)' }
-      btnOut.onmouseleave = () => { btnOut.style.background = 'rgba(255,90,101,0.12)' }
-      btnOut.onclick = (e) => { e.stopPropagation(); emit('quick-out', params.data as InventoryRow) }
-
-      const btnEdit = document.createElement('button')
-      btnEdit.style.cssText = 'color:#FDB52A;padding:5px;background:rgba(253,181,42,0.12);border-radius:6px;border:1px solid rgba(253,181,42,0.3);cursor:pointer;display:flex;align-items:center;transition:all 0.15s'
-      btnEdit.title = 'Sửa Nhanh'
-      btnEdit.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`
-      btnEdit.onmouseenter = () => { btnEdit.style.background = 'rgba(253,181,42,0.25)' }
-      btnEdit.onmouseleave = () => { btnEdit.style.background = 'rgba(253,181,42,0.12)' }
-      btnEdit.onclick = (e) => { e.stopPropagation(); emit('edit', params.data as InventoryRow) }
-
-      container.appendChild(btnOut)
-      container.appendChild(btnEdit)
-      return container
-    },
-  },
-])
-
-const isExternalFilterPresent = () => {
-  return quickFilterText.value.trim() !== ''
-}
-
-const doesExternalFilterPass = (node: any) => {
-  if (!node.data) return true
-  const query = quickFilterText.value.toLowerCase().trim()
-  const data = node.data
-  
-  let whQuery = ''
-  let generalQuery = query
-  if (query.startsWith('w00')) {
-    whQuery = query.replace('w00', '').trim()
-  }
-
-  if (data._rowType === 'group') {
-    if (data.feature && data.feature.toLowerCase().includes(generalQuery)) return true
-    const children = props.data.filter(r => r.feature === data.feature)
-    return children.some(r => {
-       if (whQuery) return r.warehouse?.includes(whQuery)
-       const text = [r.feature, r.bin, r.tag_id, r.lp_no, r.warehouse].filter(Boolean).join(' ').toLowerCase()
-       return text.includes(generalQuery)
-    })
-  }
-
-  if (whQuery) {
-    return data.warehouse?.includes(whQuery)
-  }
-  
-  const searchableText = [
-    data.feature,
-    data.bin,
-    data.tag_id,
-    data.lp_no,
-    data.warehouse
-  ].filter(Boolean).join(' ').toLowerCase()
-
-  return searchableText.includes(generalQuery)
-}
-
-const gridOptions: GridOptions = {
-  suppressCellFocus: true,
-  suppressRowClickSelection: true,
-  overlayNoRowsTemplate: '<span style="color:#AEB9E1;font-size:12px;font-style:italic">Không có dữ liệu tồn kho</span>',
-  isExternalFilterPresent,
-  doesExternalFilterPass,
-}
 </script>

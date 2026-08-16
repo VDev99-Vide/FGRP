@@ -5,7 +5,9 @@ import Aura from '@primevue/themes/aura'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 
-// Import CSS (including Tailwind CSS v4 and Dashdark V Dark Glassmorphism tokens)
+// Import CSS (including Tailwind CSS v4, AG Grid, and Dashdark V Dark Glassmorphism tokens)
+import 'ag-grid-community/styles/ag-grid.css'
+import 'ag-grid-community/styles/ag-theme-quartz.css'
 import './styles/index.css'
 
 // ECharts Setup

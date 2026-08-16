@@ -16,13 +16,28 @@
     <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
       <!-- Top Header Area (Fixed/Sticky at top of content with Frosted Glass) -->
       <header class="hidden lg:flex justify-between items-center px-8 py-5 glass-header shrink-0 z-20">
-        <div>
-          <h1 class="text-2xl lg:text-3xl font-bold text-white tracking-tight">
-            Xin chào ! <span v-if="currentTab !== 'dashboard'" class="text-[#CB3CFF] text-xl font-medium">/ {{ currentTabName }}</span>
-          </h1>
-          <p class="text-xs text-[#AEB9E1] mt-0.5">
-            Hệ thống quản lý tồn kho và báo cáo tự động Dashdark V.
-          </p>
+        <div class="flex items-center gap-3.5">
+          <!-- Glowing Brand Logo Next to Header -->
+          <div class="w-10 h-10 rounded-[12px] bg-gradient-to-tr from-[#00C2FF] via-[#CB3CFF] to-[#7e14ff] p-[1.5px] shadow-[0_0_16px_rgba(203,60,255,0.45)] shrink-0 flex items-center justify-center">
+            <div class="w-full h-full bg-[#18202D] rounded-[10.5px] flex items-center justify-center">
+              <svg viewBox="0 0 32 32" fill="none" class="w-6 h-6">
+                <path d="M6 10C6 7.79086 7.79086 6 10 6H16V16H6V10Z" fill="#00C2FF"/>
+                <path d="M16 16H26V22C26 24.2091 24.2091 26 22 26H16V16Z" fill="#00C2FF"/>
+                <path d="M16 6H22C24.2091 6 26 7.79086 26 10V16H16V6Z" fill="#CB3CFF"/>
+                <path d="M6 16H16V26H10C7.79086 26 6 24.2091 6 22V16Z" fill="#CB3CFF"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <span>Xin chào !</span>
+              <span v-if="currentTab !== 'dashboard'" class="text-[#CB3CFF] text-xl font-medium">/ {{ currentTabName }}</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#CB3CFF]/15 text-[#CB3CFF] border border-[#CB3CFF]/30 tracking-wider">V PRO</span>
+            </h1>
+            <p class="text-xs text-[#AEB9E1] mt-0.5">
+              Hệ thống quản lý tồn kho và báo cáo tự động <span class="text-white font-bold">Dashdark V</span>
+            </p>
+          </div>
         </div>
         
         <div class="flex items-center gap-4">
