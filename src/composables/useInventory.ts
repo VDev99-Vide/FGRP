@@ -7,6 +7,18 @@ import {
 } from '@/services/mockData'
 import { InventoryRow, SummaryAnalysisRow, KpiState, AnalysisState } from '@/types'
 
+// Hàm trích xuất Feature theo chuẩn Excel: =MID(text, 2, 4)
+export const extractFeatureFromStockCode = (stockCode: string): string => {
+  if (!stockCode || stockCode.trim() === '' || stockCode === 'No data') return 'No data'
+  const clean = stockCode.trim()
+  // Excel: =MID("810090203", 2, 4) -> bắt đầu từ ký tự 2 lấy 4 ký tự -> "1009"
+  // JavaScript substring(1, 5)
+  if (clean.length >= 5) {
+    return clean.substring(1, 5)
+  }
+  return clean
+}
+
 export function useInventory() {
   const loading = ref(false)
   const isDemoMode = ref(!isSupabaseConfigured)
@@ -30,6 +42,34 @@ export function useInventory() {
     midStock: []
   })
 
+  // Hàm tải toàn bộ dữ liệu từ View Supabase (vượt qua giới hạn 1,000 dòng mặc định)
+  const fetchAllFromSupabase = async <T>(viewName: string): Promise<T[]> => {
+    let allRows: T[] = []
+    let from = 0
+    const step = 1000
+    let keepGoing = true
+
+    while (keepGoing) {
+      const { data, error } = await supabase
+        .from(viewName)
+        .select('*')
+        .range(from, from + step - 1)
+
+      if (error) throw error
+      if (data && data.length > 0) {
+        allRows = allRows.concat(data as T[])
+        if (data.length < step) {
+          keepGoing = false
+        } else {
+          from += step
+        }
+      } else {
+        keepGoing = false
+      }
+    }
+    return allRows
+  }
+
   const fetchInventory = async () => {
     loading.value = true
     try {
@@ -44,29 +84,27 @@ export function useInventory() {
         return
       }
 
-      // Live Supabase
-      const { data: detailData, error: detailErr } = await supabase
-        .from('vw_kho_thanh_pham')
-        .select('*')
-      
-      const { data: sumData } = await supabase
-        .from('vw_summary_analysis')
-        .select('*')
+      // Live Supabase - Tải toàn bộ không giới hạn 1000 dòng
+      try {
+        const [detailRows, sumRows] = await Promise.all([
+          fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham'),
+          fetchAllFromSupabase<SummaryAnalysisRow>('vw_summary_analysis')
+        ])
 
-      if (detailErr) {
-        console.warn('Supabase query failed, falling back to mock data:', detailErr)
+        isDemoMode.value = false
+        inventoryData.value = detailRows || []
+        
+        if (sumRows && sumRows.length > 0) {
+          summaryData.value = sumRows
+        } else {
+          summaryData.value = generateMockSummary(inventoryData.value)
+        }
+      } catch (err: any) {
+        console.warn('Supabase query failed, falling back to mock data:', err)
         isDemoMode.value = true
         const localData = getMockInventory()
         inventoryData.value = localData
         summaryData.value = generateMockSummary(localData)
-      } else {
-        isDemoMode.value = false
-        inventoryData.value = (detailData || []) as InventoryRow[]
-        if (sumData && sumData.length > 0) {
-          summaryData.value = sumData as SummaryAnalysisRow[]
-        } else {
-          summaryData.value = generateMockSummary(inventoryData.value)
-        }
       }
 
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
@@ -87,15 +125,14 @@ export function useInventory() {
   const updateMetrics = () => {
     let totalAct = 0
     let totalIsc = 0
+    let diff = 0
     let noDataCount = 0
     let moveCount = 0
     const tagFreq: Record<string, number> = {}
 
-    // 1. Tính KPI & thống kê từ danh sách chi tiết
+    // 1. Thống kê từ bảng tồn kho chi tiết
     inventoryData.value.forEach(row => {
-      totalAct += Number(row.qty) || 0
-      
-      if (row.lp_no === 'No data' || row.warehouse === 'No data') {
+      if (!row.lp_no || row.lp_no === 'No data' || !row.feature || row.feature === 'No data') {
         noDataCount++
       }
       
@@ -108,12 +145,20 @@ export function useInventory() {
       }
     })
 
-    // 2. Tính iScala tổng từ view summary
-    summaryData.value.forEach(row => {
-      totalIsc += Number(row.iscala) || 0
-    })
+    // 2. Tính Tổng Tồn Thực Tế & Chênh Lệch Hệ Thống chuẩn theo Summary Analysis
+    if (summaryData.value && summaryData.value.length > 0) {
+      summaryData.value.forEach(row => {
+        totalAct += Number(row.actual) || 0
+        totalIsc += Number(row.iscala) || 0
+        diff += Number(row.diff) || 0
+      })
+    } else {
+      inventoryData.value.forEach(row => {
+        totalAct += Number(row.qty) || 0
+      })
+      diff = totalAct - totalIsc
+    }
 
-    const diff = totalAct - totalIsc
     let diffPercentFormatted = '0%'
     if (totalIsc > 0) {
       const pct = (diff / totalIsc) * 100
@@ -135,7 +180,7 @@ export function useInventory() {
 
     // 3. Phân tích rủi ro
     analysis.noData = inventoryData.value
-      .filter(r => r.lp_no === 'No data')
+      .filter(r => !r.lp_no || r.lp_no === 'No data' || !r.feature || r.feature === 'No data')
       .map(r => r.tag_id)
     
     analysis.duplicates = duplicateTags
@@ -188,7 +233,7 @@ export function useInventory() {
               tag_id: tagId,
               bin,
               lp_no: '8101010104',
-              feature: '1010',
+              feature: extractFeatureFromStockCode('8101010104'),
               qty: 250,
               warehouse: '62',
               create_date: new Date().toLocaleDateString('vi-VN'),
@@ -201,7 +246,7 @@ export function useInventory() {
             tag_id: tagId,
             bin,
             lp_no: '8101010104',
-            feature: '1010',
+            feature: extractFeatureFromStockCode('8101010104'),
             qty: 250,
             warehouse: '62',
             create_date: new Date().toLocaleDateString('vi-VN'),
@@ -248,7 +293,7 @@ export function useInventory() {
           tag_id: r.tag_id,
           bin: r.bin,
           lp_no: '8101010104',
-          feature: '1010',
+          feature: extractFeatureFromStockCode('8101010104'),
           qty: 250,
           warehouse: '62',
           create_date: new Date().toLocaleDateString('vi-VN'),
@@ -351,10 +396,7 @@ export function useInventory() {
         // Build mock inventory based on master data payload
         const local: InventoryRow[] = payload.map((p, i) => {
           const lp = p.stock_code || p.lp_no || '8101010104'
-          let feat = 'No data'
-          if (lp && lp.length >= 5) {
-            feat = lp.substring(1, 5)
-          }
+          const feat = extractFeatureFromStockCode(lp)
           return {
             inventory_id: `mock-master-${Date.now()}-${i}`,
             tag_id: p.batch || p.tag_id || `TAG-${i + 1000}`,

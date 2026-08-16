@@ -32,7 +32,6 @@
             <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
               <span>Xin chào !</span>
               <span v-if="currentTab !== 'dashboard'" class="text-[#CB3CFF] text-xl font-medium">/ {{ currentTabName }}</span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#CB3CFF]/15 text-[#CB3CFF] border border-[#CB3CFF]/30 tracking-wider">V PRO</span>
             </h1>
             <p class="text-xs text-[#AEB9E1] mt-0.5">
               Hệ thống quản lý tồn kho và báo cáo tự động <span class="text-white font-bold">Dashdark V</span>
@@ -217,9 +216,9 @@
       </main>
 
       <!-- Footer -->
-      <footer class="w-full text-center py-3.5 glass-footer text-[10px] font-semibold text-[#AEB9E1] tracking-wider shrink-0 z-20">
-        <span class="neon-glow-text">
-          ENGINEERED BY VINH &copy; 2026 | DATA ANALYTICS SYSTEM — DASHDARK V PRO
+      <footer class="w-full text-center py-3.5 glass-footer shrink-0 z-20">
+        <span class="neon-glow-text text-[10px] font-medium tracking-widest text-white/35 hover:text-white/70 transition-opacity duration-300">
+          ENGINEERED BY VINH &copy; 2026 | DATA ANALYTICS SYSTEM — DASHDARK V
         </span>
       </footer>
     </div>

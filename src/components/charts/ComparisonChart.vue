@@ -1,6 +1,6 @@
 <template>
   <div class="glass-card-dark p-6 lg:p-8 flex flex-col justify-between relative overflow-hidden">
-    <!-- Header Block with Title & Right Legend -->
+    <!-- Header Block with Title, Zoom Guide & Right Legend -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
       <!-- Left Title: Actual vs iScala & Tỷ Lệ Chênh Lệch flush to left with neon highlight -->
       <div class="flex items-center gap-3">
@@ -11,7 +11,9 @@
               Actual vs iScala &amp; Tỷ Lệ Chênh Lệch
             </span>
           </h2>
-          <p class="text-xs text-[#AEB9E1] mt-0.5 font-medium">So sánh chi tiết dữ liệu thực tế và hệ thống iScala theo từng Feature</p>
+          <p class="text-xs text-[#AEB9E1] mt-0.5 font-medium">
+            Biểu đồ toàn bộ {{ sortedSummary.length }} Feature trong hệ thống (Lăn chuột hoặc kéo thanh trượt dưới để phóng to / thu nhỏ)
+          </p>
         </div>
       </div>
 
@@ -31,8 +33,8 @@
       </div>
     </div>
 
-    <!-- ECharts Wave Chart Canvas -->
-    <div class="w-full h-[340px] sm:h-[380px] min-h-[300px]">
+    <!-- ECharts Wave Chart Canvas with DataZoom Slider -->
+    <div class="w-full h-[360px] sm:h-[400px] min-h-[340px] mt-2">
       <v-chart class="w-full h-full" :option="chartOption" :autoresize="true" />
     </div>
   </div>
@@ -47,20 +49,27 @@ const props = defineProps<{
   data: SummaryAnalysisRow[]
 }>()
 
-// Process chart data from summary rowsOptions matching image.png
+// Sắp xếp và lấy toàn bộ 100% Feature từ dữ liệu nguồn
+const sortedSummary = computed(() => {
+  if (!props.data || props.data.length === 0) return []
+  return [...props.data]
+    .filter(d => d.feature && d.feature !== 'No data')
+    .sort((a, b) => a.feature.localeCompare(b.feature, undefined, { numeric: true }))
+})
+
+// ECharts Neon Wave Options with DataZoom (Zoom/Pan & Slider)
 const chartOption = computed(() => {
-  // Use real data features or default design sample sequence
+  const dataList = sortedSummary.value
+  
+  // Dữ liệu mặc định mẫu nếu chưa có dữ liệu
   let features = ['1009', '1010', '2072', '2032', '3569', '3565', '3695', '4151', '4152', '4183', '5151', '5152', '5183', '6026', '6072', '8634', '8695']
   let actuals = [450, 680, 1100, 1850, 3100, 4200, 4800, 4700, 4600, 4900, 5200, 5600, 6100, 6500, 6900, 7400, 7800]
   let iscalas = [1500, 1750, 1600, 1200, 1800, 2600, 3800, 4800, 5100, 4800, 4200, 3600, 3100, 2700, 2500, 2600, 2900]
 
-  if (props.data && props.data.length > 0) {
-    const validData = [...props.data].filter(d => d.feature && d.feature !== 'No data')
-    if (validData.length > 0) {
-      features = validData.map(d => d.feature)
-      actuals = validData.map(d => Number(d.actual) || 0)
-      iscalas = validData.map(d => Number(d.iscala) || 0)
-    }
+  if (dataList.length > 0) {
+    features = dataList.map(d => d.feature)
+    actuals = dataList.map(d => Number(d.actual) || 0)
+    iscalas = dataList.map(d => Number(d.iscala) || 0)
   }
 
   return {
@@ -71,7 +80,7 @@ const chartOption = computed(() => {
       borderColor: 'rgba(255, 255, 255, 0.15)',
       borderWidth: 1,
       padding: [14, 18],
-      extraCssText: 'backdrop-filter: blur(16px); border-radius: 12px; box-shadow: 0 16px 36px rgba(0,0,0,0.55); min-width: 220px;',
+      extraCssText: 'backdrop-filter: blur(16px); border-radius: 12px; box-shadow: 0 16px 36px rgba(0,0,0,0.55); min-width: 230px; z-index: 50;',
       textStyle: {
         color: '#FFFFFF',
         fontFamily: 'Plus Jakarta Sans, sans-serif',
@@ -103,7 +112,7 @@ const chartOption = computed(() => {
         const diffFormatted = (diff > 0 ? '+' : '') + formatNumber(diff) + ' PCS'
         const diffColor = diff > 0 ? '#14CA74' : (diff < 0 ? '#FF5A65' : '#AEB9E1')
 
-        let res = `
+        return `
           <div style="font-weight:700;margin-bottom:8px;color:#FFFFFF;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:5px">
             FEATURE: ${feat}
           </div>
@@ -122,14 +131,55 @@ const chartOption = computed(() => {
             <span style="font-weight:700;color:${diffColor};font-size:11px">${diffFormatted} (${diffPercentFormatted})</span>
           </div>
         `
-        return res
       }
     },
+    // DataZoom: Cho phép lăn chuột phóng to thu nhỏ & thanh trượt kéo ngang
+    dataZoom: [
+      {
+        type: 'slider',
+        show: true,
+        xAxisIndex: [0],
+        bottom: 2,
+        height: 22,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        backgroundColor: 'rgba(16, 24, 38, 0.7)',
+        fillerColor: 'rgba(203, 60, 255, 0.25)',
+        dataBackground: {
+          lineStyle: { color: '#00C2FF', width: 1 },
+          areaStyle: { color: 'rgba(0, 194, 255, 0.2)' }
+        },
+        selectedDataBackground: {
+          lineStyle: { color: '#CB3CFF', width: 1.5 },
+          areaStyle: { color: 'rgba(203, 60, 255, 0.4)' }
+        },
+        handleStyle: {
+          color: '#CB3CFF',
+          borderColor: '#FFFFFF',
+          borderWidth: 1.5,
+          shadowBlur: 6,
+          shadowColor: 'rgba(203, 60, 255, 0.6)'
+        },
+        textStyle: {
+          color: '#AEB9E1',
+          fontSize: 10,
+          fontFamily: 'Plus Jakarta Sans, sans-serif'
+        },
+        start: 0,
+        end: dataList.length > 25 ? Math.min(100, Math.round((25 / dataList.length) * 100)) : 100
+      },
+      {
+        type: 'inside',
+        xAxisIndex: [0],
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: true
+      }
+    ],
     grid: {
       left: '2%',
       right: '2%',
       top: '6%',
-      bottom: '8%',
+      bottom: '48px',
       containLabel: true
     },
     xAxis: {
@@ -144,7 +194,8 @@ const chartOption = computed(() => {
         color: '#AEB9E1',
         fontSize: 11,
         fontFamily: 'Plus Jakarta Sans, sans-serif',
-        margin: 14
+        margin: 14,
+        formatter: (val: string) => `F.${val}`
       }
     },
     yAxis: {
@@ -161,7 +212,7 @@ const chartOption = computed(() => {
         color: '#AEB9E1',
         fontSize: 11,
         fontFamily: 'Plus Jakarta Sans, sans-serif',
-        formatter: (val: number) => val >= 1000 ? `${val / 1000}k` : val
+        formatter: (val: number) => val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val
       }
     },
     series: [
@@ -170,7 +221,7 @@ const chartOption = computed(() => {
         name: 'ISCALA',
         type: 'line',
         data: iscalas,
-        smooth: 0.5,
+        smooth: 0.45,
         showSymbol: false,
         symbolSize: 6,
         lineStyle: {
@@ -211,7 +262,7 @@ const chartOption = computed(() => {
         name: 'ACTUAL',
         type: 'line',
         data: actuals,
-        smooth: 0.5,
+        smooth: 0.45,
         showSymbol: false,
         symbolSize: 6,
         lineStyle: {
