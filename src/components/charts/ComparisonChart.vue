@@ -195,7 +195,7 @@ const chartOption = computed(() => {
         fontSize: 11,
         fontFamily: 'Plus Jakarta Sans, sans-serif',
         margin: 14,
-        formatter: (val: string) => `F.${val}`
+        formatter: (val: string) => val
       }
     },
     yAxis: {

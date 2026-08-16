@@ -153,7 +153,7 @@
             class="w-2 h-2 rounded-full shrink-0 shadow-sm"
             :style="{ backgroundColor: item.color, boxShadow: `0 0 6px ${item.color}` }"
           ></span>
-          <span class="text-xs font-bold text-white font-mono truncate">F.{{ item.feature }}</span>
+          <span class="text-xs font-bold text-white font-mono truncate">{{ item.feature }}</span>
         </div>
         <div class="flex items-baseline justify-between text-[11px]">
           <span class="text-[#AEB9E1] font-mono">{{ item.diffSign }}{{ formatNumber(Math.abs(item.diff)) }}</span>

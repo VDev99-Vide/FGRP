@@ -65,8 +65,8 @@
       </header>
 
       <!-- Main Scrollable Body Area -->
-      <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 w-full">
-        <div class="max-w-[1708px] mx-auto w-full flex flex-col gap-8 pb-12">
+      <main class="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 2xl:p-8 w-full">
+        <div class="max-w-[1920px] 2xl:max-w-full mx-auto w-full flex flex-col gap-6 lg:gap-8 pb-12">
           
           <!-- Transition giữa các Tabs -->
           <transition name="tab-fade" mode="out-in">

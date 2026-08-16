@@ -65,8 +65,8 @@
     <!-- DỮ LIỆU RENDER TRỰC TIẾP TRÊN BẢNG KÍNH MỜ (CUỘN ĐỘC LẬP + THANH TRƯỢT SẮC NÉT) -->
     <div 
       ref="tableContainerRef"
-      class="w-full rounded-[14px] border border-white/15 bg-white/[0.02] shadow-inner relative custom-scroll"
-      style="max-height: 500px; height: 500px; overflow-y: scroll; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #CB3CFF rgba(24, 32, 45, 0.9);"
+      class="w-full h-[460px] md:h-[520px] lg:h-[580px] 2xl:h-[680px] max-h-[72vh] rounded-[14px] border border-white/15 bg-white/[0.02] shadow-inner relative custom-scroll"
+      style="overflow-y: scroll; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #CB3CFF rgba(24, 32, 45, 0.9); -webkit-overflow-scrolling: touch;"
     >
       <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
         <!-- Sticky Thead -->
@@ -149,7 +149,7 @@
                   v-if="item.row.feature && item.row.feature !== 'No data'"
                   class="font-mono font-bold text-[#CB3CFF] text-xs"
                 >
-                  F.{{ item.row.feature }}
+                  {{ item.row.feature }}
                 </span>
                 <span 
                   v-else 
