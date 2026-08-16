@@ -9,43 +9,43 @@
   >
     <div class="space-y-4 pt-2" v-if="target">
       <div>
-        <label class="text-xs font-bold text-slate-400">Mã Phụ Kiện (Code)</label>
+        <label class="text-[10px] font-bold text-[#AEB9E1] uppercase">Mã Phụ Kiện (Code)</label>
         <InputText 
           v-model="code" 
-          class="w-full mt-1 p-2.5 font-bold text-sm bg-white"
+          class="w-full mt-1 p-2.5 font-bold text-sm"
         />
       </div>
       
       <div>
-        <label class="text-xs font-bold text-slate-400">Số lượng (Qty)</label>
+        <label class="text-[10px] font-bold text-[#AEB9E1] uppercase">Số lượng (Qty)</label>
         <InputText 
           v-model="qtyStr" 
           type="number"
-          class="w-full mt-1 p-2.5 font-bold text-sm bg-white"
+          class="w-full mt-1 p-2.5 font-bold text-sm"
         />
       </div>
 
       <div>
-        <label class="text-xs font-bold text-slate-400">Vị trí (Bin)</label>
+        <label class="text-[10px] font-bold text-[#AEB9E1] uppercase">Vị trí (Bin)</label>
         <InputText 
           v-model="bin" 
-          class="w-full mt-1 p-2.5 font-mono font-bold text-sm bg-white"
+          class="w-full mt-1 p-2.5 font-mono font-bold text-sm"
         />
       </div>
 
-      <p v-if="msg" class="text-xs font-bold text-center h-4 text-emerald-600">{{ msg }}</p>
+      <p v-if="msg" class="text-xs font-bold text-center h-4 text-[#14CA74]">{{ msg }}</p>
 
       <div class="flex gap-3 pt-2">
         <button 
           @click="$emit('cancel')" 
-          class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer"
+          class="flex-1 bg-white/10 hover:bg-white/20 text-[#AEB9E1] font-bold py-2.5 rounded-[7px] text-xs transition cursor-pointer"
         >
           HỦY
         </button>
         <button 
           @click="save" 
           :disabled="loading"
-          class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs cursor-pointer disabled:opacity-50"
+          class="flex-1 bg-[#FDB52A] hover:bg-[#FDB52A]/90 text-[#081028] font-bold py-2.5 rounded-[7px] text-xs transition shadow-md cursor-pointer disabled:opacity-50"
         >
           CẬP NHẬT
         </button>

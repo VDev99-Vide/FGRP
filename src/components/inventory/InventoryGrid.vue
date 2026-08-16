@@ -1,37 +1,40 @@
 <template>
-  <div class="glass-card-light p-5 flex flex-col gap-4 flex-1">
-    <!-- Grid Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+  <div class="glass-card-dark p-6 flex flex-col gap-5 flex-1 min-h-0">
+    <!-- Grid Header Bar -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-        <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-0.5">Bảng Chi Tiết</p>
-        <h2 class="text-base font-extrabold text-slate-800 uppercase tracking-tight">
-          Tồn Kho Thành Phẩm
+        <p class="text-[10px] font-bold text-[#CB3CFF] uppercase tracking-widest mb-1">
+          HỆ THỐNG KHO THỰC TẾ
+        </p>
+        <h2 class="text-xl font-bold text-white tracking-tight">
+          Bảng Chi Tiết Tồn Kho Thành Phẩm
         </h2>
       </div>
-      <div class="flex gap-3 w-full sm:w-auto">
+
+      <!-- Action Buttons & Search Bar -->
+      <div class="flex flex-wrap gap-3 w-full sm:w-auto items-center">
         <button 
           @click="$emit('export')"
-          class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 transition-all btn-premium-light cursor-pointer shadow-sm"
+          class="flex-1 sm:flex-none h-[38px] px-4 rounded-[7px] bg-[#05C168]/20 hover:bg-[#05C168]/30 border border-[#05C168]/40 text-[#14CA74] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
         >
-          <FileSpreadsheet class="w-3.5 h-3.5" />
+          <FileSpreadsheet class="w-4 h-4" />
           <span>XUẤT EXCEL</span>
         </button>
+
         <div class="relative flex-1 sm:w-72">
           <input 
             type="text" 
             v-model="quickFilterText"
-            placeholder="Tìm Bin, Tag, Feature, Kho (W0062)..." 
-            class="w-full px-4 py-2.5 pl-9 border border-slate-200 rounded-xl text-xs outline-none bg-white text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-400 transition-all"
+            placeholder="Tìm Bin, Tag, Feature, Kho (62)..." 
+            class="w-full h-[38px] px-3.5 pl-9 bg-[#18202D]/80 backdrop-blur-md border border-white/15 rounded-[8px] text-xs outline-none text-white placeholder-[#AEB9E1]/50 focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
           >
-          <Search class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+          <Search class="w-3.5 h-3.5 text-[#AEB9E1] absolute left-3 top-3" />
         </div>
       </div>
     </div>
 
-    <!-- AG Grid Container -->
-    <div 
-      class="ag-theme-quartz w-full flex-1 min-h-[500px] rounded-2xl overflow-hidden border border-slate-200 shadow-sm"
-    >
+    <!-- AG Grid Direct Standard Glass View -->
+    <div class="ag-theme-quartz w-full flex-1 min-h-[520px] rounded-[14px] overflow-hidden">
       <ag-grid-vue
         class="w-full h-full"
         :columnDefs="columnDefs"
@@ -47,18 +50,18 @@
       />
     </div>
 
-    <!-- Summary footer -->
-    <div class="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-      <span class="text-[10px] text-slate-400 font-semibold">
-        Tổng <span class="font-black text-slate-600">{{ props.data.length }}</span> dòng thực tế
+    <!-- Summary footer stats -->
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs">
+      <span class="text-[#AEB9E1]">
+        Tổng cộng <span class="font-bold text-white">{{ props.data.length }}</span> dòng tồn kho
       </span>
-      <span class="text-[10px] text-slate-300">·</span>
-      <span class="text-[10px] text-slate-400 font-semibold">
-        <span class="font-black text-indigo-600">{{ uniqueFeatureCount }}</span> Feature
+      <span class="text-[#AEB9E1]/40">|</span>
+      <span class="text-[#AEB9E1]">
+        <span class="font-bold text-[#CB3CFF]">{{ uniqueFeatureCount }}</span> Feature
       </span>
-      <span class="text-[10px] text-slate-300">·</span>
-      <span class="text-[10px] text-slate-400 font-semibold">
-        Actual <span class="font-black text-emerald-600">{{ formatNumber(totalActual) }}</span> PCS
+      <span class="text-[#AEB9E1]/40">|</span>
+      <span class="text-[#AEB9E1]">
+        Tổng Actual: <span class="font-bold text-[#14CA74]">{{ formatNumber(totalActual) }}</span> PCS
       </span>
     </div>
   </div>
@@ -82,7 +85,7 @@ import { FileSpreadsheet, Search } from 'lucide-vue-next'
 import type { InventoryRow } from '@/types'
 import { formatNumber, formatDateTime } from '@/utils/format'
 
-// Register AG Grid modules — only Community modules to avoid ResizeObserver errors
+// Register AG Grid modules
 ModuleRegistry.registerModules([
   ClientSideRowModelModule,
   QuickFilterModule,
@@ -91,9 +94,6 @@ ModuleRegistry.registerModules([
   ValidationModule,
 ])
 
-// =============================================
-// ROW TYPE definition for flattened grouped data
-// =============================================
 interface GroupHeaderRow {
   _rowType: 'group'
   _rowId: string
@@ -142,10 +142,7 @@ const onFirstDataRendered = () => {
   gridApi.value?.sizeColumnsToFit()
 }
 
-// =============================================
-// COMPUTED: Feature metrics (số kiện theo brief)
-// kien = sum(qty) / 2 / max(qty) theo feature
-// =============================================
+// Tính số kiện theo feature: kien = sum(qty) / 2 / max(qty)
 const featureMetrics = computed(() => {
   const metrics: Record<string, { sum: number; max: number }> = {}
   props.data.forEach(row => {
@@ -162,12 +159,8 @@ const featureMetrics = computed(() => {
 const uniqueFeatureCount = computed(() => Object.keys(featureMetrics.value).length)
 const totalActual = computed(() => props.data.reduce((s, r) => s + (Number(r.qty) || 0), 0))
 
-// =============================================
-// FLATTENED ROW DATA: Group header + data rows
-// Sắp xếp theo feature, mỗi group có 1 dòng header 
-// =============================================
+// Flatten rows with groups
 const flattenedRowData = computed((): FlatRow[] => {
-  // Group by feature
   const groups: Record<string, InventoryRow[]> = {}
   const noFeatureRows: InventoryRow[] = []
   
@@ -182,8 +175,6 @@ const flattenedRowData = computed((): FlatRow[] => {
   })
 
   const result: FlatRow[] = []
-
-  // Sort features alphabetically
   const sortedFeatures = Object.keys(groups).sort()
 
   sortedFeatures.forEach(feature => {
@@ -191,7 +182,6 @@ const flattenedRowData = computed((): FlatRow[] => {
     const m = featureMetrics.value[feature] || { sum: 0, max: 0 }
     const kienNum = m.max > 0 ? (m.sum / 2) / m.max : 0
 
-    // Group header row
     result.push({
       _rowType: 'group',
       _rowId: `group-${feature}`,
@@ -201,7 +191,6 @@ const flattenedRowData = computed((): FlatRow[] => {
       totalQty: m.sum,
     } as GroupHeaderRow)
 
-    // Data rows
     rows.forEach(row => {
       result.push({
         ...row,
@@ -212,7 +201,6 @@ const flattenedRowData = computed((): FlatRow[] => {
     })
   })
 
-  // Append no-feature rows at the end
   noFeatureRows.forEach(row => {
     result.push({
       ...row,
@@ -225,22 +213,16 @@ const flattenedRowData = computed((): FlatRow[] => {
   return result
 })
 
-// Row ID for AG Grid stability
 const getRowId = (params: any) => params.data._rowId
 
-// Group header rows are taller
 const getRowHeight = (params: any) => {
   return params.data?._rowType === 'group' ? 46 : 44
 }
 
-// CSS class for group rows
 const getRowClass = (params: any) => {
   return params.data?._rowType === 'group' ? 'ag-group-header-row' : ''
 }
 
-// =============================================
-// COLUMN DEFINITIONS
-// =============================================
 const defaultColDef: ColDef = {
   sortable: true,
   filter: true,
@@ -253,127 +235,125 @@ const columnDefs = ref<ColDef[]>([
   {
     headerName: 'STOCK CODE',
     field: 'lp_no',
-    minWidth: 145,
+    minWidth: 150,
     cellRenderer: (params: any) => {
       if (params.data?._rowType === 'group') {
-        // Group header: show feature label with styling
         const f = params.data.feature
         const kien = params.data.kienLabel
         const total = formatNumber(params.data.totalQty)
         return `
           <div style="display:flex;align-items:center;gap:10px;height:100%">
-            <div style="width:3px;height:22px;background:#6366f1;border-radius:3px;flex-shrink:0"></div>
-            <span style="font-size:11px;font-weight:900;color:#3730a3;letter-spacing:0.05em;text-transform:uppercase">
+            <div style="width:3px;height:20px;background:#CB3CFF;border-radius:2px;flex-shrink:0;box-shadow:0 0 6px #CB3CFF"></div>
+            <span style="font-size:12px;font-weight:800;color:#FFFFFF;letter-spacing:0.04em">
               FEATURE: ${f}
             </span>
-            <span style="font-size:10px;font-weight:700;color:#7c3aed;background:#ede9fe;padding:2px 9px;border-radius:20px;white-space:nowrap">
+            <span style="font-size:10px;font-weight:700;color:#CB3CFF;background:rgba(203,60,255,0.15);border:1px solid rgba(203,60,255,0.3);padding:2px 8px;border-radius:4px;white-space:nowrap">
               ${kien}
             </span>
-            <span style="font-size:11px;font-weight:800;color:#059669;background:#d1fae5;padding:2px 9px;border-radius:20px;white-space:nowrap">
+            <span style="font-size:11px;font-weight:800;color:#14CA74;background:rgba(5,193,104,0.15);border:1px solid rgba(5,193,104,0.3);padding:2px 8px;border-radius:4px;white-space:nowrap">
               Tổng ${total} PCS
             </span>
           </div>
         `
       }
-      // Normal data row
       const val = params.value
       if (!val || val === 'No data') {
-        return '<span style="color:#ef4444;font-size:10px;font-weight:700;background:#fee2e2;padding:2px 6px;border-radius:5px">No Data</span>'
+        return '<span style="color:#FF5A65;font-size:10px;font-weight:700;background:rgba(255,90,101,0.15);border:1px solid rgba(255,90,101,0.3);padding:2px 6px;border-radius:4px">No Data</span>'
       }
-      return `<span style="color:#64748b;font-weight:500;font-family:monospace;font-size:11px">${val}</span>`
+      return `<span style="color:#AEB9E1;font-weight:600;font-family:monospace;font-size:12px">${val}</span>`
     },
     colSpan: (params: any) => params.data?._rowType === 'group' ? 8 : 1,
   },
   {
     headerName: 'FEATURE',
     field: 'feature',
-    width: 95,
-    cellStyle: { fontWeight: '700', color: '#4f46e5', fontSize: '12px' },
+    width: 100,
+    cellStyle: { fontWeight: '700', color: '#CB3CFF', fontSize: '12px' },
   },
   {
     headerName: 'ACTUAL',
     field: 'qty',
-    width: 105,
+    width: 110,
     type: 'numericColumn',
     valueFormatter: params => {
       if (params.data?._rowType === 'group') return ''
       return params.value != null ? formatNumber(params.value) : ''
     },
-    cellStyle: { fontWeight: '900', color: '#0f172a', textAlign: 'right' },
+    cellStyle: { fontWeight: '800', color: '#FFFFFF', textAlign: 'right' },
   },
   {
     headerName: 'WAREHOUSE',
     field: 'warehouse',
-    width: 110,
+    width: 115,
     cellRenderer: (params: any) => {
       if (params.data?._rowType === 'group') return ''
       const val = params.value
       if (!val || val === 'No data') {
-        return '<span style="padding:2px 7px;background:#fee2e2;color:#dc2626;border-radius:6px;font-size:10px;font-weight:700">No Data</span>'
+        return '<span style="padding:2px 6px;background:rgba(255,90,101,0.15);border:1px solid rgba(255,90,101,0.3);color:#FF5A65;border-radius:4px;font-size:10px;font-weight:700">No Data</span>'
       }
-      return `<span style="font-weight:700;color:#334155">${val}</span>`
+      return `<span style="font-weight:700;color:#00C2FF;background:rgba(0,194,255,0.1);border:1px solid rgba(0,194,255,0.25);padding:2px 8px;border-radius:4px">${val}</span>`
     },
     cellStyle: { textAlign: 'center' },
   },
   {
     headerName: 'STOCK-UPDATE',
     field: 'stock_in_date',
-    width: 155,
+    width: 160,
     valueFormatter: params => {
       if (params.data?._rowType === 'group') return ''
       return formatDateTime(params.value)
     },
-    cellStyle: { color: '#64748b', fontSize: '11px' },
+    cellStyle: { color: '#AEB9E1', fontSize: '11px' },
   },
   {
     headerName: 'CREATEDATE',
     field: 'create_date',
-    width: 110,
+    width: 115,
     valueFormatter: params => params.data?._rowType === 'group' ? '' : (params.value || ''),
-    cellStyle: { color: '#94a3b8', fontSize: '11px' },
+    cellStyle: { color: '#AEB9E1', fontSize: '11px' },
   },
   {
     headerName: 'TAG ID',
     field: 'tag_id',
-    minWidth: 155,
+    minWidth: 160,
     cellRenderer: (params: any) => {
       if (params.data?._rowType === 'group') return ''
       if (!params.value) return ''
-      return `<span style="font-family:monospace;font-weight:700;color:#4f46e5;font-size:11px">${params.value}</span>`
+      return `<span style="font-family:monospace;font-weight:700;color:#00C2FF;font-size:11px">${params.value}</span>`
     },
   },
   {
     headerName: 'BIN',
     field: 'bin',
-    width: 100,
+    width: 105,
     valueFormatter: params => params.data?._rowType === 'group' ? '' : (params.value || 'N/A'),
-    cellStyle: { fontFamily: 'monospace', color: '#475569', fontWeight: '600', fontSize: '11px' },
+    cellStyle: { fontFamily: 'monospace', color: '#AEB9E1', fontWeight: '600', fontSize: '11px' },
   },
   {
     headerName: 'HÀNH ĐỘNG',
     field: 'actions',
-    width: 105,
+    width: 110,
     sortable: false,
     filter: false,
     cellRenderer: (params: any) => {
       if (params.data?._rowType === 'group' || !params.data) return ''
       const container = document.createElement('div')
-      container.style.cssText = 'display:flex;gap:5px;align-items:center;justify-content:center;height:100%'
+      container.style.cssText = 'display:flex;gap:6px;align-items:center;justify-content:center;height:100%'
 
       const btnOut = document.createElement('button')
-      btnOut.style.cssText = 'color:#ef4444;padding:5px;background:#fef2f2;border-radius:8px;border:1px solid #fecaca;cursor:pointer;display:flex;align-items:center;transition:background 0.15s'
+      btnOut.style.cssText = 'color:#FF5A65;padding:5px;background:rgba(255,90,101,0.12);border-radius:6px;border:1px solid rgba(255,90,101,0.3);cursor:pointer;display:flex;align-items:center;transition:all 0.15s'
       btnOut.title = 'Xuất Nhanh'
       btnOut.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`
-      btnOut.onmouseenter = () => { btnOut.style.background = '#fee2e2' }
-      btnOut.onmouseleave = () => { btnOut.style.background = '#fef2f2' }
+      btnOut.onmouseenter = () => { btnOut.style.background = 'rgba(255,90,101,0.25)' }
+      btnOut.onmouseleave = () => { btnOut.style.background = 'rgba(255,90,101,0.12)' }
       btnOut.onclick = (e) => { e.stopPropagation(); emit('quick-out', params.data as InventoryRow) }
 
       const btnEdit = document.createElement('button')
-      btnEdit.style.cssText = 'color:#d97706;padding:5px;background:#fffbeb;border-radius:8px;border:1px solid #fde68a;cursor:pointer;display:flex;align-items:center;transition:background 0.15s'
+      btnEdit.style.cssText = 'color:#FDB52A;padding:5px;background:rgba(253,181,42,0.12);border-radius:6px;border:1px solid rgba(253,181,42,0.3);cursor:pointer;display:flex;align-items:center;transition:all 0.15s'
       btnEdit.title = 'Sửa Nhanh'
       btnEdit.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`
-      btnEdit.onmouseenter = () => { btnEdit.style.background = '#fef3c7' }
-      btnEdit.onmouseleave = () => { btnEdit.style.background = '#fffbeb' }
+      btnEdit.onmouseenter = () => { btnEdit.style.background = 'rgba(253,181,42,0.25)' }
+      btnEdit.onmouseleave = () => { btnEdit.style.background = 'rgba(253,181,42,0.12)' }
       btnEdit.onclick = (e) => { e.stopPropagation(); emit('edit', params.data as InventoryRow) }
 
       container.appendChild(btnOut)
@@ -400,8 +380,6 @@ const doesExternalFilterPass = (node: any) => {
 
   if (data._rowType === 'group') {
     if (data.feature && data.feature.toLowerCase().includes(generalQuery)) return true
-    
-    // Check if any child matches
     const children = props.data.filter(r => r.feature === data.feature)
     return children.some(r => {
        if (whQuery) return r.warehouse?.includes(whQuery)
@@ -410,7 +388,6 @@ const doesExternalFilterPass = (node: any) => {
     })
   }
 
-  // Data row
   if (whQuery) {
     return data.warehouse?.includes(whQuery)
   }
@@ -429,7 +406,7 @@ const doesExternalFilterPass = (node: any) => {
 const gridOptions: GridOptions = {
   suppressCellFocus: true,
   suppressRowClickSelection: true,
-  overlayNoRowsTemplate: '<span style="color:#94a3b8;font-size:12px;font-style:italic">Không có dữ liệu tồn kho</span>',
+  overlayNoRowsTemplate: '<span style="color:#AEB9E1;font-size:12px;font-style:italic">Không có dữ liệu tồn kho</span>',
   isExternalFilterPresent,
   doesExternalFilterPass,
 }

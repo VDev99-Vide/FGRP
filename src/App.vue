@@ -1,10 +1,10 @@
 <template>
-  <div class="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-slate-50/50">
+  <div class="flex flex-col lg:flex-row min-h-screen w-full text-white relative">
     <!-- PrimeVue Toast Host -->
     <Toast />
     <ConfirmDialog />
 
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar Navigation (Dashdark V) -->
     <AppSidebar 
       v-model="currentTab" 
       :lastSync="lastSync" 
@@ -13,343 +13,272 @@
     />
 
     <!-- Main Content wrapper -->
-    <div class="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-      <main class="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 w-full">
-        <div class="max-w-[1600px] mx-auto w-full h-full flex flex-col">
-      
-      <!-- Top Title and Info Bar (Desktop only) -->
-      <div class="hidden lg:flex justify-between items-center mb-6 bg-white/70 backdrop-blur-xl p-6 rounded-2xl border border-white/60 shadow-sm shrink-0">
+    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <!-- Top Header Area (Fixed/Sticky at top of content with Frosted Glass) -->
+      <header class="hidden lg:flex justify-between items-center px-8 py-5 glass-header shrink-0 z-20">
         <div>
-          <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">HỆ THỐNG BÁO CÁO TỒN KHO</p>
-          <h1 class="text-3xl font-black bg-gradient-to-r from-slate-800 to-indigo-800 bg-clip-text text-transparent tracking-tight uppercase py-1">
-            {{ currentTabName }}
+          <h1 class="text-2xl lg:text-3xl font-bold text-white tracking-tight">
+            Xin chào ! <span v-if="currentTab !== 'dashboard'" class="text-[#CB3CFF] text-xl font-medium">/ {{ currentTabName }}</span>
           </h1>
+          <p class="text-xs text-[#AEB9E1] mt-0.5">
+            Hệ thống quản lý tồn kho và báo cáo tự động Dashdark V.
+          </p>
         </div>
-        <div class="text-right">
-          <p class="text-xs font-semibold text-slate-400">Đồng bộ cuối cùng lúc</p>
-          <p class="text-sm font-black text-indigo-600">{{ lastSync }}</p>
+        
+        <div class="flex items-center gap-4">
+          <!-- Connection Mode Badge -->
+          <div v-if="isDemoMode" class="flex items-center gap-2 px-3 py-1.5 bg-[#FDB52A]/15 border border-[#FDB52A]/30 backdrop-blur-md rounded-[8px] text-[#FDB52A] text-xs font-semibold shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-[#FDB52A] animate-pulse"></span>
+            <span>Dữ liệu mẫu (Demo Mode)</span>
+            <button 
+              @click="handleResetMockData" 
+              title="Đặt lại dữ liệu mẫu về mặc định ban đầu" 
+              class="ml-1 text-[11px] underline text-[#FDB52A] hover:text-white font-bold cursor-pointer"
+            >
+              Đặt lại
+            </button>
+          </div>
+          <div v-else class="flex items-center gap-2 px-3 py-1.5 bg-[#05C168]/15 border border-[#05C168]/30 backdrop-blur-md rounded-[8px] text-[#14CA74] text-xs font-semibold shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74]"></span>
+            <span>Supabase Trực Tiếp</span>
+          </div>
+
+          <div class="text-right pl-3 border-l border-white/10">
+            <p class="text-[10px] text-[#AEB9E1]">Đồng bộ lúc</p>
+            <p class="text-xs font-mono font-bold text-white">{{ lastSync }}</p>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <!-- Tab Content Area with Transition -->
-      
-      
-      <transition name="tab-fade" mode="out-in">
-        <!-- 1. TAB DASHBOARD -->
-        <div v-if="currentTab === 'dashboard'" class="space-y-8">
-          <!-- KPI Cards -->
-          <KpiCards :kpi="kpi" />
-
-          <!-- Trung tâm cảnh báo rủi ro -->
-          <section class="glass-card-light p-6 border-t-4 border-indigo-primary">
-            <div class="flex items-center gap-3 mb-6">
-              <div class="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
-              <h3 class="text-xs font-black text-slate-700 uppercase tracking-widest">
-                Trung Tâm Cảnh Báo Rủi Ro (Discrepancy Control)
-              </h3>
-            </div>
+      <!-- Main Scrollable Body Area -->
+      <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 w-full">
+        <div class="max-w-[1708px] mx-auto w-full flex flex-col gap-8 pb-12">
+          
+          <!-- Transition giữa các Tabs -->
+          <transition name="tab-fade" mode="out-in">
             
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <!-- Nhóm 1: Ưu tiên xử lý -->
-              <div class="bg-white/60 rounded-2xl p-5 border border-rose-100/80">
-                <div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-rose-100/50">
-                  <span class="flex h-2.5 w-2.5 relative">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
-                  </span>
-                  <h4 class="text-rose-600 font-extrabold uppercase text-[11px] tracking-wider">
-                    Ưu Tiên Xử Lý (No Data & Tồn Thấp)
-                  </h4>
-                </div>
-                
-                <div class="space-y-5">
-                  <div>
-                    <p class="text-[10px] font-extrabold text-slate-400 uppercase mb-2">
-                      Tag ID Lỗi "No Data" 
-                    </p>
-                    <div class="flex flex-wrap gap-1.5">
-                      <button 
-                        v-for="tag in analysis.noData" 
-                        :key="tag"
-                        :title="'Bins: ' + [...new Set(inventoryData.filter(r => r.tag_id === tag).map(r => r.bin))].join(', ')"
-                        class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-[10px] font-bold text-rose-600 transition-all cursor-help"
-                      >
-                        {{ tag }}
-                      </button>
-                      <span v-if="analysis.noData.length === 0" class="text-xs text-slate-400 italic">Hệ thống an toàn</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <p class="text-[10px] font-extrabold text-slate-400 uppercase mb-2">
-                      Feature Tồn Thấp (Dưới 2 Kiện)
-                    </p>
-                    <div class="flex flex-wrap gap-1.5">
-                      <span 
-                        v-for="item in analysis.lowStock" 
-                        :key="item.feat"
-                        :title="'Hiện có: ' + item.kien + ' Kiện'"
-                        class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 cursor-help border border-rose-100 rounded-lg text-[10px] font-bold text-rose-500 transition-all"
-                      >
-                        {{ item.feat }}
-                      </span>
-                      <span v-if="analysis.lowStock.length === 0" class="text-xs text-slate-400 italic">Đủ số lượng</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <!-- 1. TAB DASHBOARD (Dashdark V Layout) -->
+            <div v-if="currentTab === 'dashboard'" class="space-y-8">
+              
+              <!-- 1.1. Top 5 Metric Cards -->
+              <KpiCards :kpi="kpi" />
 
-              <!-- Nhóm 2: Theo dõi gần -->
-              <div class="bg-white/60 rounded-2xl p-5 border border-amber-100/80">
-                <div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-amber-100/50">
-                  <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                  <h4 class="text-amber-600 font-extrabold uppercase text-[11px] tracking-wider">
-                    Theo Dõi Gần (Trùng Tag & Sắp Hết)
-                  </h4>
-                </div>
-                
-                <div class="space-y-5">
-                  <div>
-                    <p class="text-[10px] font-extrabold text-slate-400 uppercase mb-2">
-                      Tag ID Bị Trùng trong Kho 
-                    </p>
-                    <div class="flex flex-wrap gap-1.5">
-                      <button 
-                        v-for="tag in analysis.duplicates" 
-                        :key="tag"
-                        :title="'Bins: ' + [...new Set(inventoryData.filter(r => r.tag_id === tag).map(r => r.bin))].join(', ')"
-                        class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-[10px] font-bold text-amber-600 transition-all cursor-help"
-                      >
-                        {{ tag }}
-                      </button>
-                      <span v-if="analysis.duplicates.length === 0" class="text-xs text-slate-400 italic">Không phát hiện trùng</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <p class="text-[10px] font-extrabold text-slate-400 uppercase mb-2">
-                      Feature Sắp Hết (Từ 3 đến 5 Kiện)
-                    </p>
-                    <div class="flex flex-wrap gap-1.5">
-                      <span 
-                        v-for="item in analysis.midStock" 
-                        :key="item.feat"
-                        :title="'Hiện có: ' + item.kien + ' Kiện'"
-                        class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 cursor-help border border-amber-100 rounded-lg text-[10px] font-bold text-amber-500 transition-all"
-                      >
-                        {{ item.feat }}
-                      </span>
-                      <span v-if="analysis.midStock.length === 0" class="text-xs text-slate-400 italic">Không có</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Charts Section -->
-          <section class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="glass-card-light p-6 lg:col-span-2">
-              <h3 class="text-xs font-black text-slate-700 uppercase mb-6 flex items-center gap-2">
-                <span class="w-1 h-4 bg-indigo-500 rounded-full"></span>
-                Actual vs iScala & Tỷ Lệ Chênh Lệch
-              </h3>
+              <!-- 1.2. Big Wave Chart: Tổng số lượng PCS (ISCALA vs ACTUAL) -->
               <ComparisonChart :data="summaryData" />
+
+              <!-- 1.3. Middle Row: Visitors Ring Chart + Recent Orders Table -->
+              <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <!-- Phân Tích Rủi Ro Lệch Kho ( top 5 ) Radial Chart -->
+                <VisitorsRingChart :summary-data="summaryData" />
+
+                <!-- Bảng dữ liệu Tag ID lỗi -->
+                <RecentOrdersTable 
+                  :inventory-data="inventoryData" 
+                  :analysis="analysis" 
+                />
+              </div>
+
+              <!-- 1.4. Bottom Section: Users by country & World Dot Matrix Map (Chấm Đỏ Lỗi, Chấm Vàng Trùng) -->
+              <WorldDotMapCard 
+                :analysis="analysis" 
+                :inventory-data="inventoryData" 
+                :kpi="kpi"
+              />
             </div>
-            
-            <div class="glass-card-light p-6">
-              <h3 class="text-xs font-black text-slate-700 uppercase mb-6 flex items-center gap-2">
-                <span class="w-1 h-4 bg-rose-500 rounded-full"></span>
-                Phân Tích Rủi Ro Lệch Kho
-              </h3>
-              <RiskNestedPieChart :data="summaryData" />
-            </div>
-          </section>
-        </div>
 
-        <!-- 2. TAB DETAIL INVENTORY -->
-        <div v-else-if="currentTab === 'inventory'" class="flex flex-col flex-1 space-y-6">
-          <!-- Control Bar for Inventory Modals -->
-          <div class="flex flex-wrap gap-3 bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200 shadow-sm shrink-0">
-            <button 
-              @click="showInboundModal = true"
-              class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all btn-premium-light cursor-pointer shadow-xs"
-            >
-              <PlusCircle class="w-4.5 h-4.5" />
-              <span>NHẬP KHO (IN)</span>
-            </button>
-            <button 
-              @click="showOutboundModal = true"
-              class="flex-1 sm:flex-none bg-rose-600 hover:bg-rose-700 text-white px-5 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all btn-premium-light cursor-pointer shadow-xs"
-            >
-              <MinusCircle class="w-4.5 h-4.5" />
-              <span>XUẤT KHO (OUT)</span>
-            </button>
-            <button 
-              @click="showUploadModal = true"
-              class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all btn-premium-light cursor-pointer shadow-xs"
-            >
-              <UploadCloud class="w-4.5 h-4.5" />
-              <span>CẬP NHẬT NGUỒN</span>
-            </button>
-          </div>
-
-          <!-- Inventory Grid AG Grid component -->
-          <InventoryGrid 
-            :data="inventoryData" 
-            @quick-out="triggerQuickOutbound"
-            @edit="triggerEditInventory"
-            @export="exportExcel"
-          />
-        </div>
-
-        <!-- 3. TAB ACCESSORIES -->
-        <div v-else-if="currentTab === 'accessories'" class="glass-card-light p-6 space-y-6">
-          <!-- Accessories Header Controls -->
-          <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div class="relative w-full sm:w-80">
-              <input 
-                type="text" 
-                v-model="pkFilter"
-                placeholder="Tìm nhanh Code, Bin..." 
-                class="w-full px-4 py-2.5 pl-10 border border-slate-200 rounded-xl text-xs outline-none bg-white text-slate-700 placeholder-slate-400 focus:ring-2 ring-violet-500 transition-all"
-              >
-              <Search class="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-            </div>
-            <button 
-              @click="showAccInboundModal = true"
-              class="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white px-5 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all btn-premium-light cursor-pointer shadow-xs"
-            >
-              <PlusCircle class="w-4.5 h-4.5" />
-              <span>NHẬP PHỤ KIỆN</span>
-            </button>
-          </div>
-
-          <!-- Accessories Detail Table -->
-          <div class="overflow-x-auto border border-slate-100 rounded-2xl bg-white/50">
-            <table class="w-full text-left text-sm whitespace-nowrap border-collapse">
-              <thead class="text-[10px] text-slate-500 uppercase bg-slate-50 sticky top-0 shadow-xs font-black">
-                <tr>
-                  <th class="px-6 py-4">Mã Phụ Kiện (Code)</th>
-                  <th class="px-4 py-4 text-right">Số lượng (Qty)</th>
-                  <th class="px-4 py-4 text-center">Vị trí (Bin)</th>
-                  <th class="px-6 py-4 text-center">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 font-medium text-slate-600">
-                <tr 
-                  v-for="row in filteredPkData" 
-                  :key="row.id" 
-                  class="hover:bg-violet-50/20 transition-colors"
+            <!-- 2. TAB TỒN KHO THÀNH PHẨM (Inventory AG Grid) -->
+            <div v-else-if="currentTab === 'inventory'" class="flex flex-col flex-1 space-y-6">
+              <!-- Control Action Buttons -->
+              <div class="flex flex-wrap gap-3 glass-card-dark p-4 rounded-2xl border border-white/10 shrink-0">
+                <button 
+                  @click="showInboundModal = true"
+                  class="flex-1 sm:flex-none h-[40px] px-5 bg-[#05C168]/20 hover:bg-[#05C168]/30 border border-[#05C168]/40 text-[#14CA74] rounded-[8px] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
                 >
-                  <td class="px-6 py-4 text-xs font-bold text-slate-700">{{ row.code }}</td>
-                  <td class="px-4 py-4 text-right font-black text-violet-600">{{ formatNumber(row.qty) }}</td>
-                  <td class="px-4 py-4 text-center text-slate-500 font-mono text-xs">{{ row.bin || 'N/A' }}</td>
-                  <td class="px-6 py-4 text-center flex justify-center gap-2">
-                    <button 
-                      @click="triggerEditAccessory(row)" 
-                      class="text-amber-600 p-1.5 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-100 text-xs font-bold cursor-pointer transition-all"
+                  <PlusCircle class="w-4 h-4" />
+                  <span>NHẬP KHO (IN)</span>
+                </button>
+                <button 
+                  @click="showOutboundModal = true"
+                  class="flex-1 sm:flex-none h-[40px] px-5 bg-[#FF5A65]/20 hover:bg-[#FF5A65]/30 border border-[#FF5A65]/40 text-[#FF5A65] rounded-[8px] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
+                >
+                  <MinusCircle class="w-4 h-4" />
+                  <span>XUẤT KHO (OUT)</span>
+                </button>
+                <button 
+                  @click="showUploadModal = true"
+                  class="flex-1 sm:flex-none h-[40px] px-5 btn-neon-purple rounded-[8px] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
+                >
+                  <UploadCloud class="w-4 h-4" />
+                  <span>CẬP NHẬT NGUỒN</span>
+                </button>
+              </div>
+
+              <!-- Inventory Grid AG Grid component -->
+              <InventoryGrid 
+                :data="inventoryData" 
+                @quick-out="triggerQuickOutbound"
+                @edit="triggerEditInventory"
+                @export="exportExcel"
+              />
+            </div>
+
+            <!-- 3. TAB QUẢN LÝ PHỤ KIỆN (Accessories) -->
+            <div v-else-if="currentTab === 'accessories'" class="glass-card-dark p-6 lg:p-8 space-y-6">
+              <!-- Accessories Header Controls -->
+              <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pb-2 border-b border-white/[0.08]">
+                <div>
+                  <h3 class="text-lg font-bold text-white tracking-wide">Quản Lý Phụ Kiện</h3>
+                  <p class="text-xs text-[#AEB9E1]">Theo dõi tồn kho &amp; phân bổ phụ kiện theo vị trí Bin</p>
+                </div>
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                  <div class="relative flex-1 sm:w-80">
+                    <input 
+                      type="text" 
+                      v-model="pkFilter"
+                      placeholder="Tìm nhanh Code, Bin..." 
+                      class="w-full h-[40px] px-4 pl-10 bg-white/[0.06] backdrop-blur-md border border-white/15 rounded-[8px] text-xs outline-none text-white placeholder-[#AEB9E1]/50 focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
                     >
-                      Sửa
-                    </button>
-                    <button 
-                      @click="triggerOutboundAccessory(row)" 
-                      class="text-rose-600 p-1.5 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-100 text-xs font-bold cursor-pointer transition-all"
+                    <Search class="w-4 h-4 text-[#AEB9E1] absolute left-3.5 top-3" />
+                  </div>
+                  <button 
+                    @click="showAccInboundModal = true"
+                    class="h-[40px] px-5 btn-neon-purple rounded-[8px] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm shrink-0"
+                  >
+                    <PlusCircle class="w-4 h-4" />
+                    <span>NHẬP PHỤ KIỆN</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Accessories Frosted Glass Table (DỮ LIỆU GẮN TRỰC TIẾP TRÊN BẢNG KÍNH MỜ TIÊU CHUẨN) -->
+              <div class="overflow-x-auto overflow-y-auto max-h-[600px] custom-scroll">
+                <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+                  <thead class="bg-[#283241]/75 backdrop-blur-md text-[#AEB9E1] font-semibold border-b border-white/10 sticky top-0 z-10">
+                    <tr>
+                      <th class="py-3.5 px-4 font-semibold">MÃ PHỤ KIỆN (CODE)</th>
+                      <th class="py-3.5 px-4 text-right font-semibold">SỐ LƯỢNG (QTY)</th>
+                      <th class="py-3.5 px-4 text-center font-semibold">VỊ TRÍ (BIN)</th>
+                      <th class="py-3.5 px-4 text-center font-semibold">THAO TÁC</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-white/[0.06] font-medium">
+                    <tr 
+                      v-for="row in filteredPkData" 
+                      :key="row.id"
+                      class="transition-colors duration-150 hover:bg-white/[0.08]"
                     >
-                      Xuất
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="filteredPkData.length === 0">
-                  <td colspan="4" class="text-center py-8 text-slate-400 italic text-xs bg-slate-50/20">
-                    Không tìm thấy phụ kiện phù hợp!
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+                      <td class="py-3.5 px-4 font-bold text-[#00C2FF] font-mono text-xs">{{ row.code }}</td>
+                      <td class="py-3.5 px-4 text-right font-bold text-[#14CA74] text-xs">{{ formatNumber(row.qty) }}</td>
+                      <td class="py-3.5 px-4 text-center text-[#AEB9E1] font-mono text-xs">{{ row.bin || 'N/A' }}</td>
+                      <td class="py-3.5 px-4 text-center">
+                        <div class="flex justify-center gap-2">
+                          <button 
+                            @click="triggerEditAccessory(row)" 
+                            class="px-3 py-1 bg-[#FDB52A]/15 hover:bg-[#FDB52A]/25 text-[#FDB52A] rounded-[4px] border border-[#FDB52A]/30 text-xs font-bold cursor-pointer transition"
+                          >
+                            Sửa
+                          </button>
+                          <button 
+                            @click="triggerOutboundAccessory(row)" 
+                            class="px-3 py-1 bg-[#FF5A65]/15 hover:bg-[#FF5A65]/25 text-[#FF5A65] rounded-[4px] border border-[#FF5A65]/30 text-xs font-bold cursor-pointer transition"
+                          >
+                            Xuất
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr v-if="filteredPkData.length === 0">
+                      <td colspan="4" class="text-center py-12 text-[#AEB9E1] italic text-xs">
+                        Không tìm thấy phụ kiện phù hợp!
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </transition>
+
         </div>
-      </transition>
+      </main>
 
-      <!-- ----------------------------------------- -->
-      <!-- MODALS & DIALOGS HOSTS -->
-      <!-- ----------------------------------------- -->
-
-      <!-- 1. Inbound Inventory Modal -->
-      <InboundModal 
-        v-model:visible="showInboundModal"
-        :inventory-data="inventoryData"
-        @inbound="handleInboundSubmit"
-        @import-csv="handleCsvImportSubmit"
-      />
-
-      <!-- 2. Outbound Inventory Modal -->
-      <OutboundModal 
-        v-model:visible="showOutboundModal"
-        :inventory-data="inventoryData"
-        :loading="loading"
-        @outbound="handleOutboundSubmit"
-      />
-
-      <!-- 3. Quick Outbound Modal -->
-      <QuickOutboundModal 
-        v-model:visible="showQuickOutModal"
-        :target="quickOutTarget"
-        @cancel="showQuickOutModal = false"
-        @confirm="handleQuickOutConfirm"
-      />
-
-      <!-- 4. Edit Inventory Modal -->
-      <EditInventoryModal 
-        v-model:visible="showEditInvModal"
-        :target="editInvTarget"
-        :loading="loading"
-        @cancel="showEditInvModal = false"
-        @save="handleEditInvSubmit"
-      />
-
-      <!-- 5. Upload Master CSV Modal -->
-      <UploadMasterModal 
-        v-model:visible="showUploadModal"
-        :loading="loading"
-        @upload="handleUploadMasterSubmit"
-      />
-
-      <!-- 6. Accessory Inbound Modal -->
-      <AccessoryInboundModal 
-        v-model:visible="showAccInboundModal"
-        :unique-codes="uniqueCodes"
-        :loading="loading"
-        @cancel="showAccInboundModal = false"
-        @save="handleAccInboundSubmit"
-      />
-
-      <!-- 7. Accessory Edit Modal -->
-      <AccessoryEditModal 
-        v-model:visible="showAccEditModal"
-        :target="accEditTarget"
-        :loading="loading"
-        @cancel="showAccEditModal = false"
-        @save="handleAccEditSubmit"
-      />
-
-      <!-- 8. Accessory Outbound Modal -->
-      <AccessoryOutboundModal 
-        v-model:visible="showAccOutModal"
-        :target="accOutTarget"
-        :loading="loading"
-        @outbound-all="handleAccOutAll"
-        @outbound-partial="handleAccOutPartial"
-      />
-
-      </div>
-    </main>
-
-    <!-- Footer Copyright -->
-    <footer class="app-footer w-full mt-auto text-center py-3 bg-white/80 border-t border-slate-200/50 text-[10px] font-bold text-slate-400">
-      ENGINEERED BY VINH © 2026 | DATA ANALYTICS SYSTEM.
-    </footer>
+      <!-- Footer -->
+      <footer class="w-full text-center py-3.5 glass-footer text-[10px] font-semibold text-[#AEB9E1] tracking-wider shrink-0 z-20">
+        <span class="neon-glow-text">
+          ENGINEERED BY VINH &copy; 2026 | DATA ANALYTICS SYSTEM — DASHDARK V PRO
+        </span>
+      </footer>
     </div>
+
+    <!-- ----------------------------------------- -->
+    <!-- MODALS & DIALOGS HOSTS                    -->
+    <!-- ----------------------------------------- -->
+
+    <!-- 1. Inbound Inventory Modal -->
+    <InboundModal 
+      v-model:visible="showInboundModal"
+      :inventory-data="inventoryData"
+      @inbound="handleInboundSubmit"
+      @import-csv="handleCsvImportSubmit"
+    />
+
+    <!-- 2. Outbound Inventory Modal -->
+    <OutboundModal 
+      v-model:visible="showOutboundModal"
+      :inventory-data="inventoryData"
+      :loading="loading"
+      @outbound="handleOutboundSubmit"
+    />
+
+    <!-- 3. Quick Outbound Modal -->
+    <QuickOutboundModal 
+      v-model:visible="showQuickOutModal"
+      :target="quickOutTarget"
+      @cancel="showQuickOutModal = false"
+      @confirm="handleQuickOutConfirm"
+    />
+
+    <!-- 4. Edit Inventory Modal -->
+    <EditInventoryModal 
+      v-model:visible="showEditInvModal"
+      :target="editInvTarget"
+      :loading="loading"
+      @cancel="showEditInvModal = false"
+      @save="handleEditInvSubmit"
+    />
+
+    <!-- 5. Upload Master CSV Modal -->
+    <UploadMasterModal 
+      v-model:visible="showUploadModal"
+      :loading="loading"
+      @upload="handleUploadMasterSubmit"
+    />
+
+    <!-- 6. Accessory Inbound Modal -->
+    <AccessoryInboundModal 
+      v-model:visible="showAccInboundModal"
+      :unique-codes="uniqueCodes"
+      :loading="loading"
+      @cancel="showAccInboundModal = false"
+      @save="handleAccInboundSubmit"
+    />
+
+    <!-- 7. Accessory Edit Modal -->
+    <AccessoryEditModal 
+      v-model:visible="showAccEditModal"
+      :target="accEditTarget"
+      :loading="loading"
+      @cancel="showAccEditModal = false"
+      @save="handleAccEditSubmit"
+    />
+
+    <!-- 8. Accessory Outbound Modal -->
+    <AccessoryOutboundModal 
+      v-model:visible="showAccOutModal"
+      :target="accOutTarget"
+      :loading="loading"
+      @outbound-all="handleAccOutAll"
+      @outbound-partial="handleAccOutPartial"
+    />
   </div>
 </template>
 
@@ -367,11 +296,13 @@ import {
   Search 
 } from 'lucide-vue-next'
 
-// Sub-components
+// Layout & Dashboard Components
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import KpiCards from '@/components/kpi/KpiCards.vue'
 import ComparisonChart from '@/components/charts/ComparisonChart.vue'
-import RiskNestedPieChart from '@/components/charts/RiskNestedPieChart.vue'
+import VisitorsRingChart from '@/components/dashboard/VisitorsRingChart.vue'
+import RecentOrdersTable from '@/components/dashboard/RecentOrdersTable.vue'
+import WorldDotMapCard from '@/components/dashboard/WorldDotMapCard.vue'
 import InventoryGrid from '@/components/inventory/InventoryGrid.vue'
 
 // Modals
@@ -384,9 +315,10 @@ import AccessoryInboundModal from '@/components/accessories/AccessoryInboundModa
 import AccessoryEditModal from '@/components/accessories/AccessoryEditModal.vue'
 import AccessoryOutboundModal from '@/components/accessories/AccessoryOutboundModal.vue'
 
-// Composables
+// Composables & Services
 import { useInventory } from '@/composables/useInventory'
 import { useAccessories } from '@/composables/useAccessories'
+import { resetMockData } from '@/services/mockData'
 import { exportToExcel } from '@/services/excelExport'
 import { formatNumber } from '@/utils/format'
 import { InventoryRow, HangPhuKienRow } from '@/types'
@@ -399,6 +331,7 @@ const currentTab = ref('dashboard')
 // Composables states
 const {
   loading,
+  isDemoMode,
   inventoryData,
   summaryData,
   kpi,
@@ -461,16 +394,27 @@ const loadAllData = async () => {
     toast.add({
       severity: 'error',
       summary: 'Lỗi tải dữ liệu',
-      detail: e.message || 'Không thể đồng bộ dữ liệu từ Supabase!',
+      detail: e.message || 'Không thể đồng bộ dữ liệu!',
       life: 5000
     })
   }
 }
 
+// Reset Mock Data
+const handleResetMockData = () => {
+  resetMockData()
+  loadAllData()
+  toast.add({
+    severity: 'info',
+    summary: 'Đã đặt lại dữ liệu',
+    detail: 'Dữ liệu mẫu đã được khôi phục về trạng thái ban đầu',
+    life: 3000
+  })
+}
+
 onMounted(() => {
   loadAllData()
 })
-
 
 // Inbound Submission (Manual)
 const handleInboundSubmit = async (payload: { tagId: string; bin: string; option: 'update' | 'insert' }) => {
@@ -701,14 +645,14 @@ const handleAccOutPartial = async (id: string, currentQty: number, outQty: numbe
   }
 }
 
-// Export Excel (từ Supabase View thực tế)
+// Export Excel
 const exportExcel = () => {
   try {
     exportToExcel(inventoryData.value, summaryData.value, accessoriesData.value)
     toast.add({
       severity: 'success',
       summary: 'Đang tải báo cáo Excel',
-      detail: 'Đã xuất dữ liệu thực tế từ Supabase thành công!',
+      detail: 'Đã xuất dữ liệu thực tế thành công!',
       life: 3000
     })
   } catch (e: any) {

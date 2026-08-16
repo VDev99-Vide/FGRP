@@ -7,39 +7,43 @@
     :style="{ width: '90vw', maxWidth: '400px' }"
   >
     <div class="space-y-4 pt-2 text-center" v-if="target">
-      <div class="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-600">
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div class="w-12 h-12 bg-[#FF5A65]/20 border border-[#FF5A65]/40 rounded-full flex items-center justify-center mx-auto text-[#FF5A65]">
+        <AlertTriangle class="w-6 h-6" />
       </div>
       
-      <p class="text-xs text-slate-500 leading-relaxed">
+      <p class="text-xs text-[#AEB9E1] leading-relaxed">
         Bạn có chắc chắn muốn xuất nhanh sản phẩm này khỏi kho?
       </p>
 
-      <div class="bg-slate-50 p-4 rounded-xl text-left text-xs font-bold text-slate-600 space-y-2 border border-slate-100">
+      <div class="bg-white/[0.04] backdrop-blur-md p-4 rounded-xl text-left text-xs font-semibold text-white space-y-2 border border-white/12 shadow-sm">
         <div class="flex justify-between">
-          <span class="text-slate-400">Tag ID:</span>
-          <span class="font-mono text-indigo-600">{{ target.tag_id }}</span>
+          <span class="text-[#AEB9E1]">Tag ID:</span>
+          <span class="font-mono text-[#00C2FF] font-bold">{{ target.tag_id }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-slate-400">Vị trí (Bin):</span>
-          <span class="font-mono">{{ target.bin || 'N/A' }}</span>
+          <span class="text-[#AEB9E1]">Vị trí (Bin):</span>
+          <span class="font-mono text-[#CB3CFF] font-bold">{{ target.bin || 'N/A' }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-slate-400">Stock Code:</span>
-          <span>{{ target.lp_no }}</span>
+          <span class="text-[#AEB9E1]">Stock Code:</span>
+          <span class="font-mono text-white">{{ target.lp_no }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-[#AEB9E1]">Số lượng:</span>
+          <span class="text-[#14CA74] font-bold">{{ target.qty }} PCS</span>
         </div>
       </div>
 
       <div class="flex gap-3 pt-2">
         <button 
           @click="$emit('cancel')" 
-          class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer"
+          class="flex-1 bg-white/10 hover:bg-white/20 text-[#AEB9E1] font-bold py-2.5 rounded-[7px] text-xs transition cursor-pointer"
         >
           HỦY
         </button>
         <button 
           @click="$emit('confirm', target)" 
-          class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs cursor-pointer"
+          class="flex-1 bg-[#FF5A65] hover:bg-[#FF5A65]/90 text-white font-bold py-2.5 rounded-[7px] text-xs transition shadow-lg cursor-pointer"
         >
           XÁC NHẬN XUẤT
         </button>
@@ -50,6 +54,7 @@
 
 <script setup lang="ts">
 import Dialog from 'primevue/dialog'
+import { AlertTriangle } from 'lucide-vue-next'
 import { InventoryRow } from '@/types'
 
 defineProps<{

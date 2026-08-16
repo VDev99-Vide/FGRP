@@ -4,56 +4,55 @@
     @update:visible="$emit('update:visible', $event)" 
     modal 
     header="Nhập Kho Phụ Kiện" 
-    :style="{ width: '90vw', maxWidth: '400px' }"
+    :style="{ width: '90vw', maxWidth: '440px' }"
     @hide="onHide"
   >
     <div class="space-y-4 pt-2">
       <div>
-        <label class="text-xs font-bold text-slate-400">Mã Phụ Kiện (Code)</label>
-        <!-- Dùng AutoComplete của PrimeVue để gợi ý mã cũ -->
+        <label class="text-[10px] font-bold text-[#AEB9E1] uppercase">Mã Phụ Kiện (Code)</label>
         <AutoComplete
           v-model="code"
           :suggestions="filteredCodes"
           @complete="searchCodes"
           placeholder="Nhập hoặc chọn mã phụ kiện..."
           dropdown
-          class="w-full mt-1 font-bold text-sm bg-white"
-          inputClass="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-bold"
+          class="w-full mt-1 font-bold text-sm"
+          inputClass="w-full p-2.5 bg-white/[0.06] border border-white/15 rounded-[7px] text-white outline-none font-bold placeholder-[#AEB9E1]/40 focus:border-[#CB3CFF]"
         />
       </div>
       
       <div>
-        <label class="text-xs font-bold text-slate-400">Số lượng (Qty)</label>
+        <label class="text-[10px] font-bold text-[#AEB9E1] uppercase">Số lượng (Qty)</label>
         <InputText 
           v-model="qtyStr" 
           type="number"
           placeholder="Nhập số lượng..."
-          class="w-full mt-1 p-2.5 font-bold text-sm bg-white"
+          class="w-full mt-1 p-2.5 font-bold text-sm bg-white/[0.06] border border-white/15 rounded-[7px] text-white placeholder-[#AEB9E1]/40 focus:border-[#CB3CFF]"
         />
       </div>
 
       <div>
-        <label class="text-xs font-bold text-slate-400">Vị trí (Bin)</label>
+        <label class="text-[10px] font-bold text-[#AEB9E1] uppercase">Vị trí (Bin)</label>
         <InputText 
           v-model="bin" 
           placeholder="Nhập vị trí..."
-          class="w-full mt-1 p-2.5 font-mono font-bold text-sm bg-white"
+          class="w-full mt-1 p-2.5 font-mono font-bold text-sm bg-white/[0.06] border border-white/15 rounded-[7px] text-white placeholder-[#AEB9E1]/40 focus:border-[#CB3CFF]"
         />
       </div>
 
-      <p v-if="msg" class="text-xs font-bold text-center h-4 text-emerald-600">{{ msg }}</p>
+      <p v-if="msg" class="text-xs font-bold text-center h-4 text-[#14CA74]">{{ msg }}</p>
 
       <div class="flex gap-3 pt-2">
         <button 
           @click="$emit('cancel')" 
-          class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer"
+          class="flex-1 bg-white/10 hover:bg-white/20 text-[#AEB9E1] font-bold py-2.5 rounded-[7px] text-xs transition cursor-pointer"
         >
           HỦY
         </button>
         <button 
           @click="save" 
           :disabled="loading"
-          class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs cursor-pointer disabled:opacity-50"
+          class="flex-1 btn-neon-purple font-bold py-2.5 rounded-[7px] text-xs transition shadow-lg cursor-pointer disabled:opacity-50"
         >
           LƯU THÔNG TIN
         </button>
@@ -86,7 +85,6 @@ const bin = ref('')
 const msg = ref('')
 const filteredCodes = ref<string[]>([])
 
-// Tìm kiếm mã phụ kiện cũ bằng AutoComplete
 const searchCodes = (event: any) => {
   const query = event.query.trim().toLowerCase()
   if (!query) {

@@ -14,5 +14,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
-  base: './' // Using relative base path makes it extremely easy to deploy anywhere, including GitHub Pages subpaths.
+  server: {
+    host: '0.0.0.0',
+    port: 5173
+  },
+  base: './'
 })

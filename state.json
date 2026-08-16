@@ -1,0 +1,62 @@
+{
+  "project": "FGRP",
+  "lastUpdated": "2026-08-16T06:11:00Z",
+  "phase": "local-testing",
+  "status": "ready-for-review",
+  "tasks": {
+    "cleanupAider": "done",
+    "createStateJson": "done",
+    "reviewRepo": "done",
+    "fixBlankScreenBug": "done",
+    "setupMockDataFallback": "done",
+    "verifyBuildAndRun": "done",
+    "writeReport": "done",
+    "redesignComparisonChartLine": "done",
+    "redesignRiskNestedPieChart": "done"
+  },
+  "repoStructure": {
+    "framework": "Vue 3 + Vite + TypeScript + Tailwind CSS v4 + PrimeVue v4 + AG Grid + ECharts",
+    "backend": "Supabase (với chế độ Dữ liệu mẫu Demo Mode tự động fallback khi chưa có credentials)",
+    "mainEntry": "src/App.vue",
+    "styles": ["src/styles/index.css", "src/style.css"],
+    "composables": ["useAccessories.ts", "useInventory.ts"],
+    "services": ["csvNormalizer.ts", "excelExport.ts", "supabase.ts", "mockData.ts"],
+    "types": "src/types/index.ts",
+    "utils": "src/utils/format.ts",
+    "database": ["fix_views_actual_schema.sql", "supabase.sql"]
+  },
+  "chartDesign": {
+    "comparisonChart": {
+      "type": "Dual Glowing Smooth Line Chart",
+      "background": "#0A0D10",
+      "actualLine": "Neon Green #00FF29 width 3px với neon glow aura",
+      "iscalaLine": "Cyan Blue #0096C7 width 3px với halo glow gradient 19px",
+      "headerLegend": "Capsule pills cho ACTUAL (#00FF29) và iSCALA (#0199B3) kèm tổng Diff % (+XX.XX%) góc phải",
+      "gridLines": "Vertical divider lines #324B55 cùng alternating dark bands #0B0F13 giống SVG gốc"
+    },
+    "riskNestedPieChart": {
+      "type": "5-Concentric Ring Radial Gauge Chart",
+      "background": "#0A0D10",
+      "baseTracks": "5 vòng tròn đồng tâm nền xám đen #151A20",
+      "activeArcColors": [
+        "#FFC300 (Vivid Amber Gold - Vòng trong cùng)",
+        "#F72585 (Neon Magenta)",
+        "#4CC9F0 (Sky Blue)",
+        "#5ED500 (Electric Lime)",
+        "#005F73 (Deep Teal - Vòng ngoài cùng)"
+      ],
+      "centerStat": "Tỷ lệ khớp / Độ chính xác tổng thể (ví dụ 98.00%) chữ trắng to nổi bật giữa tâm",
+      "interactiveBadges": "5 thẻ badge tương tác bên dưới hiển thị mã Feature và tỷ lệ % lệch"
+    }
+  },
+  "mockDataFeatures": {
+    "sampleInventory": "Đầy đủ các Feature (1009, 1010, 1011, 1012, 1014, 1015, 1020, 1088, 1099), kho 62, 50, 60, 01, dữ liệu lỗi No Data và Trùng Tag phục vụ kiểm thử rủi ro",
+    "sampleAccessories": "Danh sách phụ kiện thực tế với đầy đủ thao tác nhập kho, sửa, xuất toàn bộ, xuất 1 phần",
+    "localStoragePersistence": "Tự động lưu thay đổi khi thao tác trên giao diện, hỗ trợ nút Đặt lại dữ liệu gốc",
+    "excelExport": "Hỗ trợ xuất Excel 3 sheets trực tiếp từ dữ liệu hiện tại"
+  },
+  "nextSteps": [
+    "Dev server đang chạy tại localhost:5173",
+    "Người dùng kiểm tra trọn bộ 2 biểu đồ Line Chart và Concentric Rings Chart mới trên trình duyệt"
+  ]
+}

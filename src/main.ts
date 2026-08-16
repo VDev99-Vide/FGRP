@@ -5,43 +5,46 @@ import Aura from '@primevue/themes/aura'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 
-// Import CSS (including Tailwind CSS v4)
+// Import CSS (including Tailwind CSS v4 and Dashdark V Dark Glassmorphism tokens)
 import './styles/index.css'
 
 // ECharts Setup
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, PieChart } from 'echarts/charts'
+import { BarChart, LineChart, PieChart, GaugeChart } from 'echarts/charts'
 import {
   GridComponent,
   TooltipComponent,
   LegendComponent,
   TitleComponent,
-  DataZoomComponent
+  DataZoomComponent,
+  PolarComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 
-// Đăng ký các module ECharts cần dùng để tối ưu hóa bundle size
+// Đăng ký các module ECharts cần dùng
 use([
   CanvasRenderer,
   BarChart,
   LineChart,
   PieChart,
+  GaugeChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
   TitleComponent,
-  DataZoomComponent
+  DataZoomComponent,
+  PolarComponent
 ])
 
 const app = createApp(App)
 
-// Sử dụng PrimeVue v4 cấu hình Aura theme
+// Cấu hình PrimeVue v4 Aura Dark
 app.use(PrimeVue, {
   theme: {
     preset: Aura,
     options: {
-      darkModeSelector: 'none' // Chỉ dùng theme sáng (Light Mode) theo giao diện luxury cũ
+      darkModeSelector: 'system'
     }
   }
 })

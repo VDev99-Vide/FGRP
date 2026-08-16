@@ -1,9 +1,15 @@
 import { ref, reactive } from 'vue'
-import { supabase } from '@/services/supabase'
+import { supabase, isSupabaseConfigured } from '@/services/supabase'
+import { 
+  getMockInventory, 
+  saveMockInventory, 
+  generateMockSummary 
+} from '@/services/mockData'
 import { InventoryRow, SummaryAnalysisRow, KpiState, AnalysisState } from '@/types'
 
 export function useInventory() {
   const loading = ref(false)
+  const isDemoMode = ref(!isSupabaseConfigured)
   const inventoryData = ref<InventoryRow[]>([])
   const summaryData = ref<SummaryAnalysisRow[]>([])
   const lastSync = ref('--:--')
@@ -27,25 +33,52 @@ export function useInventory() {
   const fetchInventory = async () => {
     loading.value = true
     try {
+      if (!isSupabaseConfigured) {
+        // Dùng dữ liệu mẫu (Mock Data)
+        isDemoMode.value = true
+        const localData = getMockInventory()
+        inventoryData.value = localData
+        summaryData.value = generateMockSummary(localData)
+        lastSync.value = new Date().toLocaleTimeString('vi-VN')
+        updateMetrics()
+        return
+      }
+
+      // Live Supabase
       const { data: detailData, error: detailErr } = await supabase
         .from('vw_kho_thanh_pham')
         .select('*')
       
-      const { data: sumData, error: sumErr } = await supabase
+      const { data: sumData } = await supabase
         .from('vw_summary_analysis')
         .select('*')
 
-      if (detailErr) throw detailErr
-      if (sumErr) throw sumErr
+      if (detailErr) {
+        console.warn('Supabase query failed, falling back to mock data:', detailErr)
+        isDemoMode.value = true
+        const localData = getMockInventory()
+        inventoryData.value = localData
+        summaryData.value = generateMockSummary(localData)
+      } else {
+        isDemoMode.value = false
+        inventoryData.value = (detailData || []) as InventoryRow[]
+        if (sumData && sumData.length > 0) {
+          summaryData.value = sumData as SummaryAnalysisRow[]
+        } else {
+          summaryData.value = generateMockSummary(inventoryData.value)
+        }
+      }
 
-      inventoryData.value = detailData as InventoryRow[]
-      summaryData.value = sumData as SummaryAnalysisRow[]
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
-      
       updateMetrics()
     } catch (e: any) {
-      console.error(e)
-      throw new Error(e.message || 'Lỗi tải dữ liệu tồn kho')
+      console.warn('Lỗi kết nối Supabase, tự động chuyển sang chế độ dữ liệu mẫu:', e)
+      isDemoMode.value = true
+      const localData = getMockInventory()
+      inventoryData.value = localData
+      summaryData.value = generateMockSummary(localData)
+      lastSync.value = new Date().toLocaleTimeString('vi-VN')
+      updateMetrics()
     } finally {
       loading.value = false
     }
@@ -143,8 +176,47 @@ export function useInventory() {
   const inbound = async (tagId: string, bin: string, option: 'update' | 'insert') => {
     loading.value = true
     try {
+      if (isDemoMode.value || !isSupabaseConfigured) {
+        const local = getMockInventory()
+        if (option === 'update') {
+          const idx = local.findIndex(r => r.tag_id === tagId)
+          if (idx !== -1) {
+            local[idx].bin = bin
+          } else {
+            local.unshift({
+              inventory_id: 'mock-inv-' + Date.now(),
+              tag_id: tagId,
+              bin,
+              lp_no: '8101010104',
+              feature: '1010',
+              qty: 250,
+              warehouse: '62',
+              create_date: new Date().toLocaleDateString('vi-VN'),
+              stock_in_date: new Date().toISOString()
+            })
+          }
+        } else {
+          local.unshift({
+            inventory_id: 'mock-inv-' + Date.now(),
+            tag_id: tagId,
+            bin,
+            lp_no: '8101010104',
+            feature: '1010',
+            qty: 250,
+            warehouse: '62',
+            create_date: new Date().toLocaleDateString('vi-VN'),
+            stock_in_date: new Date().toISOString()
+          })
+        }
+        saveMockInventory(local)
+        inventoryData.value = local
+        summaryData.value = generateMockSummary(local)
+        updateMetrics()
+        return
+      }
+
+      // Live Supabase
       if (option === 'update') {
-        // Đổi vị trí: Cập nhật dòng trùng tag_id có sẵn
         const { error } = await supabase
           .from('inventory')
           .update({ bin })
@@ -169,7 +241,28 @@ export function useInventory() {
   const importCsvData = async (rows: { tag_id: string; bin: string }[]) => {
     loading.value = true
     try {
-      // Chunk inserts to avoid Supabase API limits or slowdowns
+      if (isDemoMode.value || !isSupabaseConfigured) {
+        const local = getMockInventory()
+        const newRows: InventoryRow[] = rows.map((r, i) => ({
+          inventory_id: `mock-import-${Date.now()}-${i}`,
+          tag_id: r.tag_id,
+          bin: r.bin,
+          lp_no: '8101010104',
+          feature: '1010',
+          qty: 250,
+          warehouse: '62',
+          create_date: new Date().toLocaleDateString('vi-VN'),
+          stock_in_date: new Date().toISOString()
+        }))
+        const merged = [...newRows, ...local]
+        saveMockInventory(merged)
+        inventoryData.value = merged
+        summaryData.value = generateMockSummary(merged)
+        updateMetrics()
+        return
+      }
+
+      // Live Supabase
       const chunkSize = 200
       for (let i = 0; i < rows.length; i += chunkSize) {
         const chunk = rows.slice(i, i + chunkSize).map(r => ({
@@ -192,6 +285,17 @@ export function useInventory() {
   const deleteInventoryItem = async (inventoryId: string) => {
     loading.value = true
     try {
+      if (isDemoMode.value || !isSupabaseConfigured) {
+        const local = getMockInventory()
+        const filtered = local.filter(r => r.inventory_id !== inventoryId)
+        saveMockInventory(filtered)
+        inventoryData.value = filtered
+        summaryData.value = generateMockSummary(filtered)
+        updateMetrics()
+        return
+      }
+
+      // Live Supabase
       const { error } = await supabase
         .from('inventory')
         .delete()
@@ -210,6 +314,21 @@ export function useInventory() {
   const editInventoryItem = async (inventoryId: string, tagId: string, bin: string) => {
     loading.value = true
     try {
+      if (isDemoMode.value || !isSupabaseConfigured) {
+        const local = getMockInventory()
+        const idx = local.findIndex(r => r.inventory_id === inventoryId)
+        if (idx !== -1) {
+          local[idx].tag_id = tagId
+          local[idx].bin = bin
+          saveMockInventory(local)
+          inventoryData.value = local
+          summaryData.value = generateMockSummary(local)
+          updateMetrics()
+        }
+        return
+      }
+
+      // Live Supabase
       const { error } = await supabase
         .from('inventory')
         .update({ tag_id: tagId, bin })
@@ -228,15 +347,40 @@ export function useInventory() {
   const replaceMasterData = async (payload: any[]) => {
     loading.value = true
     try {
-      // Sử dụng RPC replace_master_data để transaction an toàn
+      if (isDemoMode.value || !isSupabaseConfigured) {
+        // Build mock inventory based on master data payload
+        const local: InventoryRow[] = payload.map((p, i) => {
+          const lp = p.stock_code || p.lp_no || '8101010104'
+          let feat = 'No data'
+          if (lp && lp.length >= 5) {
+            feat = lp.substring(1, 5)
+          }
+          return {
+            inventory_id: `mock-master-${Date.now()}-${i}`,
+            tag_id: p.batch || p.tag_id || `TAG-${i + 1000}`,
+            bin: `BIN-M-${i % 20 + 1}`,
+            lp_no: lp,
+            feature: feat,
+            qty: Number(p.qty) || 0,
+            warehouse: p.warehouse || p.wh_location || '62',
+            create_date: p.create_date || new Date().toLocaleDateString('vi-VN'),
+            stock_in_date: new Date().toISOString()
+          }
+        })
+        saveMockInventory(local)
+        inventoryData.value = local
+        summaryData.value = generateMockSummary(local)
+        updateMetrics()
+        return
+      }
+
+      // Live Supabase RPC or Fallback
       const { error } = await supabase.rpc('replace_master_data', { payload })
       if (error) {
         console.warn('RPC replace_master_data failed, falling back to manual delete & insert', error)
-        // Fallback nếu RPC chưa được tạo trong DB
         const { error: delErr } = await supabase.from('master_data').delete().neq('batch', 'dummy')
         if (delErr) throw delErr
         
-        // Insert từng chunk
         const chunkSize = 200
         for (let i = 0; i < payload.length; i += chunkSize) {
           const chunk = payload.slice(i, i + chunkSize)
@@ -255,6 +399,7 @@ export function useInventory() {
 
   return {
     loading,
+    isDemoMode,
     inventoryData,
     summaryData,
     kpi,

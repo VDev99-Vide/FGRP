@@ -8,8 +8,8 @@
     @hide="onHide"
   >
     <div class="space-y-4 pt-2">
-      <div class="p-5 border-2 border-dashed border-indigo-100 rounded-2xl bg-indigo-50/20 text-center">
-        <label class="block text-xs font-bold text-indigo-600 mb-3 uppercase tracking-wider">
+      <div class="p-6 border-2 border-dashed border-[#CB3CFF]/40 rounded-xl bg-white/[0.04] backdrop-blur-md text-center">
+        <label class="block text-xs font-bold text-[#CB3CFF] mb-3 uppercase tracking-wider">
           Tải lên file: Stock Balance With Batch.csv
         </label>
         
@@ -18,11 +18,11 @@
           ref="fileInput" 
           accept=".csv" 
           @change="handleFileChange"
-          class="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer text-slate-500 mx-auto"
+          class="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-[7px] file:border-0 file:text-xs file:font-bold file:bg-[#CB3CFF]/20 file:text-[#CB3CFF] hover:file:bg-[#CB3CFF]/30 cursor-pointer text-[#AEB9E1] mx-auto"
         />
 
-        <p class="text-[10px] text-slate-400 mt-3 font-medium">
-          Lưu ý: Hành động này sẽ XÓA toàn bộ dữ liệu nguồn cũ và thay thế bằng dữ liệu mới.
+        <p class="text-[10px] text-[#AEB9E1] mt-3 font-medium">
+          Lưu ý: Hành động này sẽ đồng bộ và cập nhật lại toàn bộ danh sách nguồn master data.
         </p>
       </div>
 
@@ -30,16 +30,16 @@
       <p v-if="statusMsg" :class="['text-xs font-bold text-center h-4', statusClass]">{{ statusMsg }}</p>
 
       <!-- CSV Preview -->
-      <div v-if="previewRows.length > 0" class="p-4 border border-indigo-100 rounded-xl bg-white space-y-3">
-        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Xem trước file tải lên</p>
-        <div class="p-2 bg-slate-50 rounded-lg text-xs font-bold text-center">
-          Tổng số dòng đọc được: <span class="text-indigo-600 text-sm font-black">{{ totalCount }}</span>
+      <div v-if="previewRows.length > 0" class="p-4 border border-white/10 rounded-xl bg-white/[0.04] backdrop-blur-md space-y-3">
+        <p class="text-[10px] font-bold text-[#AEB9E1] uppercase tracking-widest">Xem trước file tải lên</p>
+        <div class="p-2 bg-white/5 rounded-[6px] text-xs font-bold text-center">
+          Tổng số dòng đọc được: <span class="text-[#00C2FF] text-sm font-black">{{ totalCount }}</span>
         </div>
 
         <!-- Preview Table -->
-        <div class="max-h-40 overflow-y-auto border border-slate-100 rounded-lg text-[9px]">
+        <div class="max-h-40 overflow-y-auto border border-white/10 rounded-[6px] text-[10px] custom-scroll">
           <table class="w-full text-left border-collapse">
-            <thead class="bg-slate-50 sticky top-0 font-bold text-slate-500">
+            <thead class="bg-[#283241]/85 backdrop-blur-md sticky top-0 font-bold text-[#AEB9E1]">
               <tr>
                 <th class="p-2">Batch/Tag</th>
                 <th class="p-2">Stock Code</th>
@@ -48,13 +48,13 @@
                 <th class="p-2">Create Date</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100 text-slate-600 font-mono">
-              <tr v-for="(row, idx) in previewRows" :key="idx" class="hover:bg-slate-50/50">
-                <td class="p-2 font-bold text-indigo-600">{{ row.batch }}</td>
-                <td class="p-2">{{ row.stock_code }}</td>
-                <td class="p-2 text-right font-sans font-bold text-slate-800">{{ row.qty }}</td>
-                <td class="p-2">{{ row.warehouse }}</td>
-                <td class="p-2">{{ row.create_date }}</td>
+            <tbody class="divide-y divide-white/5 text-white font-mono">
+              <tr v-for="(row, idx) in previewRows" :key="idx" class="hover:bg-white/5">
+                <td class="p-2 font-bold text-[#00C2FF]">{{ row.batch }}</td>
+                <td class="p-2 text-[#AEB9E1]">{{ row.stock_code }}</td>
+                <td class="p-2 text-right font-sans font-bold text-[#14CA74]">{{ row.qty }}</td>
+                <td class="p-2 text-center">{{ row.warehouse }}</td>
+                <td class="p-2 text-[#AEB9E1]">{{ row.create_date }}</td>
               </tr>
             </tbody>
           </table>
@@ -63,9 +63,9 @@
         <button 
           @click="submit" 
           :disabled="loading"
-          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-xs transition-all shadow-xs cursor-pointer disabled:opacity-50"
+          class="w-full btn-neon-purple font-bold py-3 rounded-[7px] text-xs transition shadow-lg cursor-pointer disabled:opacity-50"
         >
-          {{ loading ? 'ĐANG LƯU HỆ THỐNG...' : `CẬP NHẬT LÊN SUPABASE (${totalCount} dòng)` }}
+          {{ loading ? 'ĐANG LƯU HỆ THỐNG...' : `CẬP NHẬT LÊN HỆ THỐNG (${totalCount} dòng)` }}
         </button>
       </div>
     </div>
@@ -96,7 +96,7 @@ const isError = ref(false)
 
 let finalPayload: any[] = []
 
-const statusClass = computed(() => isError.value ? 'text-rose-600' : 'text-indigo-600')
+const statusClass = computed(() => isError.value ? 'text-[#FF5A65]' : 'text-[#00C2FF]')
 
 const handleFileChange = (event: any) => {
   const file = event.target.files[0]
@@ -114,7 +114,6 @@ const handleFileChange = (event: any) => {
         const rawRows = results.data as Record<string, any>[]
         const normalized = normalizeCsvData(rawRows, 'master_data')
         
-        // Lọc các dòng hợp lệ phải có batch/tag_id
         finalPayload = normalized.filter(row => row.batch)
 
         if (finalPayload.length === 0) {
