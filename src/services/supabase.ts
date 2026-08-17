@@ -27,5 +27,19 @@ if (!isSupabaseConfigured) {
 const clientUrl = isSupabaseConfigured ? cleanedUrl : 'https://placeholder-project.supabase.co'
 const clientKey = isSupabaseConfigured ? rawKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy'
 
-export const supabase: SupabaseClient = createClient(clientUrl, clientKey)
+// Create Supabase client with strict cache-busting headers to prevent stale data in PWA
+export const supabase: SupabaseClient = createClient(clientUrl, clientKey, {
+  global: {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true
+  }
+})
+
 export default supabase

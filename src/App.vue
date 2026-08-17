@@ -9,7 +9,9 @@
       v-model="currentTab" 
       :lastSync="lastSync" 
       :loading="loading" 
+      :is-installed="isInstalled"
       @refresh="loadAllData" 
+      @install="handleOpenInstallModal"
     />
 
     <!-- Main Content wrapper -->
@@ -56,6 +58,16 @@
             <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74] animate-pulse"></span>
             <span>Database kết nối</span>
           </div>
+
+          <!-- Nút Tải App ở Header -->
+          <button 
+            @click="handleOpenInstallModal"
+            class="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-[#00C2FF]/15 via-[#CB3CFF]/20 to-[#7e14ff]/20 hover:from-[#00C2FF]/30 hover:via-[#CB3CFF]/30 hover:to-[#7e14ff]/30 border border-[#CB3CFF]/40 text-[#CB3CFF] hover:text-white rounded-[8px] text-xs font-bold transition shadow-[0_0_12px_rgba(203,60,255,0.2)] cursor-pointer active:scale-95"
+            :title="isInstalled ? 'Ứng dụng Dashdark V (Đã cài đặt)' : 'Tải App Dashdark V về máy'"
+          >
+            <Download class="w-3.5 h-3.5 text-[#00C2FF]" />
+            <span>{{ isInstalled ? 'Đã Cài App' : 'Tải App' }}</span>
+          </button>
 
           <div class="text-right pl-3 border-l border-white/10">
             <p class="text-[10px] text-[#AEB9E1]">Đồng bộ lúc</p>
@@ -293,6 +305,15 @@
       @outbound-all="handleAccOutAll"
       @outbound-partial="handleAccOutPartial"
     />
+
+    <!-- 9. PWA Install & Anti-Cache Guide Modal -->
+    <InstallAppModal 
+      v-model:visible="showInstallModal"
+      :can-install="canInstall"
+      :is-installed="isInstalled"
+      @install="handleDirectInstall"
+      @clear-cache="handleClearCache"
+    />
   </div>
 </template>
 
@@ -307,11 +328,13 @@ import {
   PlusCircle, 
   MinusCircle, 
   UploadCloud, 
-  Search 
+  Search,
+  Download
 } from 'lucide-vue-next'
 
 // Layout & Dashboard Components
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import InstallAppModal from '@/components/layout/InstallAppModal.vue'
 import KpiCards from '@/components/kpi/KpiCards.vue'
 import ComparisonChart from '@/components/charts/ComparisonChart.vue'
 import VisitorsRingChart from '@/components/dashboard/VisitorsRingChart.vue'
@@ -332,6 +355,7 @@ import AccessoryOutboundModal from '@/components/accessories/AccessoryOutboundMo
 // Composables & Services
 import { useInventory } from '@/composables/useInventory'
 import { useAccessories } from '@/composables/useAccessories'
+import { usePwaInstall } from '@/composables/usePwaInstall'
 import { resetMockData } from '@/services/mockData'
 import { exportToExcel } from '@/services/excelExport'
 import { formatNumber } from '@/utils/format'
@@ -370,6 +394,50 @@ const {
   deleteAccessory,
   outboundAccessoryPartial
 } = useAccessories()
+
+// PWA App Installation & Anti-Cache Composable
+const {
+  canInstall,
+  isInstalled,
+  showInstallModal,
+  triggerInstall,
+  clearAppCacheAndReload
+} = usePwaInstall()
+
+const handleOpenInstallModal = async () => {
+  const res = await triggerInstall()
+  if (res === 'accepted') {
+    toast.add({
+      severity: 'success',
+      summary: 'Đã cài đặt Dashdark V',
+      detail: 'Ứng dụng đã được thêm vào màn hình chính của bạn!',
+      life: 3500
+    })
+  }
+}
+
+const handleDirectInstall = async () => {
+  const res = await triggerInstall()
+  if (res === 'accepted') {
+    showInstallModal.value = false
+    toast.add({
+      severity: 'success',
+      summary: 'Đã cài đặt Dashdark V',
+      detail: 'Ứng dụng đã được thêm vào màn hình chính của bạn!',
+      life: 3500
+    })
+  }
+}
+
+const handleClearCache = async () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Đang làm sạch dữ liệu cache...',
+    detail: 'Đang tải lại phiên bản mới nhất từ hệ thống...',
+    life: 2000
+  })
+  await clearAppCacheAndReload()
+}
 
 // Modal Triggers
 const showInboundModal = ref(false)

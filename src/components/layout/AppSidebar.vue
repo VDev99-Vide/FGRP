@@ -15,13 +15,26 @@
         <h1 class="text-lg font-bold text-white tracking-wide">Dashdark V</h1>
       </div>
     </div>
-    <button 
-      @click="isOpen = !isOpen" 
-      class="p-2 text-[#AEB9E1] hover:text-white hover:bg-white/10 rounded-lg focus:outline-none transition cursor-pointer"
-    >
-      <Menu v-if="!isOpen" class="w-6 h-6" />
-      <X v-else class="w-6 h-6" />
-    </button>
+    
+    <div class="flex items-center gap-2">
+      <!-- Nút tải trên Mobile Header -->
+      <button 
+        @click="$emit('install')"
+        class="px-2.5 py-1.5 rounded-lg bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 border border-[#CB3CFF]/40 text-[#CB3CFF] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition active:scale-95"
+        title="Tải App Dashdark V về máy"
+      >
+        <Download class="w-3.5 h-3.5 text-[#00C2FF]" />
+        <span>Tải App</span>
+      </button>
+
+      <button 
+        @click="isOpen = !isOpen" 
+        class="p-2 text-[#AEB9E1] hover:text-white hover:bg-white/10 rounded-lg focus:outline-none transition cursor-pointer"
+      >
+        <Menu v-if="!isOpen" class="w-6 h-6" />
+        <X v-else class="w-6 h-6" />
+      </button>
+    </div>
   </header>
 
   <!-- Mobile Sidebar Backdrop Overlay -->
@@ -93,15 +106,28 @@
 
     <!-- Bottom Info & Data Actions -->
     <div class="p-6 border-t border-white/10 bg-white/[0.02] backdrop-blur-sm">
-      <!-- Sync Button with Spinner -->
-      <button 
-        @click="$emit('refresh')"
-        :disabled="loading"
-        class="w-full h-[42px] flex items-center justify-center gap-2 px-4 rounded-[10px] bg-white/5 hover:bg-[#CB3CFF]/20 border border-white/15 text-[#AEB9E1] hover:text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-sm"
-      >
-        <RefreshCw :class="['w-4 h-4 text-[#00C2FF]', loading ? 'animate-spin' : '']" />
-        <span>LÀM MỚI DỮ LIỆU</span>
-      </button>
+      <!-- Sync Button & Nút Tải App ở góc phải khu vực làm mới dữ liệu -->
+      <div class="flex items-center gap-2">
+        <button 
+          @click="$emit('refresh')"
+          :disabled="loading"
+          class="flex-1 h-[42px] flex items-center justify-center gap-2 px-3 rounded-[10px] bg-white/5 hover:bg-[#CB3CFF]/20 border border-white/15 text-[#AEB9E1] hover:text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-sm active:scale-98"
+          title="Làm mới dữ liệu từ Database (Bỏ qua Cache)"
+        >
+          <RefreshCw :class="['w-4 h-4 text-[#00C2FF]', loading ? 'animate-spin' : '']" />
+          <span class="truncate">LÀM MỚI DỮ LIỆU</span>
+        </button>
+
+        <!-- Nút Tải App ở góc phải khu vực làm mới dữ liệu -->
+        <button 
+          @click="$emit('install')"
+          class="h-[42px] px-3 flex items-center justify-center gap-1.5 rounded-[10px] bg-gradient-to-r from-[#00C2FF]/15 via-[#CB3CFF]/20 to-[#7e14ff]/20 hover:from-[#00C2FF]/30 hover:via-[#CB3CFF]/35 hover:to-[#7e14ff]/35 border border-[#CB3CFF]/40 text-white text-xs font-bold transition-all cursor-pointer shadow-[0_0_14px_rgba(203,60,255,0.2)] shrink-0 active:scale-95"
+          :title="isInstalled ? 'Dashdark V (Đã cài đặt)' : 'Tải App Dashdark V về máy'"
+        >
+          <Download class="w-4 h-4 text-[#00C2FF]" />
+          <span class="text-[11px] font-bold text-[#CB3CFF]">TẢI APP</span>
+        </button>
+      </div>
 
       <div class="mt-4 flex flex-col gap-1.5 text-[10px] text-[#AEB9E1]/80 font-medium">
         <div class="flex justify-between items-center">
@@ -122,6 +148,7 @@ import {
   Menu, 
   X, 
   RefreshCw,
+  Download,
   Home, 
   Star, 
   Users
@@ -131,12 +158,14 @@ defineProps<{
   modelValue: string
   lastSync: string
   loading: boolean
+  isInstalled?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
   (e: 'update:modelValue', val: string): void
   (e: 'refresh'): void
+  (e: 'install'): void
 }>()
 
 const isOpen = ref(false)

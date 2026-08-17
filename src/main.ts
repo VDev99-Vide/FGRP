@@ -5,6 +5,21 @@ import Aura from '@primevue/themes/aura'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 
+// Import PWA Service Worker auto-updater
+import { registerSW } from 'virtual:pwa-register'
+
+// Tự động kiểm tra và cập nhật Service Worker ngay khi có bản build mới
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    console.info('🚀 Phát hiện bản cập nhật mới của Dashdark V! Đang tự động làm mới...')
+    updateSW(true)
+  },
+  onOfflineReady() {
+    console.info('📱 Dashdark V đã sẵn sàng hoạt động offline')
+  }
+})
+
 // Import CSS (including Tailwind CSS v4, AG Grid, and Dashdark V Dark Glassmorphism tokens)
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
