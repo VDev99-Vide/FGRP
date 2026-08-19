@@ -13,7 +13,6 @@
             Kiểm Soát Tag ID Lỗi &amp; Trùng
           </h3>
         </div>
-        <p class="text-xs text-[#AEB9E1]">Tỷ lệ chênh lệch &amp; trạng thái rủi ro trên toàn kho</p>
 
         <div class="flex items-center gap-3 mt-3">
           <span class="text-3xl lg:text-4xl font-bold text-white tracking-tight">

@@ -9,10 +9,7 @@
             Phân Tích Rủi Ro Lệch Kho
           </h3>
           <p class="text-[11px] text-[#AEB9E1]">
-            <span v-if="topDiscrepancyItems.length > 0">
-              Biểu diễn {{ topDiscrepancyItems.length }} mã hàng có chênh lệch tỷ lệ cao nhất
-            </span>
-            <span v-else>
+            <span v-if="topDiscrepancyItems.length === 0">
               Hệ thống không ghi nhận mã hàng chênh lệch
             </span>
           </p>

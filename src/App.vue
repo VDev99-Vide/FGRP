@@ -154,7 +154,6 @@
               <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pb-2 border-b border-white/[0.08]">
                 <div>
                   <h3 class="text-lg font-bold text-white tracking-wide">Quản Lý Phụ Kiện</h3>
-                  <p class="text-xs text-[#AEB9E1]">Theo dõi tồn kho &amp; phân bổ phụ kiện theo vị trí Bin</p>
                 </div>
                 <div class="flex items-center gap-3 w-full sm:w-auto">
                   <div class="relative flex-1 sm:w-80">

@@ -55,7 +55,16 @@ select
   i.id                                                      as inventory_id
 
 from inventory i
-left join master_data m
+left join (
+  -- Khử fan-out: nếu master_data có nhiều dòng cùng 1 tag_id (BATCH trùng),
+  -- chỉ giữ 1 dòng (mới nhất theo create_date) để mỗi tag trong inventory
+  -- sinh ra đúng 1 dòng view thay vì bị nhân bản
+  select distinct on (trim(lower(tag_id)))
+    tag_id, lp_no, qty, wh_location, create_date
+  from master_data
+  where tag_id is not null
+  order by trim(lower(tag_id)), create_date desc nulls last, lp_no
+) m
   on trim(lower(i.tag_id)) = trim(lower(m.tag_id));
 
 -- ============================================================
@@ -200,3 +209,10 @@ create policy "allow_anon_delete_hang_phu_kien" on hang_phu_kien for delete to a
 
 -- Xem thử summary
 -- select * from vw_summary_analysis limit 10;
+
+-- Kiểm tra master_data có BATCH trùng (nguyên nhân gốc gây fan-out nhân dòng)
+-- select trim(lower(tag_id)) as batch, count(*) as so_dong
+-- from master_data
+-- group by trim(lower(tag_id))
+-- having count(*) > 1
+-- order by so_dong desc;

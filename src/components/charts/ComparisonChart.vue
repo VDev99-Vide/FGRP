@@ -11,9 +11,6 @@
               Actual vs iScala &amp; Tỷ Lệ Chênh Lệch
             </span>
           </h2>
-          <p class="text-xs text-[#AEB9E1] mt-0.5 font-medium">
-            Biểu đồ toàn bộ {{ sortedSummary.length }} Feature trong hệ thống (Lăn chuột hoặc kéo thanh trượt dưới để phóng to / thu nhỏ)
-          </p>
         </div>
       </div>
 

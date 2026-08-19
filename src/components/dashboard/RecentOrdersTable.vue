@@ -9,7 +9,6 @@
             <h3 class="text-base lg:text-lg font-bold text-white tracking-wide">
               Bảng dữ liệu Tag ID lỗi
             </h3>
-            <p class="text-[11px] text-[#AEB9E1]">Danh sách toàn bộ Tag ID lỗi &amp; trùng lặp trong hệ thống</p>
           </div>
         </div>
 

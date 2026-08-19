@@ -19,6 +19,21 @@ export const extractFeatureFromStockCode = (stockCode: string): string => {
   return clean
 }
 
+// Khử trùng dòng view theo inventory_id: mỗi tag vật lý chỉ có 1 dòng trong inventory,
+// nhưng LEFT JOIN với master_data có thể nhân bản dòng khi nhiều dòng master_data trùng tag_id
+const dedupeByInventoryId = (rows: InventoryRow[]): InventoryRow[] => {
+  const seen = new Set<string>()
+  const result: InventoryRow[] = []
+  rows.forEach(row => {
+    const key = row.inventory_id || `${row.tag_id}-${row.bin}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(row)
+    }
+  })
+  return result
+}
+
 export function useInventory() {
   const loading = ref(false)
   const isDemoMode = ref(!isSupabaseConfigured)
@@ -43,7 +58,8 @@ export function useInventory() {
   })
 
   // Hàm tải toàn bộ dữ liệu từ View Supabase (vượt qua giới hạn 1,000 dòng mặc định)
-  const fetchAllFromSupabase = async <T>(viewName: string): Promise<T[]> => {
+  // orderColumn giữ thứ tự dòng ổn định giữa các trang .range() (tránh trùng/sót dòng khi phân trang)
+  const fetchAllFromSupabase = async <T>(viewName: string, orderColumn: string): Promise<T[]> => {
     let allRows: T[] = []
     let from = 0
     const step = 1000
@@ -53,6 +69,7 @@ export function useInventory() {
       const { data, error } = await supabase
         .from(viewName)
         .select('*')
+        .order(orderColumn, { ascending: true })
         .range(from, from + step - 1)
 
       if (error) throw error
@@ -87,12 +104,13 @@ export function useInventory() {
       // Live Supabase - Tải toàn bộ không giới hạn 1000 dòng
       try {
         const [detailRows, sumRows] = await Promise.all([
-          fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham'),
-          fetchAllFromSupabase<SummaryAnalysisRow>('vw_summary_analysis')
+          fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham', 'inventory_id'),
+          fetchAllFromSupabase<SummaryAnalysisRow>('vw_summary_analysis', 'feature')
         ])
 
         isDemoMode.value = false
-        inventoryData.value = detailRows || []
+        // Khử fan-out từ view: nhiều dòng master_data trùng tag_id chỉ giữ 1 dòng cho mỗi tag vật lý
+        inventoryData.value = dedupeByInventoryId(detailRows || [])
         
         if (sumRows && sumRows.length > 0) {
           summaryData.value = sumRows
@@ -178,11 +196,13 @@ export function useInventory() {
     const duplicateTags = Object.keys(tagFreq).filter(t => tagFreq[t] > 1)
     kpi.duplicates = duplicateTags.length
 
-    // 3. Phân tích rủi ro
-    analysis.noData = inventoryData.value
-      .filter(r => !r.lp_no || r.lp_no === 'No data' || !r.feature || r.feature === 'No data')
-      .map(r => r.tag_id)
-    
+    // 3. Phân tích rủi ro (dùng Set để mỗi Tag ID chỉ xuất hiện 1 lần dù có nhiều dòng)
+    analysis.noData = Array.from(new Set(
+      inventoryData.value
+        .filter(r => !r.lp_no || r.lp_no === 'No data' || !r.feature || r.feature === 'No data')
+        .map(r => r.tag_id)
+    ))
+
     analysis.duplicates = duplicateTags
 
     // Nhóm tồn kho theo Feature để tính số kiện
