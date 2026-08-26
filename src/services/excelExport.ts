@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { InventoryRow, SummaryAnalysisRow, HangPhuKienRow } from '@/types'
+import { sortInventoryAll } from '@/utils/sort'
 
 function formatFilename(): string {
   const now = new Date()
@@ -30,7 +31,9 @@ export function exportToExcel(
   // 1. Tạo workbook mới
   const wb = XLSX.utils.book_new()
 
-  // 2. Chuẩn bị dữ liệu cho sheet Tồn Kho Thành Phẩm
+  // 2. Chuẩn bị dữ liệu cho sheet Tồn Kho Thành Phẩm (sắp xếp đồng bộ: Feature A-Z -> CreateDate A-Z -> Bin A-Z)
+  const sortedInventory = sortInventoryAll(inventory)
+
   const inventoryHeaders = {
     lp_no: 'LP.No',
     feature: 'Feature',
@@ -42,7 +45,7 @@ export function exportToExcel(
     bin: 'Bin',
     inventory_id: 'ID'
   }
-  const formattedInventory = inventory.map(item => ({
+  const formattedInventory = sortedInventory.map(item => ({
     [inventoryHeaders.lp_no]: item.lp_no,
     [inventoryHeaders.feature]: item.feature,
     [inventoryHeaders.qty]: item.qty,

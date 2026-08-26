@@ -295,6 +295,7 @@ import { ref, computed, watch } from 'vue'
 import { FileSpreadsheet, Search, Zap, Edit3 } from 'lucide-vue-next'
 import type { InventoryRow } from '@/types'
 import { formatNumber, formatDateTime } from '@/utils/format'
+import { sortInventoryRows } from '@/utils/sort'
 
 const props = defineProps<{ data: InventoryRow[] }>()
 defineEmits<{
@@ -391,7 +392,10 @@ const allDisplayItems = computed((): DisplayItem[] => {
   })
 
   const result: DisplayItem[] = []
-  const sortedFeatures = Object.keys(groups).sort()
+  // Sắp xếp FEATURE A-Z
+  const sortedFeatures = Object.keys(groups).sort((a, b) => 
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+  )
 
   sortedFeatures.forEach(feat => {
     const rows = groups[feat]
@@ -407,8 +411,11 @@ const allDisplayItems = computed((): DisplayItem[] => {
       totalQty: m.sum
     })
 
+    // Sắp xếp tự động các dòng bên trong Feature: NGÀY TẠO (CREATE) A-Z -> VỊ TRÍ (BIN) A-Z
+    const sortedGroupRows = sortInventoryRows(rows)
+
     // Data rows in group
-    rows.forEach((row, idx) => {
+    sortedGroupRows.forEach((row, idx) => {
       result.push({
         _id: `data-${row.inventory_id || row.tag_id || idx}-${feat}`,
         _isGroup: false,
@@ -428,7 +435,10 @@ const allDisplayItems = computed((): DisplayItem[] => {
       totalQty: sumNoFeat
     })
 
-    noFeatureRows.forEach((row, idx) => {
+    // Sắp xếp tự động các dòng No data: NGÀY TẠO (CREATE) A-Z -> VỊ TRÍ (BIN) A-Z
+    const sortedNoFeatRows = sortInventoryRows(noFeatureRows)
+
+    sortedNoFeatRows.forEach((row, idx) => {
       result.push({
         _id: `data-noFeat-${row.inventory_id || row.tag_id || idx}`,
         _isGroup: false,
