@@ -174,9 +174,9 @@
           <thead class="glass-table-sticky-head shadow-lg">
             <tr>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QTY (PCS)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE (MÃ CON)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">TỔNG QTY (PCS)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN / THÙNG (#PKG)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">LOADING DATE</th>
@@ -305,106 +305,132 @@
                 </td>
               </tr>
 
-              <!-- 2. DATA ROW (ITEM TRONG CONTAINER) -->
+              <!-- 2. FEATURE GROUP ROW (MỖI FEATURE LÀ 1 DÒNG TỔNG HỢP DUY NHẤT) -->
               <tr 
-                v-else-if="row._type === 'item'"
+                v-else-if="row._type === 'feature-row' && row.featureGroup"
                 class="transition-colors duration-150 hover:bg-white/[0.08]"
               >
                 <!-- PO / SO -->
-                <td class="py-2.5 px-4 font-mono text-[#AEB9E1] text-[11px]">
-                  {{ row.item.po }} / {{ row.item.so }}
+                <td class="py-3 px-4 font-mono text-[#AEB9E1] text-[11px]">
+                  {{ row.container.po }} / {{ row.container.so }}
                 </td>
 
-                <!-- LPVN Item code -->
-                <td class="py-2.5 px-4">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-mono font-bold text-[#00C2FF] text-xs">
-                      {{ row.item.item_code }}
-                    </span>
-                    <!-- Cảnh báo hàng phụ kiện (Accessories) -->
+                <!-- Feature -->
+                <td class="py-3 px-4 text-center">
+                  <div class="flex flex-col items-center gap-1">
                     <span 
-                      v-if="row.item.is_accessory"
-                      title="Hàng Phụ Kiện (Accessories) - Không chia 2, đóng thùng"
-                      class="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[#FDB52A]/20 text-[#FDB52A] border border-[#FDB52A]/40 flex items-center gap-1 cursor-help shadow-sm animate-pulse"
+                      v-if="row.featureGroup.is_accessory"
+                      class="font-mono font-bold text-[#FDB52A] text-xs px-2.5 py-1 rounded-[6px] bg-[#FDB52A]/15 border border-[#FDB52A]/30 flex items-center gap-1 shadow-sm"
                     >
                       <Package class="w-3 h-3 text-[#FDB52A]" />
-                      <span>Phụ kiện</span>
+                      <span>{{ row.featureGroup.feature }}</span>
                     </span>
-                    <!-- Lưu ý hàng đặc biệt 1220 -->
                     <span 
-                      v-else-if="row.item.is_special"
-                      title="Mã đặc biệt - Lấy 4 số đầu 1220 thay vì MID(2,4)"
-                      class="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[#CB3CFF]/20 text-[#CB3CFF] border border-[#CB3CFF]/40 cursor-help"
+                      v-else
+                      class="font-mono font-black text-[#CB3CFF] text-xs px-2.5 py-1 rounded-[6px] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30 shadow-[0_0_8px_rgba(203,60,255,0.2)]"
+                    >
+                      {{ row.featureGroup.feature }}
+                    </span>
+
+                    <!-- Tag phân biệt loại hàng -->
+                    <span 
+                      v-if="row.featureGroup.is_accessory"
+                      class="text-[9px] font-bold text-[#FDB52A] bg-[#FDB52A]/10 px-1.5 py-0.5 rounded border border-[#FDB52A]/20"
+                    >
+                      Phụ kiện
+                    </span>
+                    <span 
+                      v-else-if="row.featureGroup.is_special"
+                      class="text-[9px] font-bold text-[#CB3CFF] bg-[#CB3CFF]/15 px-1.5 py-0.5 rounded border border-[#CB3CFF]/30"
                     >
                       ★ Mã 1220
+                    </span>
+                    <span 
+                      v-else-if="row.featureGroup.items.length >= 2"
+                      class="text-[9px] font-bold text-[#00C2FF] bg-[#00C2FF]/10 px-1.5 py-0.5 rounded border border-[#00C2FF]/20"
+                    >
+                      Cặp {{ row.featureGroup.items.length }} mã
                     </span>
                   </div>
                 </td>
 
-                <!-- Feature -->
-                <td class="py-2.5 px-4 text-center">
-                  <span 
-                    v-if="row.item.is_accessory"
-                    class="font-mono font-bold text-[#FDB52A] text-xs px-2 py-0.5 rounded-[4px] bg-[#FDB52A]/15 border border-[#FDB52A]/30"
-                  >
-                    {{ row.item.feature }}
+                <!-- LPVN Item code (Danh sách các mã hàng con trong Feature kèm QTY từng mã) -->
+                <td class="py-3 px-4">
+                  <div class="flex flex-col gap-1.5 min-w-[240px]">
+                    <div 
+                      v-for="it in row.featureGroup.items" 
+                      :key="it.id || it.item_code"
+                      class="flex items-center justify-between gap-3 px-2.5 py-1 rounded-[6px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition"
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono font-bold text-[#00C2FF] text-xs">{{ it.item_code }}</span>
+                        <span class="text-white/70 text-[11px] font-mono">({{ Number(it.qty || 0).toLocaleString() }} PCS)</span>
+                      </div>
+                      <button 
+                        @click.stop="triggerEdit(it)" 
+                        title="Chỉnh sửa mã này"
+                        class="p-1 text-[#AEB9E1] hover:text-[#CB3CFF] hover:bg-white/10 rounded transition cursor-pointer"
+                      >
+                        <Edit3 class="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Tổng Qty (PCS) -->
+                <td class="py-3 px-4 text-right font-bold text-white text-xs">
+                  <span class="text-[#14CA74] font-mono font-bold text-sm">
+                    {{ Number(row.featureGroup.totalQty || 0).toLocaleString() }}
                   </span>
-                  <span 
-                    v-else
-                    class="font-mono font-black text-[#CB3CFF] text-xs px-2 py-0.5 rounded-[4px] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30"
-                  >
-                    {{ row.item.feature }}
-                  </span>
+                  <p v-if="row.featureGroup.items.length >= 2" class="text-[10px] text-[#AEB9E1] font-mono mt-0.5">
+                    ({{ row.featureGroup.items.map(i => Number(i.qty || 0).toLocaleString()).join(' + ') }})
+                  </p>
                 </td>
 
-                <!-- Qty (PCS) -->
-                <td class="py-2.5 px-4 text-right font-bold text-white text-xs">
-                  <span class="text-[#14CA74]">{{ Number(row.item.qty || 0).toLocaleString() }}</span>
+                <!-- Quy cách (Pcs/pkg) -->
+                <td class="py-3 px-4 text-right font-mono text-white/90 text-xs font-semibold">
+                  {{ Number(row.featureGroup.pcs_per_pkg || 0).toLocaleString() }}
                 </td>
 
-                <!-- Pcs/pkg -->
-                <td class="py-2.5 px-4 text-right font-mono text-white/90 text-xs">
-                  {{ Number(row.item.pcs_per_pkg || 0).toLocaleString() }}
-                </td>
-
-                <!-- #pkg (Số kiện qui đổi hoặc số thùng) -->
-                <td class="py-2.5 px-4 text-center">
+                <!-- Số kiện / thùng (#pkg) - Chuẩn xác theo Group Feature, không bị double! -->
+                <td class="py-3 px-4 text-center">
                   <span 
                     :class="[
-                      'font-mono font-bold text-xs px-2 py-0.5 rounded-[4px] border',
-                      row.item.is_accessory
-                        ? 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30'
-                        : 'bg-[#CB3CFF]/15 text-[#CB3CFF] border-[#CB3CFF]/30'
+                      'font-mono font-black text-xs px-3 py-1.5 rounded-[6px] border shadow-sm inline-flex items-center gap-1.5',
+                      row.featureGroup.is_accessory
+                        ? 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/40 shadow-[0_0_8px_rgba(253,181,42,0.2)]'
+                        : 'bg-[#CB3CFF]/20 text-[#CB3CFF] border-[#CB3CFF]/40 shadow-[0_0_8px_rgba(203,60,255,0.25)]'
                     ]"
                   >
-                    {{ row.item.pkg }} {{ row.item.is_accessory ? 'Thùng' : 'Kiện' }}
+                    <Box class="w-3.5 h-3.5" />
+                    <span>{{ row.featureGroup.pkgCount }} {{ row.featureGroup.unit_type === 'thung' ? 'Thùng' : 'Kiện' }}</span>
                   </span>
                 </td>
 
                 <!-- Loading Date -->
-                <td class="py-2.5 px-4 text-center font-mono text-[#AEB9E1] text-[11px]">
-                  {{ row.item.loading_date }}
+                <td class="py-3 px-4 text-center font-mono text-[#AEB9E1] text-[11px]">
+                  {{ row.container.loading_date }}
                 </td>
 
                 <!-- Status -->
-                <td class="py-2.5 px-4 text-center">
+                <td class="py-3 px-4 text-center">
                   <span 
                     :class="[
-                      'px-2 py-0.5 rounded-[4px] text-[10px] font-bold border',
-                      row.item.status === 'ready'
+                      'px-2.5 py-1 rounded-[5px] text-[10px] font-bold border',
+                      row.container.status === 'ready'
                         ? 'bg-[#14CA74]/15 text-[#14CA74] border-[#14CA74]/30'
                         : 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30'
                     ]"
                   >
-                    {{ row.item.status === 'ready' ? 'Đã xong' : 'Chờ xuất' }}
+                    {{ row.container.status === 'ready' ? 'Đã xong' : 'Chờ xuất' }}
                   </span>
                 </td>
 
-                <!-- Thao Tác (Icon Cây Bút Chỉnh Sửa) -->
-                <td class="py-2.5 px-4 text-center">
+                <!-- Thao Tác -->
+                <td class="py-3 px-4 text-center">
                   <button 
-                    @click="triggerEdit(row.item)"
-                    title="Chỉnh sửa thông tin trong bảng" 
+                    @click="triggerEdit(row.featureGroup.items[0])"
+                    title="Chỉnh sửa dòng Feature này" 
                     class="p-1.5 bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 text-[#CB3CFF] rounded-[6px] border border-[#CB3CFF]/30 cursor-pointer transition active:scale-90"
                   >
                     <Edit3 class="w-3.5 h-3.5" />
@@ -519,7 +545,7 @@ import {
 } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { useShippingForecast } from '@/composables/useShippingForecast'
-import { ForecastRawItem, ForecastContainerGroup } from '@/utils/forecast'
+import { ForecastRawItem, ForecastContainerGroup, ForecastFeatureGroup } from '@/utils/forecast'
 import ForecastUploadModal from './ForecastUploadModal.vue'
 import ForecastEditModal from './ForecastEditModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -558,29 +584,58 @@ const scrollContainerRef = ref<HTMLElement | null>(null)
 
 interface DisplayRowItem {
   _id: string
-  _type: 'container-header' | 'item'
-  container?: any
-  item?: any
+  _type: 'container-header' | 'feature-row'
+  container: ForecastContainerGroup
+  featureGroup?: ForecastFeatureGroup
 }
 
-// Chuyển đổi dữ liệu nhóm thành danh sách các dòng hiển thị phẳng
+// Chuyển đổi dữ liệu nhóm thành danh sách các dòng hiển thị phẳng:
+// Mỗi Feature Group là 1 dòng tổng hợp duy nhất
 const allDisplayRows = computed<DisplayRowItem[]>(() => {
   const rows: DisplayRowItem[] = []
+  const q = quickFilterText.value.toLowerCase().trim()
 
   filteredContainers.value.forEach(container => {
-    // 1. Container Header Row
+    // Lọc featureGroups nếu có từ khóa tìm kiếm
+    let groupsToRender = container.featureGroups
+
+    if (q) {
+      const containerMatched = [
+        container.po,
+        container.so,
+        container.container_no,
+        container.loading_date
+      ].join(' ').toLowerCase().includes(q)
+
+      if (!containerMatched) {
+        groupsToRender = container.featureGroups.filter(fg => {
+          const fgStr = [
+            fg.feature,
+            ...fg.items.map(it => it.item_code),
+            fg.is_accessory ? 'accessories phukien thung' : '',
+            fg.is_special ? 'special 1220' : ''
+          ].join(' ').toLowerCase()
+          return fgStr.includes(q)
+        })
+      }
+    }
+
+    if (groupsToRender.length === 0) return
+
+    // 1. Container Header Row (PO & SO, Cont, Loading Date, Tổng Kiện / Thùng)
     rows.push({
       _id: `cont-header-${container.containerKey}`,
       _type: 'container-header',
       container
     })
 
-    // 2. Data Item Rows
-    container.allItems.forEach(item => {
+    // 2. Feature Group Rows (Mỗi Feature là 1 dòng duy nhất)
+    groupsToRender.forEach(fg => {
       rows.push({
-        _id: `item-${item.id || item.item_code}-${container.containerKey}`,
-        _type: 'item',
-        item
+        _id: `fg-${container.containerKey}-${fg.feature}`,
+        _type: 'feature-row',
+        container,
+        featureGroup: fg
       })
     })
   })
