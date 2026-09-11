@@ -142,6 +142,7 @@
               <!-- Inventory Grid AG Grid component -->
               <InventoryGrid 
                 :data="inventoryData" 
+                :filter-text="inventoryGridFilter"
                 @quick-out="triggerQuickOutbound"
                 @edit="triggerEditInventory"
                 @export="exportExcel"
@@ -220,6 +221,13 @@
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <!-- 4. TAB DANH SÁCH XUẤT HÀNG DỰ KIẾN -->
+            <div v-else-if="currentTab === 'forecast'">
+              <ShippingForecastView 
+                @jump-to-inventory="handleJumpToInventory"
+              />
             </div>
           </transition>
 
@@ -340,6 +348,7 @@ import VisitorsRingChart from '@/components/dashboard/VisitorsRingChart.vue'
 import RecentOrdersTable from '@/components/dashboard/RecentOrdersTable.vue'
 import WorldDotMapCard from '@/components/dashboard/WorldDotMapCard.vue'
 import InventoryGrid from '@/components/inventory/InventoryGrid.vue'
+import ShippingForecastView from '@/components/forecast/ShippingForecastView.vue'
 
 // Modals
 import InboundModal from '@/components/inventory/InboundModal.vue'
@@ -453,16 +462,30 @@ const quickOutTarget = ref<InventoryRow | null>(null)
 const editInvTarget = ref<InventoryRow | null>(null)
 const accEditTarget = ref<HangPhuKienRow | null>(null)
 const accOutTarget = ref<HangPhuKienRow | null>(null)
+const inventoryGridFilter = ref('')
 
 // Current Tab Name in Vietnamese
 const currentTabName = computed(() => {
   switch (currentTab.value) {
     case 'dashboard': return 'Bảng Điều Khiển'
     case 'inventory': return 'Tồn Kho Thành Phẩm'
+    case 'forecast': return 'Danh Sách Xuất Hàng Dự Kiến'
     case 'accessories': return 'Quản Lý Phụ Kiện'
     default: return ''
   }
 })
+
+// Chuyển nhanh từ Danh sách xuất hàng dự kiến sang Tồn Kho Thành Phẩm để lọc mã
+const handleJumpToInventory = (payload: { filterText: string; feature: string }) => {
+  currentTab.value = 'inventory'
+  inventoryGridFilter.value = payload.filterText
+  toast.add({
+    severity: 'info',
+    summary: 'Lọc tồn kho thành phẩm',
+    detail: `Đã lọc mã hàng / Feature: ${payload.filterText}`,
+    life: 3500
+  })
+}
 
 // Load All System Data
 const loadAllData = async () => {

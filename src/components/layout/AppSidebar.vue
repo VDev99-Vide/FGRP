@@ -151,7 +151,8 @@ import {
   Download,
   Home, 
   Star, 
-  Users
+  Users,
+  Truck
 } from 'lucide-vue-next'
 
 defineProps<{
@@ -173,6 +174,7 @@ const isOpen = ref(false)
 const menuItems = [
   { label: 'Dashboard', value: 'dashboard', icon: Home, badge: 'Active' },
   { label: 'Tồn Kho Thành Phẩm', value: 'inventory', icon: Star },
+  { label: 'Danh sách xuất hàng dự kiến', value: 'forecast', icon: Truck, badge: 'Mới' },
   { label: 'Quản Lý Phụ Kiện', value: 'accessories', icon: Users }
 ]
 

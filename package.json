@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "test": "vitest run",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist -r https://github.com/PQVinh99-Glory/RPFG.git -b gh-pages"
@@ -38,6 +39,7 @@
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^5.0.0",
     "vue-tsc": "^3.2.8"
   }
 }

@@ -297,17 +297,27 @@ import type { InventoryRow } from '@/types'
 import { formatNumber, formatDateTime } from '@/utils/format'
 import { sortInventoryRows } from '@/utils/sort'
 
-const props = defineProps<{ data: InventoryRow[] }>()
+const props = defineProps<{ 
+  data: InventoryRow[]
+  filterText?: string
+}>()
 defineEmits<{
   (e: 'quick-out', row: InventoryRow): void
   (e: 'edit', row: InventoryRow): void
   (e: 'export'): void
 }>()
 
-const quickFilterText = ref('')
+const quickFilterText = ref(props.filterText || '')
 const pageSize = ref(100) // Mặc định hiển thị 100 dòng hoặc chuyển sang Tất cả
 const currentPage = ref(1)
 const tableContainerRef = ref<HTMLElement | null>(null)
+
+// Đồng bộ filterText từ bên ngoài truyền vào
+watch(() => props.filterText, (val) => {
+  if (val !== undefined) {
+    quickFilterText.value = val
+  }
+})
 
 // Reset trang khi lọc dữ liệu
 watch(quickFilterText, () => {

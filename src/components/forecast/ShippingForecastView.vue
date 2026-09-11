@@ -1,0 +1,641 @@
+<template>
+  <div class="flex flex-col flex-1 space-y-6">
+    
+    <!-- 1. Top Action Cards / Nạp Dữ Liệu & Thống Kê Tổng Quan -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      
+      <!-- Card Thao Tác Nạp Dữ Liệu -->
+      <div class="md:col-span-1 glass-card-dark p-4 rounded-2xl border border-white/10 flex flex-col justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 rounded-full bg-[#00C2FF] animate-pulse"></span>
+            <p class="text-[10px] font-bold text-[#00C2FF] uppercase tracking-wider">THAO TÁC HỆ THỐNG</p>
+          </div>
+          <h3 class="text-sm font-bold text-white">Nạp Dữ Liệu Xuất Hàng</h3>
+          <p class="text-[10px] text-[#AEB9E1] mt-0.5">
+            Nhập file Excel .xlsx, tự động tính MID(2,4) & phân kiện
+          </p>
+        </div>
+
+        <div class="flex gap-2">
+          <button 
+            @click="showUploadModal = true"
+            class="flex-1 h-[38px] btn-neon-purple rounded-[8px] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm active:scale-95"
+          >
+            <UploadCloud class="w-4 h-4" />
+            <span>NẠP FILE EXCEL</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Metric 1: Tổng Container & Đơn Hàng -->
+      <div class="glass-card-dark p-4 rounded-2xl border border-white/10 flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-xl bg-[#00C2FF]/15 border border-[#00C2FF]/30 flex items-center justify-center text-[#00C2FF] shrink-0">
+          <Truck class="w-5 h-5" />
+        </div>
+        <div>
+          <p class="text-[11px] font-semibold text-[#AEB9E1]">Tổng Container / Đơn</p>
+          <div class="flex items-baseline gap-2 mt-0.5">
+            <span class="text-xl font-bold text-white font-mono">{{ stats.totalContainers }}</span>
+            <span class="text-[10px] text-[#AEB9E1]">Cont</span>
+          </div>
+          <p class="text-[10px] text-[#00C2FF] mt-0.5">Lọc ngày tăng dần</p>
+        </div>
+      </div>
+
+      <!-- Metric 2: Tổng Số Kiện (#pkg) Cần Chuẩn Bị -->
+      <div class="glass-card-dark p-4 rounded-2xl border border-white/10 flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-xl bg-[#CB3CFF]/15 border border-[#CB3CFF]/30 flex items-center justify-center text-[#CB3CFF] shrink-0">
+          <Box class="w-5 h-5" />
+        </div>
+        <div>
+          <p class="text-[11px] font-semibold text-[#AEB9E1]">Tổng Số Kiện Cần Xuất</p>
+          <div class="flex items-baseline gap-2 mt-0.5">
+            <span class="text-xl font-bold text-[#CB3CFF] font-mono">{{ stats.totalPkg.toLocaleString() }}</span>
+            <span class="text-[10px] text-[#CB3CFF]">Kiện</span>
+          </div>
+          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Đã gom theo Feature</p>
+        </div>
+      </div>
+
+      <!-- Metric 3: Trạng Thái Chuẩn Bị (Pending / Ready) -->
+      <div class="glass-card-dark p-4 rounded-2xl border border-white/10 flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-xl bg-[#14CA74]/15 border border-[#14CA74]/30 flex items-center justify-center text-[#14CA74] shrink-0">
+          <CheckCircle2 class="w-5 h-5" />
+        </div>
+        <div>
+          <p class="text-[11px] font-semibold text-[#AEB9E1]">Tiến Độ Chuẩn Bị</p>
+          <div class="flex items-baseline gap-2 mt-0.5">
+            <span class="text-lg font-bold text-[#14CA74] font-mono">{{ stats.readyCount }}</span>
+            <span class="text-[10px] text-[#AEB9E1]">Đã xong /</span>
+            <span class="text-lg font-bold text-[#FDB52A] font-mono">{{ stats.pendingCount }}</span>
+            <span class="text-[10px] text-[#AEB9E1]">Chờ</span>
+          </div>
+          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Tự xóa sau 24h khi xong</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. Bảng Danh Sách Xuất Hàng Dự Kiến -->
+    <div class="glass-card-dark p-5 sm:p-6 flex flex-col gap-4 flex-1 min-h-0">
+      
+      <!-- Filter Bar & Controls -->
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <p class="text-[10px] font-bold text-[#CB3CFF] uppercase tracking-widest mb-1">
+            KẾ HOẠCH ĐÓNG CONTAINER
+          </p>
+          <h2 class="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <span>Danh Sách Xuất Hàng Dự Kiến</span>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-[#00C2FF]/15 border border-[#00C2FF]/30 text-[#00C2FF] font-mono font-semibold">
+              {{ filteredContainers.length }} Container
+            </span>
+          </h2>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="flex flex-wrap gap-2.5 w-full sm:w-auto items-center">
+          
+          <!-- Status Filter Tabs -->
+          <div class="flex items-center gap-1 bg-[#18202D]/90 border border-white/15 p-1 rounded-[8px] text-xs">
+            <button 
+              @click="statusFilter = 'all'"
+              :class="[
+                'px-2.5 py-1 rounded-[6px] text-xs font-bold transition cursor-pointer',
+                statusFilter === 'all' ? 'bg-[#CB3CFF] text-white shadow-[0_0_8px_#CB3CFF]' : 'text-[#AEB9E1] hover:text-white'
+              ]"
+            >
+              Tất cả
+            </button>
+            <button 
+              @click="statusFilter = 'pending'"
+              :class="[
+                'px-2.5 py-1 rounded-[6px] text-xs font-bold transition cursor-pointer',
+                statusFilter === 'pending' ? 'bg-[#FDB52A] text-[#081028] shadow-[0_0_8px_#FDB52A]' : 'text-[#AEB9E1] hover:text-white'
+              ]"
+            >
+              Chờ chuẩn bị ({{ stats.pendingCount }})
+            </button>
+            <button 
+              @click="statusFilter = 'ready'"
+              :class="[
+                'px-2.5 py-1 rounded-[6px] text-xs font-bold transition cursor-pointer',
+                statusFilter === 'ready' ? 'bg-[#14CA74] text-[#081028] shadow-[0_0_8px_#14CA74]' : 'text-[#AEB9E1] hover:text-white'
+              ]"
+            >
+              Đã xong ({{ stats.readyCount }})
+            </button>
+          </div>
+
+          <!-- Smart Search Bar -->
+          <div class="relative flex-1 sm:w-64">
+            <input 
+              type="text" 
+              v-model="quickFilterText"
+              placeholder="Tìm PO, SO, Item, Feature, Ngày..." 
+              class="w-full h-[36px] px-3 pl-8 bg-[#18202D]/80 backdrop-blur-md border border-white/15 rounded-[8px] text-xs outline-none text-white placeholder-[#AEB9E1]/50 focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
+            >
+            <Search class="w-3.5 h-3.5 text-[#AEB9E1] absolute left-2.5 top-2.5" />
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Scrolling Table Container với cơ chế cuộn mượt 50 dòng thông minh -->
+      <!-- Mặc định 50 dòng, khi cuộn chuột xuống tự render thêm, cuộn ngược lên tự động ẩn dòng 51 trở đi -->
+      <div 
+        ref="scrollContainerRef"
+        @scroll="handleTableScroll"
+        class="w-full h-[460px] md:h-[520px] lg:h-[580px] 2xl:h-[680px] max-h-[72vh] rounded-[14px] border border-white/15 bg-white/[0.02] shadow-inner relative custom-scroll"
+        style="overflow-y: scroll; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #CB3CFF rgba(24, 32, 45, 0.9); -webkit-overflow-scrolling: touch;"
+      >
+        <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+          
+          <!-- Sticky Table Head -->
+          <thead class="bg-[#1f2837] text-[#AEB9E1] font-semibold border-b border-white/15 sticky top-0 z-30 shadow-md">
+            <tr>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE MID(2,4)</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QTY (PCS)</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG)</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN (#PKG)</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">LOADING DATE</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">TRẠNG THÁI</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">THAO TÁC</th>
+            </tr>
+          </thead>
+
+          <!-- Table Body -->
+          <tbody class="divide-y divide-white/[0.06] font-medium">
+            <template v-for="row in renderedDisplayRows" :key="row._id">
+              
+              <!-- 1. CONTAINER GROUP HEADER ROW -->
+              <tr 
+                v-if="row._type === 'container-header'"
+                :class="[
+                  'border-y font-bold sticky z-20',
+                  row.container.status === 'ready'
+                    ? 'bg-gradient-to-r from-[#14CA74]/20 via-[#00C2FF]/10 to-[#18202D]/95 border-[#14CA74]/40'
+                    : 'bg-gradient-to-r from-[#CB3CFF]/20 via-[#00C2FF]/10 to-[#18202D]/95 border-[#CB3CFF]/40'
+                ]"
+                style="top: 39px;"
+              >
+                <td colspan="9" class="py-3 px-4 backdrop-blur-md">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    
+                    <!-- Left: PO, SO, Cont No, Loading Date -->
+                    <div class="flex items-center gap-3">
+                      <div 
+                        :class="[
+                          'w-2 h-5 rounded-full shadow-sm',
+                          row.container.status === 'ready'
+                            ? 'bg-[#14CA74] shadow-[0_0_8px_#14CA74]'
+                            : 'bg-[#CB3CFF] shadow-[0_0_8px_#CB3CFF]'
+                        ]"
+                      />
+                      
+                      <!-- PO & SO Title -->
+                      <div class="flex items-center gap-2">
+                        <span class="text-white text-xs font-black tracking-wide font-mono">
+                          PO: {{ row.container.po }}
+                        </span>
+                        <span class="text-white/40 font-mono">|</span>
+                        <span class="text-white text-xs font-black tracking-wide font-mono">
+                          SO: {{ row.container.so }}
+                        </span>
+                        <span v-if="row.container.container_no" class="text-[11px] font-mono text-[#00C2FF] bg-[#00C2FF]/15 border border-[#00C2FF]/30 px-2 py-0.5 rounded-[4px]">
+                          Cont: {{ row.container.container_no }}
+                        </span>
+                      </div>
+
+                      <!-- Loading Date Badge (Sắp xếp từ nhỏ tới lớn) -->
+                      <span class="text-[11px] font-mono font-bold text-[#AEB9E1] bg-white/10 border border-white/15 px-2.5 py-0.5 rounded-[5px] flex items-center gap-1.5">
+                        <Calendar class="w-3 h-3 text-[#00C2FF]" />
+                        <span>Loading: {{ row.container.loading_date }}</span>
+                      </span>
+
+                      <!-- Nút LỌC NHANH SANG TỒN KHO THÀNH PHẨM -->
+                      <button 
+                        @click="handleJumpToInventory(row.container)"
+                        title="Tự động chuyển sang Bảng Chi Tiết Tồn Kho Thành Phẩm để lọc mã hàng từ filter"
+                        class="h-[26px] px-2.5 rounded-[6px] bg-[#00C2FF]/15 hover:bg-[#00C2FF]/25 border border-[#00C2FF]/40 text-[#00C2FF] hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <ExternalLink class="w-3 h-3" />
+                        <span>Lọc tồn kho</span>
+                      </button>
+                    </div>
+
+                    <!-- Right: Total Kiện, Total PCS, Thao tác "Chuẩn bị xong" -->
+                    <div class="flex items-center gap-3">
+                      <!-- Total Qty -->
+                      <span class="text-[11px] font-bold text-white bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-[5px]">
+                        Tổng: <b class="text-[#14CA74]">{{ row.container.totalQty.toLocaleString() }}</b> PCS
+                      </span>
+
+                      <!-- Total #pkg (Tổng số kiện cần chuẩn bị cho container đó) -->
+                      <span class="text-xs font-black text-[#CB3CFF] bg-[#CB3CFF]/15 border border-[#CB3CFF]/40 px-3 py-1 rounded-[6px] shadow-[0_0_10px_rgba(203,60,255,0.2)]">
+                        Tổng: {{ row.container.totalPkg }} Kiện
+                      </span>
+
+                      <!-- THAO TÁC "CHUẨN BỊ XONG" -->
+                      <div v-if="row.container.status === 'pending'">
+                        <button 
+                          @click="handleMarkReady(row.container)"
+                          title="Đánh dấu đơn hàng container đã chuẩn bị xong chờ xuất (Tự động xóa sau 1 ngày)"
+                          class="h-[28px] px-3 rounded-[6px] bg-[#14CA74]/20 hover:bg-[#14CA74]/35 border border-[#14CA74]/40 text-[#14CA74] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+                        >
+                          <CheckCircle2 class="w-3.5 h-3.5" />
+                          <span>Chuẩn bị xong</span>
+                        </button>
+                      </div>
+
+                      <div v-else class="flex items-center gap-2">
+                        <span 
+                          class="text-[11px] font-bold text-[#14CA74] bg-[#14CA74]/20 border border-[#14CA74]/40 px-2.5 py-1 rounded-[6px] flex items-center gap-1.5"
+                          :title="`Tự động xóa khỏi hệ thống sau ${row.container.remainingHours || 24} giờ`"
+                        >
+                          <CheckCircle2 class="w-3.5 h-3.5" />
+                          <span>Đã xong (Tự xóa sau {{ row.container.remainingHours || 24 }}h)</span>
+                        </span>
+
+                        <button 
+                          @click="handleRevertPending(row.container)"
+                          title="Khôi phục trạng thái về Chờ chuẩn bị"
+                          class="text-[10px] text-[#AEB9E1] hover:text-white underline cursor-pointer"
+                        >
+                          Hoàn lại
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </td>
+              </tr>
+
+              <!-- 2. DATA ROW (ITEM TRONG CONTAINER) -->
+              <tr 
+                v-else-if="row._type === 'item'"
+                class="transition-colors duration-150 hover:bg-white/[0.08]"
+              >
+                <!-- PO / SO -->
+                <td class="py-2.5 px-4 font-mono text-[#AEB9E1] text-[11px]">
+                  {{ row.item.po }} / {{ row.item.so }}
+                </td>
+
+                <!-- LPVN Item code -->
+                <td class="py-2.5 px-4">
+                  <span class="font-mono font-bold text-[#00C2FF] text-xs">
+                    {{ row.item.item_code }}
+                  </span>
+                </td>
+
+                <!-- Feature MID(2,4) -->
+                <td class="py-2.5 px-4 text-center">
+                  <span class="font-mono font-black text-[#CB3CFF] text-xs px-2 py-0.5 rounded-[4px] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30">
+                    {{ row.item.feature }}
+                  </span>
+                </td>
+
+                <!-- Qty (PCS) -->
+                <td class="py-2.5 px-4 text-right font-bold text-white text-xs">
+                  <span class="text-[#14CA74]">{{ Number(row.item.qty || 0).toLocaleString() }}</span>
+                </td>
+
+                <!-- Pcs/pkg -->
+                <td class="py-2.5 px-4 text-right font-mono text-white/90 text-xs">
+                  {{ Number(row.item.pcs_per_pkg || 0).toLocaleString() }}
+                </td>
+
+                <!-- #pkg (Số kiện qui đổi cho nhóm feature) -->
+                <td class="py-2.5 px-4 text-center">
+                  <span class="font-mono font-bold text-[#CB3CFF] text-xs bg-white/5 border border-white/10 px-2 py-0.5 rounded-[4px]">
+                    {{ row.item.pkg }} Kiện
+                  </span>
+                </td>
+
+                <!-- Loading Date -->
+                <td class="py-2.5 px-4 text-center font-mono text-[#AEB9E1] text-[11px]">
+                  {{ row.item.loading_date }}
+                </td>
+
+                <!-- Status -->
+                <td class="py-2.5 px-4 text-center">
+                  <span 
+                    :class="[
+                      'px-2 py-0.5 rounded-[4px] text-[10px] font-bold border',
+                      row.item.status === 'ready'
+                        ? 'bg-[#14CA74]/15 text-[#14CA74] border-[#14CA74]/30'
+                        : 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30'
+                    ]"
+                  >
+                    {{ row.item.status === 'ready' ? 'Đã xong' : 'Chờ xuất' }}
+                  </span>
+                </td>
+
+                <!-- Thao Tác (Icon Cây Bút Chỉnh Sửa) -->
+                <td class="py-2.5 px-4 text-center">
+                  <button 
+                    @click="triggerEdit(row.item)"
+                    title="Chỉnh sửa thông tin trong bảng" 
+                    class="p-1.5 bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 text-[#CB3CFF] rounded-[6px] border border-[#CB3CFF]/30 cursor-pointer transition active:scale-90"
+                  >
+                    <Edit3 class="w-3.5 h-3.5" />
+                  </button>
+                </td>
+              </tr>
+
+            </template>
+
+            <!-- Trạng Thái Trống -->
+            <tr v-if="renderedDisplayRows.length === 0">
+              <td colspan="9" class="text-center py-16 text-[#AEB9E1] italic text-xs">
+                <div class="flex flex-col items-center justify-center gap-2">
+                  <Search class="w-6 h-6 text-[#AEB9E1]/40" />
+                  <span>Không tìm thấy container hoặc đơn hàng phù hợp!</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+
+        </table>
+      </div>
+
+      <!-- Footer Info & Virtual Scroll Count -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs border-t border-white/[0.08]">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[#AEB9E1]">
+          <span>
+            Đang hiển thị: <b class="text-white">{{ renderedDisplayRows.length }}</b> / {{ allDisplayRows.length }} dòng
+          </span>
+          <span class="text-white/20">|</span>
+          <span class="text-[11px] text-[#00C2FF]">
+            (Tự render thêm khi cuộn chuột xuống, tự động ẩn dòng 51 trở đi khi cuộn lên)
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2 text-xs font-mono text-[#AEB9E1]">
+          <span>Tổng kiện: <b class="text-[#CB3CFF] font-bold">{{ stats.totalPkg }}</b></span>
+          <span class="text-white/20">|</span>
+          <span>Tổng PCS: <b class="text-[#14CA74] font-bold">{{ stats.totalQty.toLocaleString() }}</b></span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Modals -->
+    <!-- 1. Modal Nạp File Excel -->
+    <ForecastUploadModal 
+      v-model:visible="showUploadModal"
+      :loading="loading"
+      @upload="handleUploadSubmit"
+    />
+
+    <!-- 2. Modal Chỉnh Sửa Dòng Xuất Hàng -->
+    <ForecastEditModal 
+      v-model:visible="showEditModal"
+      :target="editingTarget"
+      :loading="loading"
+      @cancel="showEditModal = false"
+      @save="handleEditSubmit"
+      @delete="handleDeleteSubmit"
+    />
+
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue'
+import { 
+  UploadCloud, 
+  Truck, 
+  Box, 
+  CheckCircle2, 
+  Search, 
+  Calendar, 
+  ExternalLink, 
+  Edit3 
+} from 'lucide-vue-next'
+import { useToast } from 'primevue/usetoast'
+import { useShippingForecast } from '@/composables/useShippingForecast'
+import { ForecastRawItem, ForecastContainerGroup } from '@/utils/forecast'
+import ForecastUploadModal from './ForecastUploadModal.vue'
+import ForecastEditModal from './ForecastEditModal.vue'
+
+const emit = defineEmits<{
+  (e: 'jump-to-inventory', payload: { filterText: string; feature: string }): void
+}>()
+
+const toast = useToast()
+
+const {
+  loading,
+  quickFilterText,
+  statusFilter,
+  stats,
+  filteredContainers,
+  fetchForecast,
+  addForecastItems,
+  editForecastItem,
+  deleteForecastItem,
+  markContainerReady,
+  revertContainerPending
+} = useShippingForecast()
+
+// Modals State
+const showUploadModal = ref(false)
+const showEditModal = ref(false)
+const editingTarget = ref<ForecastRawItem | null>(null)
+
+// Virtual Scrolling State (Mặc định 50 dòng, tự động render thêm khi cuộn xuống, ẩn dòng 51 trở đi khi cuộn lên)
+const visibleCount = ref(50)
+const scrollContainerRef = ref<HTMLElement | null>(null)
+
+interface DisplayRowItem {
+  _id: string
+  _type: 'container-header' | 'item'
+  container?: any
+  item?: any
+}
+
+// Chuyển đổi dữ liệu nhóm thành danh sách các dòng hiển thị phẳng
+const allDisplayRows = computed<DisplayRowItem[]>(() => {
+  const rows: DisplayRowItem[] = []
+
+  filteredContainers.value.forEach(container => {
+    // 1. Container Header Row
+    rows.push({
+      _id: `cont-header-${container.containerKey}`,
+      _type: 'container-header',
+      container
+    })
+
+    // 2. Data Item Rows
+    container.allItems.forEach(item => {
+      rows.push({
+        _id: `item-${item.id || item.item_code}-${container.containerKey}`,
+        _type: 'item',
+        item
+      })
+    })
+  })
+
+  return rows
+})
+
+// Danh sách các dòng được render trực tiếp trong DOM (tối đa visibleCount dòng)
+const renderedDisplayRows = computed(() => {
+  return allDisplayRows.value.slice(0, visibleCount.value)
+})
+
+// Xử lý cuộn chuột:
+// - Cuộn xuống gần đáy: tự động render thêm 50 dòng
+// - Cuộn ngược lên gần đỉnh: tự động ẩn các dòng từ 51 trở đi
+const handleTableScroll = (e: Event) => {
+  const target = e.target as HTMLElement
+  const { scrollTop, scrollHeight, clientHeight } = target
+
+  // Cuộn xuống gần đáy (cách đáy <= 80px): nạp thêm 50 dòng
+  if (scrollTop + clientHeight >= scrollHeight - 80) {
+    if (visibleCount.value < allDisplayRows.value.length) {
+      visibleCount.value = Math.min(allDisplayRows.value.length, visibleCount.value + 50)
+    }
+  }
+
+  // Cuộn ngược lên đỉnh (scrollTop <= 50px): ẩn dòng 51 trở đi để giải phóng DOM
+  if (scrollTop <= 50 && visibleCount.value > 50) {
+    visibleCount.value = 50
+  }
+}
+
+// Reset visible count khi thay đổi filter
+watch([quickFilterText, statusFilter], () => {
+  visibleCount.value = 50
+  if (scrollContainerRef.value) {
+    scrollContainerRef.value.scrollTop = 0
+  }
+})
+
+onMounted(() => {
+  fetchForecast()
+})
+
+// Thao tác "Chuẩn bị xong"
+const handleMarkReady = async (container: ForecastContainerGroup) => {
+  try {
+    await markContainerReady(container.po, container.so)
+    toast.add({
+      severity: 'success',
+      summary: 'Đã chuẩn bị xong',
+      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] đã sẵn sàng xuất cont. Hệ thống sẽ tự động dọn dẹp sau 24h.`,
+      life: 4000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi cập nhật',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+
+// Khôi phục trạng thái về pending
+const handleRevertPending = async (container: ForecastContainerGroup) => {
+  try {
+    await revertContainerPending(container.po, container.so)
+    toast.add({
+      severity: 'info',
+      summary: 'Đã hoàn lại',
+      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] chuyển về Chờ chuẩn bị.`,
+      life: 3000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi cập nhật',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+
+// Nút Lọc nhanh sang Bảng Chi Tiết Tồn Kho Thành Phẩm
+const handleJumpToInventory = (container: ForecastContainerGroup) => {
+  // Lấy danh sách các Feature hoặc Item Code của container này
+  const features = container.featureGroups.map(fg => fg.feature).filter(Boolean)
+  const filterKey = features[0] || container.allItems[0]?.item_code || ''
+
+  emit('jump-to-inventory', {
+    filterText: filterKey,
+    feature: features.join(', ')
+  })
+}
+
+// Chỉnh sửa dòng
+const triggerEdit = (item: ForecastRawItem) => {
+  editingTarget.value = item
+  showEditModal.value = true
+}
+
+const handleEditSubmit = async (item: ForecastRawItem) => {
+  try {
+    await editForecastItem(item)
+    showEditModal.value = false
+    toast.add({
+      severity: 'success',
+      summary: 'Cập nhật thành công',
+      detail: `Đã lưu thay đổi cho mã hàng ${item.item_code}`,
+      life: 3000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi cập nhật',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+
+const handleDeleteSubmit = async (id: string) => {
+  try {
+    await deleteForecastItem(id)
+    showEditModal.value = false
+    toast.add({
+      severity: 'success',
+      summary: 'Đã xóa',
+      detail: 'Đã xóa dòng mã hàng khỏi danh sách xuất',
+      life: 3000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi xóa',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+
+// Nạp file Excel
+const handleUploadSubmit = async (rows: ForecastRawItem[]) => {
+  try {
+    await addForecastItems(rows)
+    showUploadModal.value = false
+    toast.add({
+      severity: 'success',
+      summary: 'Nạp dữ liệu thành công',
+      detail: `Đã nhập ${rows.length} dòng kế hoạch xuất hàng vào hệ thống!`,
+      life: 4000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi nạp dữ liệu',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+</script>
