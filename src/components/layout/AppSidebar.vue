@@ -106,6 +106,26 @@
 
     <!-- Bottom Info & Data Actions -->
     <div class="p-6 border-t border-white/10 bg-white/[0.02] backdrop-blur-sm">
+      <!-- User Profile in Sidebar -->
+      <div v-if="currentUser" class="mb-3.5 p-2.5 rounded-[12px] bg-[#18202D]/90 border border-white/10 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-[0_0_8px_rgba(203,60,255,0.4)]">
+            {{ currentUser.name.charAt(0).toUpperCase() }}
+          </div>
+          <div class="min-w-0 text-left">
+            <p class="text-xs font-bold text-white truncate">{{ currentUser.name }}</p>
+            <p class="text-[9px] text-[#AEB9E1] truncate">{{ currentUser.email }}</p>
+          </div>
+        </div>
+        <button 
+          @click="$emit('logout')"
+          title="Đăng xuất khỏi thiết bị"
+          class="p-1.5 hover:bg-white/10 text-[#AEB9E1] hover:text-red-400 rounded-lg transition cursor-pointer shrink-0"
+        >
+          <LogOut class="w-4 h-4" />
+        </button>
+      </div>
+
       <!-- Sync Button & Nút Tải App ở góc phải khu vực làm mới dữ liệu -->
       <div class="flex items-center gap-2">
         <button 
@@ -152,8 +172,10 @@ import {
   Home, 
   Star, 
   Users,
-  Truck
+  Truck,
+  LogOut
 } from 'lucide-vue-next'
+import { useAuth } from '@/composables/useAuth'
 
 defineProps<{
   modelValue: string
@@ -167,8 +189,10 @@ const emit = defineEmits<{
   (e: 'update:modelValue', val: string): void
   (e: 'refresh'): void
   (e: 'install'): void
+  (e: 'logout'): void
 }>()
 
+const { currentUser } = useAuth()
 const isOpen = ref(false)
 
 const menuItems = [

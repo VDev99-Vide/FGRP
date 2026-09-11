@@ -312,6 +312,16 @@ export function useShippingForecast() {
       })
 
       if (isSupabaseConfigured) {
+        // Tự động xóa sạch dữ liệu cũ trên Supabase trước khi cập nhật dữ liệu mới từ Excel
+        try {
+          await supabase
+            .from('shipping_forecast')
+            .delete()
+            .neq('po', '__clear_before_import__')
+        } catch (delErr) {
+          console.warn('Lưu ý dọn dẹp dữ liệu cũ:', delErr)
+        }
+
         let { error } = await supabase
           .from('shipping_forecast')
           .insert(preparedItems)
@@ -346,8 +356,8 @@ export function useShippingForecast() {
         }
       }
 
-      // Cập nhật bộ nhớ frontend với đầy đủ thông tin tính toán
-      forecastItems.value = [...preparedItems, ...forecastItems.value]
+      // Tự động ghi đè dữ liệu mới (thay thế hoàn toàn dữ liệu cũ)
+      forecastItems.value = [...preparedItems]
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
       return true
     } catch (err: any) {

@@ -52,6 +52,14 @@
           </button>
         </div>
 
+        <!-- Auto-replace Data Notice -->
+        <div class="flex items-start gap-2.5 p-3 bg-[#00C2FF]/10 border border-[#00C2FF]/25 rounded-xl text-xs text-[#00C2FF]">
+          <RefreshCw class="w-4 h-4 shrink-0 text-[#00C2FF] mt-0.5" />
+          <span class="leading-relaxed">
+            <b>Cơ chế tự động làm mới:</b> Khi xác nhận nạp file, hệ thống sẽ tự động xóa sạch toàn bộ dữ liệu xuất hàng cũ và cập nhật dữ liệu mới nhất từ file Excel này.
+          </span>
+        </div>
+
         <!-- File Upload Area -->
         <div 
           @dragover.prevent="isDragging = true"
@@ -278,7 +286,8 @@ import {
   Download, 
   AlertCircle, 
   CheckCircle2,
-  Package
+  Package,
+  RefreshCw
 } from 'lucide-vue-next'
 import { 
   parseForecastExcelFile, 

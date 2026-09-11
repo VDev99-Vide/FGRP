@@ -201,6 +201,17 @@
       </form>
 
     </div>
+
+    <!-- Floating UI Confirm Modal (thay thế hoàn toàn confirm trình duyệt) -->
+    <ConfirmModal 
+      v-model:visible="showDeleteConfirm"
+      title="Xác nhận xóa mã hàng"
+      :message="`Bạn có chắc chắn muốn xóa mã hàng [${editForm?.item_code || ''}] khỏi danh sách xuất không? Thao tác này không thể hoàn tác.`"
+      confirmText="Xác nhận xóa"
+      cancelText="Hủy bỏ"
+      severity="danger"
+      @confirm="handleConfirmDelete"
+    />
   </div>
 </template>
 
@@ -208,6 +219,7 @@
 import { ref, watch, computed } from 'vue'
 import { Edit3, X, Save, Trash2, Package } from 'lucide-vue-next'
 import { extractFeatureFromItemCode, isSpecialStockCode, ForecastRawItem } from '@/utils/forecast'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -223,6 +235,7 @@ const emit = defineEmits<{
 }>()
 
 const editForm = ref<ForecastRawItem | null>(null)
+const showDeleteConfirm = ref(false)
 
 watch(() => props.target, (newTarget) => {
   if (newTarget) {
@@ -238,8 +251,8 @@ const isSpecial = computed(() => {
 })
 
 const previewFeature = computed(() => {
-  if (!editForm.value?.item_code) return 'No data'
-  return extractFeatureFromItemCode(editForm.value.item_code, Boolean(editForm.value.is_accessory))
+  if (!editForm.value?.item_code) return ''
+  return extractFeatureFromItemCode(editForm.value.item_code, editForm.value.is_accessory)
 })
 
 const previewSinglePkg = computed(() => {
@@ -257,7 +270,11 @@ const handleSave = () => {
 
 const handleDelete = () => {
   if (!editForm.value?.id) return
-  if (confirm(`Bạn có chắc muốn xóa mã hàng ${editForm.value.item_code} khỏi danh sách xuất?`)) {
+  showDeleteConfirm.value = true
+}
+
+const handleConfirmDelete = () => {
+  if (editForm.value?.id) {
     emit('delete', editForm.value.id)
   }
 }

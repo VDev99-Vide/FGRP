@@ -12,6 +12,7 @@
       :is-installed="isInstalled"
       @refresh="loadAllData" 
       @install="handleOpenInstallModal"
+      @logout="showLogoutConfirm = true"
     />
 
     <!-- Main Content wrapper -->
@@ -68,6 +69,24 @@
             <Download class="w-3.5 h-3.5 text-[#00C2FF]" />
             <span>{{ isInstalled ? 'Đã Cài App' : 'Tải App' }}</span>
           </button>
+
+          <!-- User Profile Badge & Logout -->
+          <div v-if="currentUser" class="flex items-center gap-2.5 px-3 py-1.5 bg-[#18202D]/90 border border-white/15 rounded-[10px] backdrop-blur-md shadow-sm">
+            <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold shadow-[0_0_8px_rgba(203,60,255,0.4)]">
+              {{ currentUser.name.charAt(0).toUpperCase() }}
+            </div>
+            <div class="text-left leading-tight hidden xl:block">
+              <p class="text-xs font-bold text-white">{{ currentUser.name }}</p>
+              <p class="text-[9px] text-[#AEB9E1] truncate max-w-[120px]">{{ currentUser.email }}</p>
+            </div>
+            <button 
+              @click="showLogoutConfirm = true"
+              title="Đăng xuất khỏi thiết bị"
+              class="ml-1 p-1 hover:bg-white/10 text-[#AEB9E1] hover:text-red-400 rounded-md transition cursor-pointer"
+            >
+              <LogOut class="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           <div class="text-right pl-3 border-l border-white/10">
             <p class="text-[10px] text-[#AEB9E1]">Đồng bộ lúc</p>
@@ -321,6 +340,23 @@
       @install="handleDirectInstall"
       @clear-cache="handleClearCache"
     />
+
+    <!-- 10. Login Modal khi chưa đăng nhập hệ thống -->
+    <LoginModal 
+      v-if="!isAuthenticated" 
+      @login-success="handleLoginSuccess"
+    />
+
+    <!-- 11. Floating Confirm Modal Xác Nhận Đăng Xuất -->
+    <ConfirmModal 
+      v-model:visible="showLogoutConfirm"
+      title="Xác nhận đăng xuất"
+      :message="`Bạn có chắc chắn muốn đăng xuất tài khoản [${currentUser?.email || ''}] khỏi thiết bị này không?`"
+      confirmText="Đăng xuất"
+      cancelText="Hủy bỏ"
+      severity="danger"
+      @confirm="handleLogout"
+    />
   </div>
 </template>
 
@@ -336,12 +372,15 @@ import {
   MinusCircle, 
   UploadCloud, 
   Search,
-  Download
+  Download,
+  LogOut
 } from 'lucide-vue-next'
 
 // Layout & Dashboard Components
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import InstallAppModal from '@/components/layout/InstallAppModal.vue'
+import LoginModal from '@/components/auth/LoginModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import KpiCards from '@/components/kpi/KpiCards.vue'
 import ComparisonChart from '@/components/charts/ComparisonChart.vue'
 import VisitorsRingChart from '@/components/dashboard/VisitorsRingChart.vue'
@@ -364,6 +403,7 @@ import AccessoryOutboundModal from '@/components/accessories/AccessoryOutboundMo
 import { useInventory } from '@/composables/useInventory'
 import { useAccessories } from '@/composables/useAccessories'
 import { usePwaInstall } from '@/composables/usePwaInstall'
+import { useAuth } from '@/composables/useAuth'
 import { resetMockData } from '@/services/mockData'
 import { exportToExcel } from '@/services/excelExport'
 import { formatNumber } from '@/utils/format'
@@ -516,8 +556,35 @@ const handleResetMockData = () => {
   })
 }
 
-onMounted(() => {
+// Auth State & Methods
+const { currentUser, isAuthenticated, initAuth, logout } = useAuth()
+const showLogoutConfirm = ref(false)
+
+const handleLoginSuccess = () => {
+  toast.add({
+    severity: 'success',
+    summary: 'Đăng nhập thành công',
+    detail: `Xin chào ${currentUser.value?.name}! Phiên làm việc đã được ghi nhớ trên thiết bị này.`,
+    life: 3000
+  })
   loadAllData()
+}
+
+const handleLogout = async () => {
+  await logout()
+  toast.add({
+    severity: 'info',
+    summary: 'Đã đăng xuất',
+    detail: 'Đã kết thúc phiên làm việc trên thiết bị này.',
+    life: 3000
+  })
+}
+
+onMounted(async () => {
+  await initAuth()
+  if (isAuthenticated.value) {
+    loadAllData()
+  }
 })
 
 // Inbound Submission (Manual)

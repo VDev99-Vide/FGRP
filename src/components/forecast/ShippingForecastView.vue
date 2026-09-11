@@ -480,6 +480,17 @@
       @delete="handleDeleteSubmit"
     />
 
+    <!-- 3. Floating UI Confirm Modal Xóa Toàn Bộ (Thay thế hoàn toàn confirm trình duyệt) -->
+    <ConfirmModal 
+      v-model:visible="showClearAllModal"
+      title="Xác nhận xóa toàn bộ dữ liệu xuất hàng"
+      message="Bạn có chắc chắn muốn xóa TOÀN BỘ danh sách xuất hàng dự kiến trên cơ sở dữ liệu Supabase? Thao tác này sẽ xóa sạch dữ liệu và không thể hoàn tác."
+      confirmText="Xác nhận xóa tất cả"
+      cancelText="Hủy bỏ"
+      severity="danger"
+      @confirm="executeClearAll"
+    />
+
   </div>
 </template>
 
@@ -504,6 +515,7 @@ import { useShippingForecast } from '@/composables/useShippingForecast'
 import { ForecastRawItem, ForecastContainerGroup } from '@/utils/forecast'
 import ForecastUploadModal from './ForecastUploadModal.vue'
 import ForecastEditModal from './ForecastEditModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const emit = defineEmits<{
   (e: 'jump-to-inventory', payload: { filterText: string; feature: string }): void
@@ -530,6 +542,7 @@ const {
 // Modals State
 const showUploadModal = ref(false)
 const showEditModal = ref(false)
+const showClearAllModal = ref(false)
 const editingTarget = ref<ForecastRawItem | null>(null)
 
 // Virtual Scrolling State (Mặc định 50 dòng, tự động render thêm khi cuộn xuống, ẩn dòng 51 trở đi khi cuộn lên)
@@ -621,9 +634,12 @@ const handleManualSync = async () => {
   })
 }
 
-// Xóa toàn bộ dữ liệu xuất hàng trên Supabase
-const handleClearAll = async () => {
-  if (!confirm('Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu xuất hàng dự kiến trên Supabase không?')) return
+// Xóa toàn bộ dữ liệu xuất hàng trên Supabase (hiển thị UI nổi thay cho confirm)
+const handleClearAll = () => {
+  showClearAllModal.value = true
+}
+
+const executeClearAll = async () => {
   try {
     await clearAllForecastData()
     toast.add({
