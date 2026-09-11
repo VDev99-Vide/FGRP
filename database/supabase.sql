@@ -197,10 +197,12 @@ create index if not exists idx_shipping_forecast_loading_date on shipping_foreca
 create index if not exists idx_shipping_forecast_status on shipping_forecast (status);
 create index if not exists idx_shipping_forecast_status_changed_at on shipping_forecast (status_changed_at);
 
-alter table shipping_forecast enable row level security;
-create policy "allow_anon_select_shipping_forecast" on shipping_forecast for select to anon using (true);
-create policy "allow_anon_insert_shipping_forecast" on shipping_forecast for insert to anon with check (true);
-create policy "allow_anon_update_shipping_forecast" on shipping_forecast for update to anon using (true) with check (true);
-create policy "allow_anon_delete_shipping_forecast" on shipping_forecast for delete to anon using (true);
+alter table shipping_forecast disable row level security;
+drop policy if exists "allow_all_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_select_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_insert_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_update_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_delete_shipping_forecast" on shipping_forecast;
+create policy "allow_all_shipping_forecast" on shipping_forecast for all to public using (true) with check (true);
 
 notify pgrst, 'reload schema';

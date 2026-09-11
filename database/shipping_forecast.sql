@@ -66,14 +66,21 @@ end;
 $$;
 
 -- ==========================================
--- BẬT RLS VÀ PHÂN QUYỀN TRUY CẬP CHO ANON
+-- PHÂN QUYỀN TRUY CẬP (RLS)
+-- Đối với hệ thống nội bộ không phân quyền user, TẮT RLS là giải pháp triệt để nhất để không bao giờ bị lỗi:
+-- "new row violates row-level security policy for table shipping_forecast"
 -- ==========================================
-alter table shipping_forecast enable row level security;
+alter table shipping_forecast disable row level security;
 
-create policy "allow_anon_select_shipping_forecast" on shipping_forecast for select to anon using (true);
-create policy "allow_anon_insert_shipping_forecast" on shipping_forecast for insert to anon with check (true);
-create policy "allow_anon_update_shipping_forecast" on shipping_forecast for update to anon using (true) with check (true);
-create policy "allow_anon_delete_shipping_forecast" on shipping_forecast for delete to anon using (true);
+-- Hoặc nếu muốn bật RLS thì cấp toàn quyền cho PUBLIC (bao gồm cả anon và authenticated)
+-- và xóa policy cũ để tránh lỗi trùng tên:
+drop policy if exists "allow_all_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_select_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_insert_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_update_shipping_forecast" on shipping_forecast;
+drop policy if exists "allow_anon_delete_shipping_forecast" on shipping_forecast;
+
+create policy "allow_all_shipping_forecast" on shipping_forecast for all to public using (true) with check (true);
 
 -- ==========================================
 -- LÀM MỚI SCHEMA CACHE CỦA POSTGREST / SUPABASE NGAY LẬP TỨC

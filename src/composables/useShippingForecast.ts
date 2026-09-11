@@ -333,9 +333,15 @@ export function useShippingForecast() {
             .insert(fallbackItems)
 
           if (retryRes.error) {
+            if (retryRes.error.message?.includes('row-level security') || retryRes.error.message?.includes('violates row-level security')) {
+              throw new Error('Supabase chặn quyền ghi (RLS). Vui lòng chạy lệnh "ALTER TABLE shipping_forecast DISABLE ROW LEVEL SECURITY;" trong Supabase SQL Editor.')
+            }
             throw retryRes.error
           }
         } else if (error) {
+          if (error.message?.includes('row-level security') || error.message?.includes('violates row-level security')) {
+            throw new Error('Supabase chặn quyền ghi (RLS). Vui lòng chạy lệnh "ALTER TABLE shipping_forecast DISABLE ROW LEVEL SECURITY;" trong Supabase SQL Editor.')
+          }
           throw error
         }
       }
