@@ -31,29 +31,21 @@ export function useAccessories() {
   const fetchAccessories = async () => {
     loading.value = true
     try {
-      if (!isSupabaseConfigured) {
-        isDemoMode.value = true
-        accessoriesData.value = getMockAccessories()
-        return
-      }
-
       const { data, error } = await supabase
         .from('hang_phu_kien')
         .select('*')
         .order('code', { ascending: true })
 
       if (error) {
-        console.warn('Supabase hang_phu_kien query failed, falling back to mock data:', error)
-        isDemoMode.value = true
-        accessoriesData.value = getMockAccessories()
+        console.error('Lỗi kết nối Supabase phụ kiện:', error)
+        throw error
       } else {
         isDemoMode.value = false
         accessoriesData.value = (data || []) as HangPhuKienRow[]
       }
     } catch (e: any) {
-      console.warn('Lỗi kết nối Supabase phụ kiện, sử dụng dữ liệu mẫu:', e)
-      isDemoMode.value = true
-      accessoriesData.value = getMockAccessories()
+      console.error('Lỗi kết nối Supabase phụ kiện:', e)
+      throw e
     } finally {
       loading.value = false
     }

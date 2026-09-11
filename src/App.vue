@@ -581,10 +581,14 @@ const handleLogout = async () => {
 }
 
 onMounted(async () => {
+  // Tự động xóa sạch dữ liệu mẫu cũ trong LocalStorage để đồng bộ 100% với Supabase
+  try {
+    localStorage.removeItem('wms_mock_inventory_v1')
+    localStorage.removeItem('wms_mock_accessories_v1')
+  } catch {}
+
   await initAuth()
-  if (isAuthenticated.value) {
-    loadAllData()
-  }
+  await loadAllData()
 })
 
 // Inbound Submission (Manual)

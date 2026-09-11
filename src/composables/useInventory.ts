@@ -96,51 +96,29 @@ export function useInventory() {
   const fetchInventory = async () => {
     loading.value = true
     try {
-      if (!isSupabaseConfigured) {
-        // Dùng dữ liệu mẫu (Mock Data)
-        isDemoMode.value = true
-        const localData = getMockInventory()
-        inventoryData.value = localData
-        summaryData.value = generateMockSummary(localData)
-        lastSync.value = new Date().toLocaleTimeString('vi-VN')
-        updateMetrics()
-        return
-      }
+      // Live Supabase - Tải toàn bộ dữ liệu từ Views không giới hạn 1,000 dòng
+      const [detailRows, sumRows] = await Promise.all([
+        fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham', 'inventory_id'),
+        fetchAllFromSupabase<SummaryAnalysisRow>('vw_summary_analysis', 'feature')
+      ])
 
-      // Live Supabase - Tải toàn bộ không giới hạn 1000 dòng
-      try {
-        const [detailRows, sumRows] = await Promise.all([
-          fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham', 'inventory_id'),
-          fetchAllFromSupabase<SummaryAnalysisRow>('vw_summary_analysis', 'feature')
-        ])
-
-        isDemoMode.value = false
-        // Khử fan-out từ view: nhiều dòng master_data trùng tag_id chỉ giữ 1 dòng cho mỗi tag vật lý
-        inventoryData.value = dedupeByInventoryId(detailRows || [])
-        
-        if (sumRows && sumRows.length > 0) {
-          summaryData.value = sumRows
-        } else {
-          summaryData.value = generateMockSummary(inventoryData.value)
-        }
-      } catch (err: any) {
-        console.warn('Supabase query failed, falling back to mock data:', err)
-        isDemoMode.value = true
-        const localData = getMockInventory()
-        inventoryData.value = localData
-        summaryData.value = generateMockSummary(localData)
+      isDemoMode.value = false
+      // Khử fan-out từ view: nhiều dòng master_data trùng tag_id chỉ giữ 1 dòng cho mỗi tag vật lý
+      inventoryData.value = dedupeByInventoryId(detailRows || [])
+      
+      if (sumRows && sumRows.length > 0) {
+        summaryData.value = sumRows
+      } else {
+        summaryData.value = generateMockSummary(inventoryData.value)
       }
 
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
       updateMetrics()
-    } catch (e: any) {
-      console.warn('Lỗi kết nối Supabase, tự động chuyển sang chế độ dữ liệu mẫu:', e)
-      isDemoMode.value = true
-      const localData = getMockInventory()
-      inventoryData.value = localData
-      summaryData.value = generateMockSummary(localData)
+    } catch (err: any) {
+      console.error('Lỗi kết nối Supabase tồn kho:', err)
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
       updateMetrics()
+      throw err
     } finally {
       loading.value = false
     }
