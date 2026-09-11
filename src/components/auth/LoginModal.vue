@@ -23,16 +23,13 @@
         </div>
 
         <h2 class="text-xl font-bold text-white tracking-tight">ĐĂNG NHẬP HỆ THỐNG</h2>
-        <p class="text-xs text-[#AEB9E1] mt-1">
-          Hệ thống quản lý tồn kho và kế hoạch xuất hàng <span class="text-white font-bold">Dashdark V</span>
-        </p>
       </div>
 
-      <!-- Quick Account Selector Chips -->
+      <!-- Quick Account Selector Chips (Gợi ý user) -->
       <div class="mb-5">
         <p class="text-[11px] font-semibold text-[#AEB9E1] mb-2 flex items-center gap-1.5">
           <UserCheck class="w-3.5 h-3.5 text-[#00C2FF]" />
-          <span>Chọn nhanh tài khoản được cấp quyền:</span>
+          <span>Gợi ý người dùng:</span>
         </p>
         <div class="grid grid-cols-3 gap-2">
           <button
@@ -69,7 +66,7 @@
               type="email"
               v-model="formEmail"
               required
-              placeholder="Vinh@gmail.com, Hung@gmail.com, Luu@gmail.com"
+              placeholder="Chọn tài khoản hoặc nhập email..."
               class="w-full h-[42px] px-3.5 pl-10 bg-[#18202D]/90 border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition font-medium"
             />
             <Mail class="w-4 h-4 text-[#AEB9E1] absolute left-3 top-3" />
@@ -78,16 +75,16 @@
 
         <!-- Password Input -->
         <div>
-          <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5 flex justify-between items-center">
+          <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">
             <span>Mật khẩu</span>
-            <span class="text-[10px] text-[#00C2FF] font-normal">Mặc định: 123</span>
           </label>
           <div class="relative">
             <input 
               :type="showPassword ? 'text' : 'password'"
               v-model="formPassword"
               required
-              placeholder="Nhập mật khẩu (123)"
+              placeholder="Nhập mật khẩu của bạn..."
+              autocomplete="current-password"
               class="w-full h-[42px] px-3.5 pl-10 pr-10 bg-[#18202D]/90 border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition font-medium"
             />
             <Lock class="w-4 h-4 text-[#AEB9E1] absolute left-3 top-3" />
@@ -126,12 +123,6 @@
           <span>{{ authLoading ? 'ĐANG XÁC THỰC...' : 'ĐĂNG NHẬP HỆ THỐNG' }}</span>
         </button>
       </form>
-
-      <!-- Footer Info -->
-      <div class="mt-6 pt-4 border-t border-white/10 text-center text-[10px] text-[#AEB9E1]/70 leading-relaxed">
-        Phân quyền quản trị: <b class="text-white">Vinh</b>, <b class="text-white">Hùng</b>, <b class="text-white">Lưu</b><br>
-        Tất cả dữ liệu được bảo mật và đồng bộ trực tiếp với cơ sở dữ liệu Supabase.
-      </div>
     </div>
   </div>
 </template>
@@ -156,14 +147,14 @@ const emit = defineEmits<{
 
 const { login, authLoading, authError } = useAuth()
 
-const formEmail = ref('Vinh@gmail.com')
-const formPassword = ref('123')
+const formEmail = ref('')
+const formPassword = ref('')
 const showPassword = ref(false)
 const rememberDevice = ref(true)
 
 const selectAccount = (email: string) => {
   formEmail.value = email
-  formPassword.value = '123'
+  formPassword.value = ''
 }
 
 const handleSubmit = async () => {
