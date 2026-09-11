@@ -509,7 +509,7 @@ const currentTabName = computed(() => {
   switch (currentTab.value) {
     case 'dashboard': return 'Bảng Điều Khiển'
     case 'inventory': return 'Tồn Kho Thành Phẩm'
-    case 'forecast': return 'Danh Sách Xuất Hàng Dự Kiến'
+    case 'forecast': return 'Kế Hoạch Xuất Hàng'
     case 'accessories': return 'Quản Lý Phụ Kiện'
     default: return ''
   }

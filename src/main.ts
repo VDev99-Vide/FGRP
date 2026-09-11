@@ -5,20 +5,43 @@ import Aura from '@primevue/themes/aura'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 
-// Import PWA Service Worker auto-updater
-import { registerSW } from 'virtual:pwa-register'
+// PWA Service Worker & Anti-Stale Cache Management
+if (import.meta.env.PROD) {
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    const updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        console.info('🚀 Phát hiện bản cập nhật mới của Dashdark V! Đang tự động làm mới...')
+        updateSW(true)
+      },
+      onOfflineReady() {
+        console.info('📱 Dashdark V đã sẵn sàng hoạt động offline')
+      }
+    })
 
-// Tự động kiểm tra và cập nhật Service Worker ngay khi có bản build mới
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    console.info('🚀 Phát hiện bản cập nhật mới của Dashdark V! Đang tự động làm mới...')
-    updateSW(true)
-  },
-  onOfflineReady() {
-    console.info('📱 Dashdark V đã sẵn sàng hoạt động offline')
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload()
+      })
+    }
+  })
+} else {
+  // Trong môi trường DEV / Localhost: Tự động gỡ bỏ mọi Service Worker cũ và dọn sạch cache để chống dính cache 100%
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister()
+      }
+    })
   }
-})
+  if ('caches' in window) {
+    caches.keys().then((keys) => {
+      for (const key of keys) {
+        caches.delete(key)
+      }
+    })
+  }
+}
 
 // Import CSS (including Tailwind CSS v4, AG Grid, and Dashdark V Dark Glassmorphism tokens)
 import 'ag-grid-community/styles/ag-grid.css'
