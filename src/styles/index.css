@@ -139,6 +139,49 @@ html, body {
   border-radius: 12px;
 }
 
+/* Glass User Badge / Card - Đồng bộ chuẩn kính mờ Figma Frosted Glass */
+.glass-user-card {
+  background: 
+    linear-gradient(0deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.28)),
+    rgba(40, 50, 65, 0.54);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    0 8px 20px -4px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-user-card:hover {
+  border-color: rgba(203, 60, 255, 0.40);
+  box-shadow: 
+    0 10px 25px -4px rgba(0, 0, 0, 0.45),
+    0 0 16px rgba(203, 60, 255, 0.20),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
+}
+
+/* Sticky Forecast Table Header - Đồng bộ kính mờ toàn hệ thống */
+.glass-table-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.glass-table-sticky-head th {
+  background: 
+    linear-gradient(0deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.30)),
+    rgba(40, 50, 65, 0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 -1px 0 0 rgba(255, 255, 255, 0.10);
+  color: #AEB9E1;
+}
+
 /* Neon Text Pulse Animation */
 @keyframes neonGlow {
   0%, 100% {

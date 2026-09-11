@@ -106,8 +106,8 @@
 
     <!-- Bottom Info & Data Actions -->
     <div class="p-6 border-t border-white/10 bg-white/[0.02] backdrop-blur-sm">
-      <!-- User Profile in Sidebar -->
-      <div v-if="currentUser" class="mb-3.5 p-2.5 rounded-[12px] bg-[#18202D]/90 border border-white/10 flex items-center justify-between shadow-sm">
+      <!-- User Profile in Sidebar (Đồng bộ kính mờ với toàn hệ thống) -->
+      <div v-if="currentUser" class="mb-3.5 p-2.5 rounded-[12px] glass-user-card flex items-center justify-between">
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-[0_0_8px_rgba(203,60,255,0.4)]">
             {{ currentUser.name.charAt(0).toUpperCase() }}

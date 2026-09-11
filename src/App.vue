@@ -70,8 +70,8 @@
             <span>{{ isInstalled ? 'Đã Cài App' : 'Tải App' }}</span>
           </button>
 
-          <!-- User Profile Badge & Logout -->
-          <div v-if="currentUser" class="flex items-center gap-2.5 px-3 py-1.5 bg-[#18202D]/90 border border-white/15 rounded-[10px] backdrop-blur-md shadow-sm">
+          <!-- User Profile Badge & Logout (Đồng bộ kính mờ với toàn hệ thống) -->
+          <div v-if="currentUser" class="flex items-center gap-2.5 px-3 py-1.5 glass-user-card rounded-[10px]">
             <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold shadow-[0_0_8px_rgba(203,60,255,0.4)]">
               {{ currentUser.name.charAt(0).toUpperCase() }}
             </div>

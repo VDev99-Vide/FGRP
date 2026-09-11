@@ -170,18 +170,18 @@
       >
         <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
           
-          <!-- Sticky Table Head -->
-          <thead class="bg-[#1f2837] text-[#AEB9E1] font-semibold border-b border-white/15 sticky top-0 z-30 shadow-md">
+          <!-- Sticky Table Head (Đồng bộ kính mờ toàn hệ thống) -->
+          <thead class="glass-table-sticky-head shadow-lg">
             <tr>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QTY (PCS)</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG)</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN / THÙNG (#PKG)</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">LOADING DATE</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">TRẠNG THÁI</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">THAO TÁC</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QTY (PCS)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN / THÙNG (#PKG)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">LOADING DATE</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">TRẠNG THÁI</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">THAO TÁC</th>
             </tr>
           </thead>
 
@@ -189,18 +189,25 @@
           <tbody class="divide-y divide-white/[0.06] font-medium">
             <template v-for="row in renderedDisplayRows" :key="row._id">
               
-              <!-- 1. CONTAINER GROUP HEADER ROW -->
+              <!-- 1. CONTAINER GROUP HEADER ROW (Banner phân nhóm container, đồng bộ kính mờ, không ghim để chống chồng lớp màu) -->
               <tr 
                 v-if="row._type === 'container-header'"
                 :class="[
-                  'border-y font-bold sticky z-20',
+                  'border-y font-bold transition-colors',
                   row.container.status === 'ready'
-                    ? 'bg-gradient-to-r from-[#14CA74]/20 via-[#00C2FF]/10 to-[#18202D]/95 border-[#14CA74]/40'
-                    : 'bg-gradient-to-r from-[#CB3CFF]/20 via-[#00C2FF]/10 to-[#18202D]/95 border-[#CB3CFF]/40'
+                    ? 'border-[#14CA74]/30'
+                    : 'border-[#CB3CFF]/30'
                 ]"
-                style="top: 39px;"
               >
-                <td colspan="9" class="py-3 px-4 backdrop-blur-md">
+                <td 
+                  colspan="9" 
+                  :class="[
+                    'py-3 px-4 glass-panel-subtle backdrop-blur-md',
+                    row.container.status === 'ready'
+                      ? 'bg-gradient-to-r from-[#14CA74]/15 via-[#00C2FF]/10 to-transparent'
+                      : 'bg-gradient-to-r from-[#CB3CFF]/15 via-[#00C2FF]/10 to-transparent'
+                  ]"
+                >
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     
                     <!-- Left: PO, SO, Cont No, Loading Date -->
