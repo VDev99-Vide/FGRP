@@ -6,6 +6,7 @@ describe('useShippingForecast composable', () => {
 
   beforeEach(() => {
     composable = useShippingForecast()
+    composable.seedDemoData()
     composable.quickFilterText.value = ''
     composable.statusFilter.value = 'all'
   })

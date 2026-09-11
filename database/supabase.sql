@@ -159,3 +159,48 @@ create policy "allow_anon_select_hang_phu_kien" on hang_phu_kien for select to a
 create policy "allow_anon_insert_hang_phu_kien" on hang_phu_kien for insert to anon with check (true);
 create policy "allow_anon_update_hang_phu_kien" on hang_phu_kien for update to anon using (true) with check (true);
 create policy "allow_anon_delete_hang_phu_kien" on hang_phu_kien for delete to anon using (true);
+
+-- ==========================================
+-- 8. BẢNG DANH SÁCH XUẤT HÀNG DỰ KIẾN (SHIPPING_FORECAST)
+-- ==========================================
+create table if not exists shipping_forecast (
+  id uuid primary key default gen_random_uuid(),
+  po text not null,
+  so text not null,
+  container_no text default '',
+  item_code text not null,
+  feature text not null,
+  loading_date text not null,
+  qty numeric not null default 0,
+  pcs_per_pkg numeric not null default 0,
+  pkg numeric not null default 0,
+  is_accessory boolean not null default false,
+  is_special boolean not null default false,
+  unit_type text not null default 'kien',
+  status text not null default 'pending',
+  status_changed_at timestamptz default null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table shipping_forecast 
+  add column if not exists is_accessory boolean not null default false,
+  add column if not exists is_special boolean not null default false,
+  add column if not exists unit_type text not null default 'kien';
+
+create index if not exists idx_shipping_forecast_po_so on shipping_forecast (po, so);
+create index if not exists idx_shipping_forecast_item_code on shipping_forecast (item_code);
+create index if not exists idx_shipping_forecast_feature on shipping_forecast (feature);
+create index if not exists idx_shipping_forecast_accessory on shipping_forecast (is_accessory);
+create index if not exists idx_shipping_forecast_special on shipping_forecast (is_special);
+create index if not exists idx_shipping_forecast_loading_date on shipping_forecast (loading_date);
+create index if not exists idx_shipping_forecast_status on shipping_forecast (status);
+create index if not exists idx_shipping_forecast_status_changed_at on shipping_forecast (status_changed_at);
+
+alter table shipping_forecast enable row level security;
+create policy "allow_anon_select_shipping_forecast" on shipping_forecast for select to anon using (true);
+create policy "allow_anon_insert_shipping_forecast" on shipping_forecast for insert to anon with check (true);
+create policy "allow_anon_update_shipping_forecast" on shipping_forecast for update to anon using (true) with check (true);
+create policy "allow_anon_delete_shipping_forecast" on shipping_forecast for delete to anon using (true);
+
+notify pgrst, 'reload schema';

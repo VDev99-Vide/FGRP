@@ -185,15 +185,17 @@ const DEFAULT_IN_MEMORY_FORECAST: ForecastRawItem[] = [
   }
 ]
 
-// State lưu trữ dữ liệu trong session
-const forecastItems = ref<ForecastRawItem[]>([...DEFAULT_IN_MEMORY_FORECAST])
+// State lưu trữ dữ liệu trong session - mặc định khởi tạo RỖNG để đồng bộ 100% với Supabase
+// TUYỆT ĐỐI KHÔNG DÙNG LOCALSTORAGE / INDEXEDDB / DEMO DATA theo đúng yêu cầu:
+// "xóa đi dữ liệu mẫu khi hệ thống chưa có dữ liệu... đồng bộ với dữ liệu supabase 100%"
+const forecastItems = ref<ForecastRawItem[]>([])
 const loading = ref(false)
 const quickFilterText = ref('')
 const statusFilter = ref<'all' | 'pending' | 'ready'>('all')
 const lastSync = ref('--:--')
 
 export function useShippingForecast() {
-  const isDemoMode = ref(!isSupabaseConfigured)
+  const isDemoMode = ref(false)
 
   /**
    * Tự động xóa các đơn hàng 'ready' quá 1 ngày (24 giờ)
@@ -220,6 +222,7 @@ export function useShippingForecast() {
 
   /**
    * Tải toàn bộ danh sách xuất hàng dự kiến từ Supabase
+   * ĐỒNG BỘ 100% VỚI SUPABASE: Nếu database rỗng => hiển thị rỗng, không chèn bất kỳ demo data nào
    */
   const fetchForecast = async () => {
     loading.value = true
@@ -227,6 +230,7 @@ export function useShippingForecast() {
       await cleanupExpiredItems()
 
       if (!isSupabaseConfigured) {
+        // Khi chưa cấu hình Supabase, để trống danh sách
         isDemoMode.value = true
         lastSync.value = new Date().toLocaleTimeString('vi-VN')
         return
@@ -240,19 +244,34 @@ export function useShippingForecast() {
 
       if (error) throw error
 
-      if (data && data.length > 0) {
-        forecastItems.value = filterOutExpiredItems(data as ForecastRawItem[])
+      if (data) {
+        // Ánh xạ dữ liệu từ Supabase - tự động nhận diện phụ kiện & mã đặc biệt nếu DB chưa có cột
+        const mappedRows = data.map((row: any) => {
+          const isAcc = (row.is_accessory !== undefined && row.is_accessory !== null)
+            ? Boolean(row.is_accessory)
+            : (row.feature === row.item_code)
+          const isSpec = (row.is_special !== undefined && row.is_special !== null)
+            ? Boolean(row.is_special)
+            : isSpecialStockCode(row.item_code)
+          const unitType: 'kien' | 'thung' = row.unit_type || (isAcc ? 'thung' : 'kien')
+
+          return {
+            ...row,
+            is_accessory: isAcc,
+            is_special: isSpec,
+            unit_type: unitType
+          } as ForecastRawItem
+        })
+
+        forecastItems.value = filterOutExpiredItems(mappedRows)
         isDemoMode.value = false
       } else {
-        // Nếu bảng trống, giữ dữ liệu mẫu trong ram
-        forecastItems.value = filterOutExpiredItems(forecastItems.value)
+        forecastItems.value = []
       }
 
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
     } catch (err: any) {
-      console.warn('Lỗi kết nối Supabase cho shipping_forecast, sử dụng dữ liệu bộ nhớ:', err)
-      isDemoMode.value = true
-      forecastItems.value = filterOutExpiredItems(forecastItems.value)
+      console.warn('Lỗi kết nối Supabase cho shipping_forecast:', err)
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
     } finally {
       loading.value = false
@@ -293,14 +312,35 @@ export function useShippingForecast() {
       })
 
       if (isSupabaseConfigured) {
-        const { error } = await supabase
+        let { error } = await supabase
           .from('shipping_forecast')
           .insert(preparedItems)
 
-        if (error) throw error
+        // Tự động tương thích ngược nếu schema cache trên Supabase chưa có cột is_accessory/unit_type
+        if (error && (
+          error.message?.includes('is_accessory') || 
+          error.message?.includes('schema cache') || 
+          error.code === 'PGRST204' ||
+          error.message?.includes('column')
+        )) {
+          console.warn('⚠️ Supabase schema cache chưa có cột is_accessory. Tự động insert danh sách các trường cơ bản...', error.message)
+          const fallbackItems = preparedItems.map(it => {
+            const { is_accessory, is_special, unit_type, ...rest } = it
+            return rest
+          })
+          const retryRes = await supabase
+            .from('shipping_forecast')
+            .insert(fallbackItems)
+
+          if (retryRes.error) {
+            throw retryRes.error
+          }
+        } else if (error) {
+          throw error
+        }
       }
 
-      // Cập nhật bộ nhớ frontend
+      // Cập nhật bộ nhớ frontend với đầy đủ thông tin tính toán
       forecastItems.value = [...preparedItems, ...forecastItems.value]
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
       return true
@@ -333,12 +373,29 @@ export function useShippingForecast() {
       }
 
       if (isSupabaseConfigured && updatedItem.id && !updatedItem.id.startsWith('demo-')) {
-        const { error } = await supabase
+        let { error } = await supabase
           .from('shipping_forecast')
           .update(payload)
           .eq('id', updatedItem.id)
 
-        if (error) throw error
+        // Fallback nếu schema cache chưa có cột mới
+        if (error && (
+          error.message?.includes('is_accessory') || 
+          error.message?.includes('schema cache') || 
+          error.code === 'PGRST204' ||
+          error.message?.includes('column')
+        )) {
+          console.warn('⚠️ Supabase schema cache chưa có cột is_accessory khi cập nhật. Thử cập nhật các cột cơ bản...', error.message)
+          const { is_accessory, is_special, unit_type, ...legacyPayload } = payload
+          const retryRes = await supabase
+            .from('shipping_forecast')
+            .update(legacyPayload)
+            .eq('id', updatedItem.id)
+
+          if (retryRes.error) throw retryRes.error
+        } else if (error) {
+          throw error
+        }
       }
 
       // Cập nhật in-memory
@@ -354,6 +411,44 @@ export function useShippingForecast() {
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * Xóa toàn bộ dữ liệu xuất hàng dự kiến (Xóa sạch trên Supabase và giao diện)
+   */
+  const clearAllForecastData = async () => {
+    loading.value = true
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from('shipping_forecast')
+          .delete()
+          .neq('po', '__never_match_key__')
+
+        if (error) throw error
+      }
+      forecastItems.value = []
+      return true
+    } catch (err: any) {
+      console.error('Lỗi xóa toàn bộ dữ liệu xuất hàng:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Nạp demo data (Chỉ dùng cho testing hoặc khi người dùng yêu cầu)
+   */
+  const seedDemoData = () => {
+    forecastItems.value = [...DEFAULT_IN_MEMORY_FORECAST]
+  }
+
+  /**
+   * Xóa dữ liệu bộ nhớ
+   */
+  const clearAllData = () => {
+    forecastItems.value = []
   }
 
   /**
@@ -522,6 +617,9 @@ export function useShippingForecast() {
     editForecastItem,
     deleteForecastItem,
     markContainerReady,
-    revertContainerPending
+    revertContainerPending,
+    clearAllForecastData,
+    seedDemoData,
+    clearAllData
   }
 }

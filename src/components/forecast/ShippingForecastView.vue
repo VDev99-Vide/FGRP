@@ -25,6 +25,21 @@
             <UploadCloud class="w-4 h-4" />
             <span>NẠP FILE EXCEL</span>
           </button>
+          <button 
+            @click="handleManualSync"
+            :title="'Đồng bộ trực tiếp Supabase (Lần cuối: ' + lastSync + ')'"
+            class="w-[38px] h-[38px] bg-white/5 hover:bg-white/10 border border-white/15 rounded-[8px] flex items-center justify-center text-[#AEB9E1] hover:text-white transition cursor-pointer active:scale-95"
+          >
+            <RefreshCw :class="['w-4 h-4', loading ? 'animate-spin text-[#00C2FF]' : '']" />
+          </button>
+          <button 
+            v-if="stats.totalContainers > 0"
+            @click="handleClearAll"
+            title="Xóa toàn bộ dữ liệu xuất hàng trên Supabase"
+            class="w-[38px] h-[38px] bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-[8px] flex items-center justify-center text-red-400 hover:text-red-300 transition cursor-pointer active:scale-95"
+          >
+            <Trash2 class="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -395,9 +410,25 @@
             <!-- Trạng Thái Trống -->
             <tr v-if="renderedDisplayRows.length === 0">
               <td colspan="9" class="text-center py-16 text-[#AEB9E1] italic text-xs">
-                <div class="flex flex-col items-center justify-center gap-2">
+                <div v-if="stats.totalContainers === 0" class="flex flex-col items-center justify-center gap-2.5">
+                  <div class="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#AEB9E1]/50 mb-1">
+                    <PackageOpen class="w-6 h-6 text-[#AEB9E1]/70" />
+                  </div>
+                  <span class="text-sm font-semibold text-white/90">Hệ thống chưa có dữ liệu xuất hàng dự kiến</span>
+                  <p class="text-[11px] text-[#AEB9E1]/70 max-w-md text-center leading-relaxed">
+                    Dữ liệu được đồng bộ trực tiếp 100% từ Supabase (không lưu bất kỳ dữ liệu mẫu hay cache local nào). Vui lòng bấm <b>"NẠP FILE EXCEL"</b> để tải lên kế hoạch xuất hàng!
+                  </p>
+                  <button 
+                    @click="showUploadModal = true"
+                    class="mt-1 px-4 py-2 btn-neon-purple rounded-[8px] text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-md active:scale-95"
+                  >
+                    <UploadCloud class="w-4 h-4" />
+                    <span>NẠP FILE EXCEL NGAY</span>
+                  </button>
+                </div>
+                <div v-else class="flex flex-col items-center justify-center gap-2">
                   <Search class="w-6 h-6 text-[#AEB9E1]/40" />
-                  <span>Không tìm thấy container hoặc đơn hàng phù hợp!</span>
+                  <span>Không tìm thấy container hoặc đơn hàng phù hợp với bộ lọc!</span>
                 </div>
               </td>
             </tr>
@@ -463,7 +494,10 @@ import {
   Calendar, 
   ExternalLink, 
   Edit3,
-  Package
+  Package,
+  PackageOpen,
+  RefreshCw,
+  Trash2
 } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { useShippingForecast } from '@/composables/useShippingForecast'
@@ -482,13 +516,15 @@ const {
   quickFilterText,
   statusFilter,
   stats,
+  lastSync,
   filteredContainers,
   fetchForecast,
   addForecastItems,
   editForecastItem,
   deleteForecastItem,
   markContainerReady,
-  revertContainerPending
+  revertContainerPending,
+  clearAllForecastData
 } = useShippingForecast()
 
 // Modals State
@@ -566,8 +602,45 @@ watch([quickFilterText, statusFilter], () => {
 })
 
 onMounted(() => {
+  // Đảm bảo loại bỏ mọi tàn dư cache cũ nếu có
+  try {
+    localStorage.removeItem('fgrp_forecast_cache')
+    sessionStorage.removeItem('fgrp_forecast_cache')
+  } catch (e) {}
   fetchForecast()
 })
+
+// Đồng bộ thủ công với Supabase
+const handleManualSync = async () => {
+  await fetchForecast()
+  toast.add({
+    severity: 'info',
+    summary: 'Đã làm mới',
+    detail: 'Dữ liệu đã được đồng bộ trực tiếp 100% từ Supabase',
+    life: 2500
+  })
+}
+
+// Xóa toàn bộ dữ liệu xuất hàng trên Supabase
+const handleClearAll = async () => {
+  if (!confirm('Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu xuất hàng dự kiến trên Supabase không?')) return
+  try {
+    await clearAllForecastData()
+    toast.add({
+      severity: 'success',
+      summary: 'Đã xóa dữ liệu',
+      detail: 'Toàn bộ dữ liệu xuất hàng đã được xóa sạch trên Supabase!',
+      life: 3000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi xóa dữ liệu',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
 
 // Thao tác "Chuẩn bị xong"
 const handleMarkReady = async (container: ForecastContainerGroup) => {

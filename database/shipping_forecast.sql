@@ -32,6 +32,19 @@ create index if not exists idx_shipping_forecast_status on shipping_forecast (st
 create index if not exists idx_shipping_forecast_status_changed_at on shipping_forecast (status_changed_at);
 
 -- ==========================================
+-- CẬP NHẬT CỘT MỚI NẾU BẢNG ĐÃ TỒN TẠI TỪ TRƯỚC
+-- (Giải quyết triệt để lỗi: Could not find the 'is_accessory' column of 'shipping_forecast' in the schema cache)
+-- ==========================================
+alter table shipping_forecast 
+  add column if not exists is_accessory boolean not null default false,
+  add column if not exists is_special boolean not null default false,
+  add column if not exists unit_type text not null default 'kien';
+
+-- Index bổ sung
+create index if not exists idx_shipping_forecast_accessory on shipping_forecast (is_accessory);
+create index if not exists idx_shipping_forecast_special on shipping_forecast (is_special);
+
+-- ==========================================
 -- HÀM DỌN DẸP TỰ ĐỘNG CÁC ĐƠN ĐÃ CHUẨN BỊ XONG QUÁ 1 NGÀY (24H)
 -- ==========================================
 create or replace function cleanup_expired_shipping_forecast()
@@ -51,3 +64,18 @@ begin
   return deleted_count;
 end;
 $$;
+
+-- ==========================================
+-- BẬT RLS VÀ PHÂN QUYỀN TRUY CẬP CHO ANON
+-- ==========================================
+alter table shipping_forecast enable row level security;
+
+create policy "allow_anon_select_shipping_forecast" on shipping_forecast for select to anon using (true);
+create policy "allow_anon_insert_shipping_forecast" on shipping_forecast for insert to anon with check (true);
+create policy "allow_anon_update_shipping_forecast" on shipping_forecast for update to anon using (true) with check (true);
+create policy "allow_anon_delete_shipping_forecast" on shipping_forecast for delete to anon using (true);
+
+-- ==========================================
+-- LÀM MỚI SCHEMA CACHE CỦA POSTGREST / SUPABASE NGAY LẬP TỨC
+-- ==========================================
+notify pgrst, 'reload schema';
