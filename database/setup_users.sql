@@ -61,6 +61,7 @@ BEGIN
       IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
         INSERT INTO auth.identities (
           id,
+          provider_id,
           user_id,
           identity_data,
           provider,
@@ -69,6 +70,7 @@ BEGIN
           updated_at
         ) VALUES (
           gen_random_uuid(),
+          v_user_id::text,
           v_user_id,
           json_build_object('sub', v_user_id::text, 'email', lower(v_email)),
           'email',
@@ -79,12 +81,41 @@ BEGIN
       END IF;
 
     ELSE
-      -- Nếu user đã tồn tại, cập nhật lại mật khẩu là 123
+      -- Nếu user đã tồn tại, lấy v_user_id và cập nhật lại mật khẩu là 123
+      SELECT id INTO v_user_id FROM auth.users WHERE lower(email) = lower(v_email) LIMIT 1;
+
       UPDATE auth.users
       SET encrypted_password = crypt('123', gen_salt('bf')),
           email_confirmed_at = coalesce(email_confirmed_at, now()),
-          updated_at = now()
-      WHERE lower(email) = lower(v_email);
+          updated_at = now(),
+          raw_app_meta_data = '{"provider":"email","providers":["email"]}',
+          raw_user_meta_data = json_build_object('name', v_name, 'display_name', v_name)
+      WHERE id = v_user_id;
+
+      -- Đảm bảo auth.identities cũng có bản ghi tương ứng
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
+        IF NOT EXISTS (SELECT 1 FROM auth.identities WHERE user_id = v_user_id AND provider = 'email') THEN
+          INSERT INTO auth.identities (
+            id,
+            provider_id,
+            user_id,
+            identity_data,
+            provider,
+            last_sign_in_at,
+            created_at,
+            updated_at
+          ) VALUES (
+            gen_random_uuid(),
+            v_user_id::text,
+            v_user_id,
+            json_build_object('sub', v_user_id::text, 'email', lower(v_email)),
+            'email',
+            now(),
+            now(),
+            now()
+          ) ON CONFLICT DO NOTHING;
+        END IF;
+      END IF;
     END IF;
   END LOOP;
 END $$;
