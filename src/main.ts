@@ -20,7 +20,10 @@ if (import.meta.env.PROD) {
     })
 
     if ('serviceWorker' in navigator) {
+      let refreshing = false
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return
+        refreshing = true
         window.location.reload()
       })
     }
