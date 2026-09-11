@@ -54,6 +54,9 @@ export interface ForecastItem {
   qty: number;
   pcs_per_pkg: number;
   pkg: number;
+  is_accessory?: boolean;
+  is_special?: boolean;
+  unit_type?: 'kien' | 'thung';
   status: 'pending' | 'ready';
   status_changed_at?: string | null;
   created_at?: string;
@@ -66,6 +69,9 @@ export interface ForecastFeatureGroup {
   totalQty: number;
   pcs_per_pkg: number;
   pkgCount: number;
+  is_accessory: boolean;
+  is_special: boolean;
+  unit_type: 'kien' | 'thung';
 }
 
 export interface ForecastContainerGroup {
@@ -80,8 +86,12 @@ export interface ForecastContainerGroup {
   isExpired: boolean;
   remainingHours?: number;
   totalQty: number;
-  totalPkg: number;
+  totalPkg: number; // Tổng số kiện hàng thành phẩm
+  totalBoxes: number; // Tổng số thùng phụ kiện
+  summaryPkgLabel: string; // "X Kiện + Y Thùng" hoặc "X Kiện"
+  hasAccessories: boolean;
   featureGroups: ForecastFeatureGroup[];
   allItems: ForecastItem[];
 }
+
 

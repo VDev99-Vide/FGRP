@@ -78,6 +78,8 @@ create or replace view vw_kho_thanh_pham as
 select
   coalesce(m.stock_code, 'No data') as lp_no,
   case
+    when m.stock_code is not null and trim(m.stock_code) like '1220%'
+      then '1220'
     when m.stock_code is not null and length(m.stock_code) >= 5
       then substring(m.stock_code from 2 for 4)
     else 'No data'

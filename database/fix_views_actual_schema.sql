@@ -26,8 +26,10 @@ select
   -- LP.No / Stock Code
   coalesce(m.lp_no, 'No data')                              as lp_no,
   
-  -- Feature: trích ký tự 2-5 từ lp_no (công thức MID Excel: =MID(text,2,4))
+  -- Feature: trích ký tự 2-5 từ lp_no (mã đặc biệt 1220 lấy 4 ký tự đầu, các mã khác =MID(text,2,4))
   case
+    when m.lp_no is not null and trim(m.lp_no) like '1220%'
+      then '1220'
     when m.lp_no is not null and length(trim(m.lp_no)) >= 5
       then substring(trim(m.lp_no) from 2 for 4)
     else 'No data'

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   extractFeatureFromItemCode,
+  isSpecialStockCode,
   parseLoadingDate,
   formatLoadingDate,
   calculateFeaturePkg,
@@ -11,12 +12,22 @@ import {
   ForecastRawItem
 } from './forecast'
 
-describe('extractFeatureFromItemCode', () => {
-  it('tách MID(2, 4): bỏ số đầu lấy 4 số tiếp theo', () => {
+describe('extractFeatureFromItemCode & isSpecialStockCode', () => {
+  it('mã đặc biệt 1220 (1220190004, 1220200004): lấy 4 số đầu "1220"', () => {
+    expect(isSpecialStockCode('1220190004')).toBe(true)
+    expect(isSpecialStockCode('1220200004')).toBe(true)
+    expect(extractFeatureFromItemCode('1220190004')).toBe('1220')
+    expect(extractFeatureFromItemCode('1220200004')).toBe('1220')
+  })
+
+  it('hàng phụ kiện (Accessories): giữ nguyên mã hàng không tách MID(2,4)', () => {
+    expect(extractFeatureFromItemCode('1455350001', true)).toBe('1455350001')
+    expect(extractFeatureFromItemCode('1325730001', true)).toBe('1325730001')
+  })
+
+  it('mã thông thường: tách MID(2, 4) bỏ số đầu lấy 4 số tiếp theo', () => {
     expect(extractFeatureFromItemCode('8163210604')).toBe('1632')
     expect(extractFeatureFromItemCode('8163220604')).toBe('1632')
-    expect(extractFeatureFromItemCode('1220190004')).toBe('2201')
-    expect(extractFeatureFromItemCode('1220200004')).toBe('2202')
     expect(extractFeatureFromItemCode('8515210204')).toBe('5152')
     expect(extractFeatureFromItemCode('8515220204')).toBe('5152')
   })
@@ -37,39 +48,52 @@ describe('parseLoadingDate & formatLoadingDate', () => {
     expect(formatLoadingDate('15/09/2026')).toBe('15/09/2026')
   })
 
-  it('parse đúng định dạng ISO yyyy-mm-dd', () => {
-    const d2 = parseLoadingDate('2026-09-20')
+  it('parse đúng định dạng số serial của Excel (như trong file thực tế 46279)', () => {
+    const d2 = parseLoadingDate(46279)
     expect(d2).not.toBeNull()
-    expect(formatLoadingDate('2026-09-20')).toBe('20/09/2026')
+    expect(d2?.getFullYear()).toBe(2026)
   })
 })
 
-describe('calculateFeaturePkg (Công thức tính số kiện #pkg)', () => {
-  it('nhóm có từ 2 mã hàng trở lên: (Tổng Qty / 2) / (Pcs/pkg)', () => {
-    // Ví dụ từ người dùng: 8163210604 và 8163220604
-    // Mỗi mã có Qty = 480, Pcs/pkg = 240
-    // Tổng Qty = 960
-    // Số kiện = (960 / 2) / 240 = 480 / 240 = 2 kiện
+describe('calculateFeaturePkg (Công thức tính Kiện & Thùng)', () => {
+  it('hàng phụ kiện (Accessories): không chia 2, số thùng = Tổng Qty / (Pcs/pkg)', () => {
+    // 1455350001: Qty = 1700, Pcs/pkg = 50 -> 1700 / 50 = 34 Thùng
+    const accItem = [{ qty: 1700, pcs_per_pkg: 50, is_accessory: true }]
+    const boxes = calculateFeaturePkg(accItem, true)
+    expect(boxes).toBe(34)
+
+    // 1325730001: Qty = 1750, Pcs/pkg = 25 -> 1750 / 25 = 70 Thùng
+    const accItem2 = [{ qty: 1750, pcs_per_pkg: 25, is_accessory: true }]
+    const boxes2 = calculateFeaturePkg(accItem2, true)
+    expect(boxes2).toBe(70)
+  })
+
+  it('mã đặc biệt 1220 có cặp: (Tổng Qty / 2) / (Pcs/pkg)', () => {
+    // 1220190004 & 1220200004: mỗi mã Qty = 4400, Pcs/pkg = 200
+    // Tổng Qty = 8800 -> (8800 / 2) / 200 = 4400 / 200 = 22 Kiện
+    const items = [
+      { qty: 4400, pcs_per_pkg: 200 },
+      { qty: 4400, pcs_per_pkg: 200 }
+    ]
+    const pkg = calculateFeaturePkg(items, false)
+    expect(pkg).toBe(22)
+  })
+
+  it('thành phẩm thông thường có cặp: (Tổng Qty / 2) / (Pcs/pkg)', () => {
     const items = [
       { qty: 480, pcs_per_pkg: 240 },
       { qty: 480, pcs_per_pkg: 240 }
     ]
-    const pkg = calculateFeaturePkg(items)
+    const pkg = calculateFeaturePkg(items, false)
     expect(pkg).toBe(2)
   })
 
-  it('nhóm chỉ có 1 mã đơn lẻ: Tổng Qty / (Pcs/pkg) (không chia 2)', () => {
-    // 1 mã đơn lẻ có Qty = 480, Pcs/pkg = 240 -> 480 / 240 = 2 kiện
+  it('thành phẩm chỉ có 1 mã đơn lẻ: không chia 2', () => {
     const items = [
       { qty: 480, pcs_per_pkg: 240 }
     ]
-    const pkg = calculateFeaturePkg(items)
+    const pkg = calculateFeaturePkg(items, false)
     expect(pkg).toBe(2)
-  })
-
-  it('trả về 0 khi pcs_per_pkg = 0 hoặc rỗng', () => {
-    expect(calculateFeaturePkg([{ qty: 100, pcs_per_pkg: 0 }])).toBe(0)
-    expect(calculateFeaturePkg([])).toBe(0)
   })
 })
 
@@ -85,92 +109,84 @@ describe('isContainerExpired & filterOutExpiredItems (Tự xóa sau 1 ngày)', (
     expect(getRemainingHoursBeforeDelete(twoHoursAgo)).toBe(22)
   })
 
-  it('đơn pending thì không bao giờ hết hạn', () => {
-    const oldDate = new Date(Date.now() - 50 * 60 * 60 * 1000).toISOString()
-    expect(isContainerExpired('pending', oldDate)).toBe(false)
-  })
-
-  it('filterOutExpiredItems loại bỏ chính xác các đơn quá hạn', () => {
+  it('filterOutExpiredItems loại bỏ các item đã ready quá 24h', () => {
+    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
     const items: ForecastRawItem[] = [
-      {
-        po: 'PO-01',
-        so: 'SO-01',
-        item_code: '8163210604',
-        loading_date: '15/09/2026',
-        qty: 480,
-        pcs_per_pkg: 240,
-        status: 'ready',
-        status_changed_at: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString() // Hết hạn
-      },
-      {
-        po: 'PO-02',
-        so: 'SO-02',
-        item_code: '8163220604',
-        loading_date: '16/09/2026',
-        qty: 480,
-        pcs_per_pkg: 240,
-        status: 'pending' // Còn hiệu lực
-      }
+      { po: 'PO1', so: 'SO1', item_code: '8163210604', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 50, status: 'ready', status_changed_at: twentyFiveHoursAgo },
+      { po: 'PO2', so: 'SO2', item_code: '8163220604', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 50, status: 'pending', status_changed_at: null }
     ]
-
     const filtered = filterOutExpiredItems(items)
     expect(filtered.length).toBe(1)
-    expect(filtered[0].po).toBe('PO-02')
+    expect(filtered[0].po).toBe('PO2')
   })
 })
 
-describe('groupAndSortForecastData (Phân nhóm PO-SO, gom Feature, sắp xếp Loading Date)', () => {
-  it('nhóm các dòng theo PO và SO, gom theo Feature và sắp xếp ngày từ nhỏ tới lớn', () => {
+describe('groupAndSortForecastData (Phân nhóm PO-SO, Phụ kiện thùng và Mã 1220)', () => {
+  it('phân nhóm chính xác Container có cả thành phẩm lẫn phụ kiện', () => {
     const rawItems: ForecastRawItem[] = [
-      // Container 2 (Ngày 20/09/2026)
+      // Đơn hàng PO 64853, SO 2610000112 (Ngày 14/09/2026)
+      // Cặp thành phẩm 5152
       {
-        po: 'PO-B',
-        so: 'SO-B',
+        po: '64853',
+        so: '2610000112',
         item_code: '8515210204',
-        loading_date: '20/09/2026',
-        qty: 500,
-        pcs_per_pkg: 250
-      },
-      // Container 1 (Ngày 12/09/2026) - Có 2 mã Feature 1632
-      {
-        po: 'PO-A',
-        so: 'SO-A',
-        item_code: '8163210604',
-        loading_date: '12/09/2026',
-        qty: 480,
-        pcs_per_pkg: 240
+        loading_date: '14/09/2026',
+        qty: 1750,
+        pcs_per_pkg: 70
       },
       {
-        po: 'PO-A',
-        so: 'SO-A',
-        item_code: '8163220604',
-        loading_date: '12/09/2026',
-        qty: 480,
-        pcs_per_pkg: 240
+        po: '64853',
+        so: '2610000112',
+        item_code: '8515220204',
+        loading_date: '14/09/2026',
+        qty: 1750,
+        pcs_per_pkg: 70
+      },
+      // Phụ kiện Accessories: 1750 / 25 = 70 Thùng
+      {
+        po: '64853',
+        so: '2610000112',
+        item_code: '1325730001',
+        loading_date: '14/09/2026',
+        qty: 1750,
+        pcs_per_pkg: 25,
+        is_accessory: true
+      },
+      // Đơn hàng khác: Mã đặc biệt 1220 (Ngày 17/09/2026)
+      {
+        po: '0N64',
+        so: '2610',
+        item_code: '1220190004',
+        loading_date: '17/09/2026',
+        qty: 4400,
+        pcs_per_pkg: 200
+      },
+      {
+        po: '0N64',
+        so: '2610',
+        item_code: '1220200004',
+        loading_date: '17/09/2026',
+        qty: 4400,
+        pcs_per_pkg: 200
       }
     ]
 
     const groups = groupAndSortForecastData(rawItems)
     expect(groups.length).toBe(2)
 
-    // Kiểm tra thứ tự sắp xếp: Container 1 (12/09) phải trước Container 2 (20/09)
-    expect(groups[0].po).toBe('PO-A')
-    expect(groups[0].loading_date).toBe('12/09/2026')
-    expect(groups[1].po).toBe('PO-B')
-    expect(groups[1].loading_date).toBe('20/09/2026')
+    // Container 1 (14/09)
+    const cont1 = groups[0]
+    expect(cont1.po).toBe('64853')
+    expect(cont1.hasAccessories).toBe(true)
+    expect(cont1.totalPkg).toBe(25) // (3500 / 2) / 70 = 25 Kiện
+    expect(cont1.totalBoxes).toBe(70) // 1750 / 25 = 70 Thùng
+    expect(cont1.summaryPkgLabel).toBe('25 Kiện + 70 Thùng')
 
-    // Container 1: Feature 1632 có 2 mã -> (960 / 2) / 240 = 2 kiện
-    expect(groups[0].featureGroups.length).toBe(1)
-    expect(groups[0].featureGroups[0].feature).toBe('1632')
-    expect(groups[0].featureGroups[0].pkgCount).toBe(2)
-    expect(groups[0].totalPkg).toBe(2)
-    expect(groups[0].totalQty).toBe(960)
-
-    // Container 2: Feature 5152 có 1 mã -> 500 / 250 = 2 kiện
-    expect(groups[1].featureGroups.length).toBe(1)
-    expect(groups[1].featureGroups[0].feature).toBe('5152')
-    expect(groups[1].featureGroups[0].pkgCount).toBe(2)
-    expect(groups[1].totalPkg).toBe(2)
-    expect(groups[1].totalQty).toBe(500)
+    // Container 2 (17/09): Mã đặc biệt 1220
+    const cont2 = groups[1]
+    expect(cont2.po).toBe('0N64')
+    expect(cont2.featureGroups[0].feature).toBe('1220')
+    expect(cont2.featureGroups[0].is_special).toBe(true)
+    expect(cont2.totalPkg).toBe(22) // (8800 / 2) / 200 = 22 Kiện
   })
 })

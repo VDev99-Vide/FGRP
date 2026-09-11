@@ -13,6 +13,9 @@ export interface ForecastRawItem {
   qty: number
   pcs_per_pkg: number
   pkg?: number
+  is_accessory?: boolean
+  is_special?: boolean
+  unit_type?: 'kien' | 'thung'
   status?: 'pending' | 'ready'
   status_changed_at?: string | null
   created_at?: string
@@ -25,6 +28,9 @@ export interface ForecastFeatureGroup {
   totalQty: number
   pcs_per_pkg: number
   pkgCount: number
+  is_accessory: boolean
+  is_special: boolean
+  unit_type: 'kien' | 'thung'
 }
 
 export interface ForecastContainerGroup {
@@ -39,19 +45,44 @@ export interface ForecastContainerGroup {
   isExpired: boolean
   remainingHours?: number
   totalQty: number
-  totalPkg: number
+  totalPkg: number // Tổng số kiện thành phẩm
+  totalBoxes: number // Tổng số thùng phụ kiện
+  summaryPkgLabel: string // "X Kiện + Y Thùng" hoặc "X Kiện"
+  hasAccessories: boolean
   featureGroups: ForecastFeatureGroup[]
   allItems: ForecastRawItem[]
 }
 
 /**
- * Trích xuất Feature từ LPVN Item Code: MID(2, 4)
- * Bỏ số đầu, lấy 4 số tiếp theo.
- * Ví dụ: "8163210604" -> "1632", "1220190004" -> "2201", "8515210204" -> "5152"
+ * Kiểm tra xem mã hàng có phải mã đặc biệt bắt đầu bằng "1220" không
+ * (Ví dụ: 1220190004, 1220200004)
  */
-export function extractFeatureFromItemCode(itemCode: string): string {
+export function isSpecialStockCode(code: string): boolean {
+  if (!code || typeof code !== 'string') return false
+  return code.trim().startsWith('1220')
+}
+
+/**
+ * Trích xuất Feature từ LPVN Item Code:
+ * - Hàng phụ kiện (Accessories): không tách MID(2, 4), giữ nguyên mã hàng.
+ * - Mã đặc biệt bắt đầu bằng "1220" (1220190004, 1220200004): lấy trọn 4 số đầu "1220".
+ * - Các mã tiêu chuẩn khác: MID(2, 4) - bỏ số đầu, lấy 4 số tiếp theo (ví dụ: "8163210604" -> "1632", "8515210204" -> "5152").
+ */
+export function extractFeatureFromItemCode(itemCode: string, isAccessory: boolean = false): string {
   if (!itemCode || typeof itemCode !== 'string') return 'No data'
   const clean = itemCode.trim()
+
+  // 1. Phụ kiện: giữ nguyên mã hàng
+  if (isAccessory) {
+    return clean || 'Accessories'
+  }
+
+  // 2. Mã đặc biệt 1220: lấy 4 số đầu
+  if (clean.startsWith('1220')) {
+    return '1220'
+  }
+
+  // 3. Chuẩn MID(2, 4): bắt đầu ký tự thứ 2, lấy 4 ký tự
   if (clean.length >= 5) {
     return clean.substring(1, 5)
   }
@@ -69,7 +100,7 @@ export function parseLoadingDate(dateInput: any): Date | null {
     return dateInput
   }
 
-  // Nếu là số serial của Excel (ví dụ 45549)
+  // Nếu là số serial của Excel (ví dụ 45549, 46279)
   if (typeof dateInput === 'number' && !isNaN(dateInput)) {
     // Excel base date: 1899-12-30 (due to Excel leap year bug in 1900)
     const excelEpoch = new Date(Date.UTC(1899, 11, 30))
@@ -118,15 +149,19 @@ export function formatLoadingDate(dateInput: any): string {
 }
 
 /**
- * Tính số kiện (#pkg) cho một nhóm Feature theo quy tắc:
- * - Nếu nhóm có từ 2 mã hàng trở lên: (Tổng Qty / 2) / (Pcs/pkg)
- * - Nếu nhóm chỉ có 1 mã đơn lẻ: Tổng Qty / (Pcs/pkg) (không chia 2)
+ * Tính số kiện (#pkg) hoặc số thùng cho một nhóm Feature theo quy tắc:
+ * - Hàng Accessories: không chia 2, số thùng = Tổng Qty / Pcs/pkg
+ * - Hàng thành phẩm:
+ *   + Nếu nhóm có từ 2 mã hàng trở lên: (Tổng Qty / 2) / (Pcs/pkg)
+ *   + Nếu nhóm chỉ có 1 mã đơn lẻ: Tổng Qty / (Pcs/pkg) (không chia 2)
  */
-export function calculateFeaturePkg(items: { qty: number; pcs_per_pkg: number }[]): number {
+export function calculateFeaturePkg(
+  items: { qty: number; pcs_per_pkg: number; is_accessory?: boolean }[],
+  isAccessoryGroup: boolean = false
+): number {
   if (!items || items.length === 0) return 0
 
   const totalQty = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0)
-  // Lấy quy cách đóng gói (nếu các mã có quy cách khác nhau, lấy giá trị > 0 đầu tiên hoặc lớn nhất)
   const pcsPerPkg = items.reduce((max, item) => {
     const val = Number(item.pcs_per_pkg) || 0
     return val > max ? val : max
@@ -134,12 +169,16 @@ export function calculateFeaturePkg(items: { qty: number; pcs_per_pkg: number }[
 
   if (pcsPerPkg <= 0) return 0
 
+  // 1. Phụ kiện: số thùng = Qty / (Pcs/pkg)
+  if (isAccessoryGroup) {
+    return Math.round((totalQty / pcsPerPkg) * 100) / 100
+  }
+
+  // 2. Thành phẩm:
   if (items.length >= 2) {
-    // Có từ 2 mã trở lên: chia 2 rồi chia tiếp cho pcs_per_pkg
-    return (totalQty / 2) / pcsPerPkg
+    return Math.round(((totalQty / 2) / pcsPerPkg) * 100) / 100
   } else {
-    // Chỉ có 1 mã đơn lẻ: không chia 2
-    return totalQty / pcsPerPkg
+    return Math.round((totalQty / pcsPerPkg) * 100) / 100
   }
 }
 
@@ -180,8 +219,11 @@ export function filterOutExpiredItems(items: ForecastRawItem[]): ForecastRawItem
  * Phân nhóm và sắp xếp dữ liệu xuất hàng dự kiến:
  * - Nhóm cấp 1: Container / Đơn hàng theo PO và SO
  * - Sắp xếp theo Loading Date từ nhỏ tới lớn (earliest date first)
- * - Nhóm cấp 2: Trong mỗi Container, gom nhóm theo Feature = MID(item_code, 2, 4)
- * - Tính #pkg cho từng Feature và tổng #pkg cho từng Container
+ * - Nhóm cấp 2: Trong mỗi Container, gom nhóm theo Feature:
+ *   + Hàng Accessories: giữ nguyên mã hàng, tính ra số THÙNG (không / 2)
+ *   + Hàng đặc biệt (1220): lấy 4 số đầu "1220", tính số KIỆN theo quy tắc cặp
+ *   + Hàng thông thường: tách MID(2, 4), tính số KIỆN theo quy tắc cặp
+ * - Tính tổng số kiện FG và tổng số thùng phụ kiện cho từng Container
  */
 export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastContainerGroup[] {
   // Loại bỏ các dòng đã hết hạn
@@ -195,12 +237,20 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
     const so = (item.so || 'UNKNOWN_SO').trim()
     const containerKey = `${po}___${so}`
 
+    const isAcc = Boolean(item.is_accessory)
+    const isSpec = isSpecialStockCode(item.item_code)
+    const feat = item.feature || extractFeatureFromItemCode(item.item_code, isAcc)
+    const unitType = isAcc ? 'thung' : 'kien'
+
     if (!containerMap.has(containerKey)) {
       containerMap.set(containerKey, [])
     }
     containerMap.get(containerKey)!.push({
       ...item,
-      feature: item.feature || extractFeatureFromItemCode(item.item_code)
+      feature: feat,
+      is_accessory: isAcc,
+      is_special: isSpec,
+      unit_type: unitType
     })
   })
 
@@ -214,7 +264,7 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
     const loadingDateStr = formatLoadingDate(firstItem.loading_date)
     const loadingDateObj = parseLoadingDate(firstItem.loading_date)
 
-    // Trạng thái container: nếu tất cả items đều 'ready' hoặc container được đánh dấu 'ready'
+    // Trạng thái container: nếu tất cả items đều 'ready'
     const isAllReady = cItems.every(it => it.status === 'ready')
     const status: 'pending' | 'ready' = isAllReady ? 'ready' : 'pending'
     const statusChangedAt = cItems.find(it => it.status_changed_at)?.status_changed_at || null
@@ -222,7 +272,7 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
     // Nhóm cấp 2: Theo Feature trong Container
     const featureMap = new Map<string, ForecastRawItem[]>()
     cItems.forEach(it => {
-      const feat = it.feature || extractFeatureFromItemCode(it.item_code)
+      const feat = it.feature || extractFeatureFromItemCode(it.item_code, Boolean(it.is_accessory))
       if (!featureMap.has(feat)) {
         featureMap.set(feat, [])
       }
@@ -231,25 +281,47 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
 
     const featureGroups: ForecastFeatureGroup[] = []
     let totalContainerQty = 0
-    let totalContainerPkg = 0
+    let totalContainerPkg = 0 // Tổng số kiện thành phẩm
+    let totalContainerBoxes = 0 // Tổng số thùng phụ kiện
+    let hasAccessories = false
 
-    // Sắp xếp feature A-Z
-    const sortedFeatures = Array.from(featureMap.keys()).sort((a, b) => 
-      a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-    )
+    // Sắp xếp feature A-Z (đưa thành phẩm lên trước, phụ kiện xuống sau)
+    const sortedFeatures = Array.from(featureMap.keys()).sort((a, b) => {
+      const isAccA = featureMap.get(a)![0]?.is_accessory
+      const isAccB = featureMap.get(b)![0]?.is_accessory
+      if (isAccA !== isAccB) {
+        return isAccA ? 1 : -1
+      }
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+    })
 
     sortedFeatures.forEach(feat => {
       const fItems = featureMap.get(feat)!
+      const isAccGroup = Boolean(fItems[0]?.is_accessory)
+      const isSpecGroup = Boolean(fItems[0]?.is_special || isSpecialStockCode(fItems[0]?.item_code))
+      const unitType: 'kien' | 'thung' = isAccGroup ? 'thung' : 'kien'
+
+      if (isAccGroup) {
+        hasAccessories = true
+      }
+
       const featQty = fItems.reduce((s, it) => s + (Number(it.qty) || 0), 0)
-      const featPkg = calculateFeaturePkg(fItems)
+      const featPkg = calculateFeaturePkg(fItems, isAccGroup)
       const pcsPerPkg = fItems[0]?.pcs_per_pkg || 0
 
       totalContainerQty += featQty
-      totalContainerPkg += featPkg
+      if (isAccGroup) {
+        totalContainerBoxes += featPkg
+      } else {
+        totalContainerPkg += featPkg
+      }
 
-      // Cập nhật #pkg tính toán vào từng item
+      // Cập nhật #pkg và đơn vị tính vào từng item
       fItems.forEach(it => {
         it.pkg = featPkg
+        it.unit_type = unitType
+        it.is_accessory = isAccGroup
+        it.is_special = isSpecGroup
       })
 
       featureGroups.push({
@@ -257,9 +329,26 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
         items: fItems,
         totalQty: featQty,
         pcs_per_pkg: pcsPerPkg,
-        pkgCount: featPkg
+        pkgCount: featPkg,
+        is_accessory: isAccGroup,
+        is_special: isSpecGroup,
+        unit_type: unitType
       })
     })
+
+    const roundedPkg = Math.round(totalContainerPkg * 100) / 100
+    const roundedBoxes = Math.round(totalContainerBoxes * 100) / 100
+
+    let summaryPkgLabel = ''
+    if (roundedPkg > 0 && roundedBoxes > 0) {
+      summaryPkgLabel = `${roundedPkg} Kiện + ${roundedBoxes} Thùng`
+    } else if (roundedPkg > 0) {
+      summaryPkgLabel = `${roundedPkg} Kiện`
+    } else if (roundedBoxes > 0) {
+      summaryPkgLabel = `${roundedBoxes} Thùng`
+    } else {
+      summaryPkgLabel = '0 Kiện'
+    }
 
     const remainingHours = status === 'ready' ? getRemainingHoursBeforeDelete(statusChangedAt) : undefined
 
@@ -275,7 +364,10 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
       isExpired: isContainerExpired(status, statusChangedAt),
       remainingHours,
       totalQty: totalContainerQty,
-      totalPkg: Math.round(totalContainerPkg * 100) / 100,
+      totalPkg: roundedPkg,
+      totalBoxes: roundedBoxes,
+      summaryPkgLabel,
+      hasAccessories,
       featureGroups,
       allItems: cItems
     })

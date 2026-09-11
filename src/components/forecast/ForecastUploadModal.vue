@@ -163,6 +163,20 @@
                 <option v-for="h in parsedHeaders" :key="h" :value="h">{{ h }}</option>
               </select>
             </div>
+
+            <div class="sm:col-span-3">
+              <label class="text-[10px] text-[#FDB52A] font-semibold block mb-0.5 flex items-center gap-1">
+                <Package class="w-3 h-3 text-[#FDB52A]" />
+                Cột nhận diện Hàng Phụ kiện / Feature (VD: Feature, Type, Accessories, Remark)
+              </label>
+              <select 
+                v-model="customMapping.feature_or_accessory"
+                class="w-full h-[32px] px-2 bg-[#18202D] border border-[#FDB52A]/30 rounded text-[11px] text-[#FDB52A] font-semibold outline-none"
+              >
+                <option value="">-- Không có cột phụ kiện (Để trống) --</option>
+                <option v-for="h in parsedHeaders" :key="h" :value="h">{{ h }}</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -184,6 +198,7 @@
                   <th class="py-2 px-3">PO / SO</th>
                   <th class="py-2 px-3">LPVN ITEM CODE</th>
                   <th class="py-2 px-3 text-center">FEATURE</th>
+                  <th class="py-2 px-3 text-center">LOẠI HÀNG</th>
                   <th class="py-2 px-3 text-right">QTY (PCS)</th>
                   <th class="py-2 px-3 text-right">PCS/PKG</th>
                   <th class="py-2 px-3">LOADING DATE</th>
@@ -194,6 +209,27 @@
                   <td class="py-2 px-3 font-mono text-[#AEB9E1]">{{ r.po }} / {{ r.so }}</td>
                   <td class="py-2 px-3 font-mono font-bold text-[#00C2FF]">{{ r.item_code }}</td>
                   <td class="py-2 px-3 font-mono font-bold text-[#CB3CFF] text-center">{{ r.feature }}</td>
+                  <td class="py-2 px-3 text-center">
+                    <span 
+                      v-if="r.is_accessory"
+                      class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FDB52A]/15 text-[#FDB52A] border border-[#FDB52A]/30 flex items-center justify-center gap-1"
+                    >
+                      <Package class="w-2.5 h-2.5" />
+                      Phụ kiện (Thùng)
+                    </span>
+                    <span 
+                      v-else-if="r.is_special"
+                      class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#CB3CFF]/15 text-[#CB3CFF] border border-[#CB3CFF]/30"
+                    >
+                      ★ Mã 1220
+                    </span>
+                    <span 
+                      v-else
+                      class="text-[10px] text-[#AEB9E1]"
+                    >
+                      Thành phẩm (Kiện)
+                    </span>
+                  </td>
                   <td class="py-2 px-3 text-right font-bold text-[#14CA74]">{{ r.qty.toLocaleString() }}</td>
                   <td class="py-2 px-3 text-right font-mono">{{ r.pcs_per_pkg }}</td>
                   <td class="py-2 px-3 font-mono text-[#AEB9E1]">{{ r.loading_date }}</td>
@@ -241,7 +277,8 @@ import {
   FileSpreadsheet, 
   Download, 
   AlertCircle, 
-  CheckCircle2 
+  CheckCircle2,
+  Package
 } from 'lucide-vue-next'
 import { 
   parseForecastExcelFile, 
@@ -276,7 +313,8 @@ const customMapping = reactive<ColumnMapping>({
   pcs_per_pkg: '',
   po: '',
   so: '',
-  container_no: ''
+  container_no: '',
+  feature_or_accessory: ''
 })
 
 const previewContainerCount = computed(() => {

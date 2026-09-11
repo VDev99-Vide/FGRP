@@ -19,9 +19,9 @@ describe('useShippingForecast composable', () => {
   })
 
   it('lọc dữ liệu bằng quickFilterText và statusFilter', () => {
-    composable.quickFilterText.value = 'PO-9001'
+    composable.quickFilterText.value = '0N64-0003004870'
     expect(composable.filteredContainers.value.length).toBe(1)
-    expect(composable.filteredContainers.value[0].po).toBe('PO-9001')
+    expect(composable.filteredContainers.value[0].po).toBe('0N64-0003004870')
 
     composable.quickFilterText.value = 'khong-ton-tai-123'
     expect(composable.filteredContainers.value.length).toBe(0)

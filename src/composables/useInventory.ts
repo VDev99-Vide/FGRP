@@ -7,10 +7,16 @@ import {
 } from '@/services/mockData'
 import { InventoryRow, SummaryAnalysisRow, KpiState, AnalysisState } from '@/types'
 
-// Hàm trích xuất Feature theo chuẩn Excel: =MID(text, 2, 4)
+// Hàm trích xuất Feature:
+// - Mã đặc biệt bắt đầu bằng '1220' (ví dụ 1220190004, 1220200004): lấy 4 số đầu '1220'
+// - Các mã khác: theo chuẩn Excel =MID(text, 2, 4) (bỏ số đầu, lấy 4 số tiếp theo)
 export const extractFeatureFromStockCode = (stockCode: string): string => {
   if (!stockCode || stockCode.trim() === '' || stockCode === 'No data') return 'No data'
   const clean = stockCode.trim()
+  // Mã đặc biệt 1220 (1220190004, 1220200004): lấy trọn 4 số đầu 1220
+  if (clean.startsWith('1220')) {
+    return '1220'
+  }
   // Excel: =MID("810090203", 2, 4) -> bắt đầu từ ký tự 2 lấy 4 ký tự -> "1009"
   // JavaScript substring(1, 5)
   if (clean.length >= 5) {

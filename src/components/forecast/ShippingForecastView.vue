@@ -49,12 +49,15 @@
           <Box class="w-5 h-5" />
         </div>
         <div>
-          <p class="text-[11px] font-semibold text-[#AEB9E1]">Tổng Số Kiện Cần Xuất</p>
-          <div class="flex items-baseline gap-2 mt-0.5">
+          <p class="text-[11px] font-semibold text-[#AEB9E1]">Tổng Số Lượng Quy Đổi</p>
+          <div class="flex items-baseline gap-2 mt-0.5 flex-wrap">
             <span class="text-xl font-bold text-[#CB3CFF] font-mono">{{ stats.totalPkg.toLocaleString() }}</span>
             <span class="text-[10px] text-[#CB3CFF]">Kiện</span>
+            <span v-if="stats.totalBoxes > 0" class="text-white/40">/</span>
+            <span v-if="stats.totalBoxes > 0" class="text-xl font-bold text-[#FDB52A] font-mono">{{ stats.totalBoxes.toLocaleString() }}</span>
+            <span v-if="stats.totalBoxes > 0" class="text-[10px] text-[#FDB52A]">Thùng</span>
           </div>
-          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Đã gom theo Feature</p>
+          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Kiện FG + Thùng Phụ Kiện</p>
         </div>
       </div>
 
@@ -157,10 +160,10 @@
             <tr>
               <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
               <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE MID(2,4)</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
               <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QTY (PCS)</th>
               <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG)</th>
-              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN (#PKG)</th>
+              <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN / THÙNG (#PKG)</th>
               <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">LOADING DATE</th>
               <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">TRẠNG THÁI</th>
               <th class="py-3 px-4 font-bold text-[11px] tracking-wider uppercase text-center">THAO TÁC</th>
@@ -210,6 +213,12 @@
                         </span>
                       </div>
 
+                      <!-- Badge nếu có Phụ Kiện -->
+                      <span v-if="row.container.hasAccessories" class="text-[10px] font-bold px-2 py-0.5 rounded-[4px] bg-[#FDB52A]/15 text-[#FDB52A] border border-[#FDB52A]/30 flex items-center gap-1">
+                        <Package class="w-3 h-3 text-[#FDB52A]" />
+                        <span>Có phụ kiện</span>
+                      </span>
+
                       <!-- Loading Date Badge (Sắp xếp từ nhỏ tới lớn) -->
                       <span class="text-[11px] font-mono font-bold text-[#AEB9E1] bg-white/10 border border-white/15 px-2.5 py-0.5 rounded-[5px] flex items-center gap-1.5">
                         <Calendar class="w-3 h-3 text-[#00C2FF]" />
@@ -227,16 +236,16 @@
                       </button>
                     </div>
 
-                    <!-- Right: Total Kiện, Total PCS, Thao tác "Chuẩn bị xong" -->
+                    <!-- Right: Total Kiện/Thùng, Total PCS, Thao tác "Chuẩn bị xong" -->
                     <div class="flex items-center gap-3">
                       <!-- Total Qty -->
                       <span class="text-[11px] font-bold text-white bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-[5px]">
                         Tổng: <b class="text-[#14CA74]">{{ row.container.totalQty.toLocaleString() }}</b> PCS
                       </span>
 
-                      <!-- Total #pkg (Tổng số kiện cần chuẩn bị cho container đó) -->
+                      <!-- Total #pkg (Tổng số kiện FG và số thùng phụ kiện) -->
                       <span class="text-xs font-black text-[#CB3CFF] bg-[#CB3CFF]/15 border border-[#CB3CFF]/40 px-3 py-1 rounded-[6px] shadow-[0_0_10px_rgba(203,60,255,0.2)]">
-                        Tổng: {{ row.container.totalPkg }} Kiện
+                        Tổng: {{ row.container.summaryPkgLabel }}
                       </span>
 
                       <!-- THAO TÁC "CHUẨN BỊ XONG" -->
@@ -286,14 +295,42 @@
 
                 <!-- LPVN Item code -->
                 <td class="py-2.5 px-4">
-                  <span class="font-mono font-bold text-[#00C2FF] text-xs">
-                    {{ row.item.item_code }}
-                  </span>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono font-bold text-[#00C2FF] text-xs">
+                      {{ row.item.item_code }}
+                    </span>
+                    <!-- Cảnh báo hàng phụ kiện (Accessories) -->
+                    <span 
+                      v-if="row.item.is_accessory"
+                      title="Hàng Phụ Kiện (Accessories) - Không chia 2, đóng thùng"
+                      class="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[#FDB52A]/20 text-[#FDB52A] border border-[#FDB52A]/40 flex items-center gap-1 cursor-help shadow-sm animate-pulse"
+                    >
+                      <Package class="w-3 h-3 text-[#FDB52A]" />
+                      <span>Phụ kiện</span>
+                    </span>
+                    <!-- Lưu ý hàng đặc biệt 1220 -->
+                    <span 
+                      v-else-if="row.item.is_special"
+                      title="Mã đặc biệt - Lấy 4 số đầu 1220 thay vì MID(2,4)"
+                      class="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[#CB3CFF]/20 text-[#CB3CFF] border border-[#CB3CFF]/40 cursor-help"
+                    >
+                      ★ Mã 1220
+                    </span>
+                  </div>
                 </td>
 
-                <!-- Feature MID(2,4) -->
+                <!-- Feature -->
                 <td class="py-2.5 px-4 text-center">
-                  <span class="font-mono font-black text-[#CB3CFF] text-xs px-2 py-0.5 rounded-[4px] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30">
+                  <span 
+                    v-if="row.item.is_accessory"
+                    class="font-mono font-bold text-[#FDB52A] text-xs px-2 py-0.5 rounded-[4px] bg-[#FDB52A]/15 border border-[#FDB52A]/30"
+                  >
+                    {{ row.item.feature }}
+                  </span>
+                  <span 
+                    v-else
+                    class="font-mono font-black text-[#CB3CFF] text-xs px-2 py-0.5 rounded-[4px] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30"
+                  >
                     {{ row.item.feature }}
                   </span>
                 </td>
@@ -308,10 +345,17 @@
                   {{ Number(row.item.pcs_per_pkg || 0).toLocaleString() }}
                 </td>
 
-                <!-- #pkg (Số kiện qui đổi cho nhóm feature) -->
+                <!-- #pkg (Số kiện qui đổi hoặc số thùng) -->
                 <td class="py-2.5 px-4 text-center">
-                  <span class="font-mono font-bold text-[#CB3CFF] text-xs bg-white/5 border border-white/10 px-2 py-0.5 rounded-[4px]">
-                    {{ row.item.pkg }} Kiện
+                  <span 
+                    :class="[
+                      'font-mono font-bold text-xs px-2 py-0.5 rounded-[4px] border',
+                      row.item.is_accessory
+                        ? 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30'
+                        : 'bg-[#CB3CFF]/15 text-[#CB3CFF] border-[#CB3CFF]/30'
+                    ]"
+                  >
+                    {{ row.item.pkg }} {{ row.item.is_accessory ? 'Thùng' : 'Kiện' }}
                   </span>
                 </td>
 
@@ -374,9 +418,13 @@
           </span>
         </div>
 
-        <div class="flex items-center gap-2 text-xs font-mono text-[#AEB9E1]">
-          <span>Tổng kiện: <b class="text-[#CB3CFF] font-bold">{{ stats.totalPkg }}</b></span>
+        <div class="flex items-center gap-2 text-xs font-mono text-[#AEB9E1] flex-wrap">
+          <span>Tổng kiện FG: <b class="text-[#CB3CFF] font-bold">{{ stats.totalPkg }}</b> Kiện</span>
           <span class="text-white/20">|</span>
+          <span v-if="stats.totalBoxes > 0" class="text-[#FDB52A]">
+            Tổng thùng PK: <b class="font-bold">{{ stats.totalBoxes }}</b> Thùng
+            <span class="text-white/20 ml-2">|</span>
+          </span>
           <span>Tổng PCS: <b class="text-[#14CA74] font-bold">{{ stats.totalQty.toLocaleString() }}</b></span>
         </div>
       </div>
@@ -414,7 +462,8 @@ import {
   Search, 
   Calendar, 
   ExternalLink, 
-  Edit3 
+  Edit3,
+  Package
 } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { useShippingForecast } from '@/composables/useShippingForecast'

@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import { 
   extractFeatureFromItemCode, 
   formatLoadingDate, 
+  isSpecialStockCode,
   ForecastRawItem 
 } from '@/utils/forecast'
 
@@ -13,6 +14,7 @@ export interface ColumnMapping {
   po: string
   so: string
   container_no?: string
+  feature_or_accessory?: string
 }
 
 export interface ParseExcelResult {
@@ -43,7 +45,8 @@ export function detectColumnMapping(headers: string[]): ColumnMapping {
     pcs_per_pkg: '',
     po: '',
     so: '',
-    container_no: ''
+    container_no: '',
+    feature_or_accessory: ''
   }
 
   const normHeaders = headers.map(h => ({
@@ -121,19 +124,31 @@ export function detectColumnMapping(headers: string[]): ColumnMapping {
     }
   }
 
+  // 8. Cột nhận diện Accessories / Feature
+  const featPatterns = ['feature', 'accessories', 'accessory', 'phukien', 'loaihang', 'itemtype', 'type', 'remark', 'note', 'column1']
+  for (const pattern of featPatterns) {
+    const found = normHeaders.find(h => h.norm === pattern || h.norm.includes(pattern))
+    if (found) {
+      mapping.feature_or_accessory = found.original
+      break
+    }
+  }
+
   return mapping
 }
 
 /**
  * Đọc và chuẩn hóa dữ liệu từ file Excel (.xlsx / .xls)
  */
-export async function parseForecastExcelFile(file: File | ArrayBuffer): Promise<ParseExcelResult> {
+export async function parseForecastExcelFile(file: File | ArrayBuffer | Uint8Array): Promise<ParseExcelResult> {
   try {
-    let buffer: ArrayBuffer
-    if (file instanceof File) {
-      buffer = await file.arrayBuffer()
-    } else {
+    let buffer: ArrayBuffer | Uint8Array
+    if (file instanceof ArrayBuffer || file instanceof Uint8Array) {
       buffer = file
+    } else if (file && typeof (file as any).arrayBuffer === 'function') {
+      buffer = await (file as any).arrayBuffer()
+    } else {
+      throw new Error('Định dạng file không hỗ trợ')
     }
 
     const workbook = XLSX.read(buffer, {
@@ -147,8 +162,9 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer): Promise<
       return { headers: [], detectedMapping: {} as any, rows: [], error: 'File Excel không có sheet nào!' }
     }
 
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
+    // Ưu tiên sheet 'Data-full info.' nếu có (như file mẫu của nhà máy), ngược lại lấy sheet đầu tiên
+    const targetSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('data-full') || n.toLowerCase().includes('data')) || workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[targetSheetName]
 
     // Chuyển sheet thành mảng 2 chiều để quét tìm dòng tiêu đề
     const rawMatrix = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, blankrows: false })
@@ -169,7 +185,7 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer): Promise<
         const norm = normalizeHeaderName(String(cell || ''))
         if (norm.includes('code') || norm.includes('item') || norm.includes('po') || 
             norm.includes('so') || norm.includes('qty') || norm.includes('date') || 
-            norm.includes('pkg') || norm.includes('pack')) {
+            norm.includes('pkg') || norm.includes('pack') || norm.includes('feature')) {
           matchCount++
         }
       })
@@ -212,7 +228,12 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer): Promise<
       const so = String(row[detectedMapping.so] || `SO-${defaultIndex}`).trim()
       const containerNo = detectedMapping.container_no ? String(row[detectedMapping.container_no] || '').trim() : ''
 
-      const feature = extractFeatureFromItemCode(itemCode)
+      // Cột nhận diện Accessories / Feature
+      const featRaw = detectedMapping.feature_or_accessory ? String(row[detectedMapping.feature_or_accessory] || '').trim().toLowerCase() : ''
+      const isAccessory = featRaw.includes('acc') // "accessories", "accessory"
+      const isSpecial = isSpecialStockCode(itemCode) || featRaw.includes('special')
+      const feature = extractFeatureFromItemCode(itemCode, isAccessory)
+      const unitType: 'kien' | 'thung' = isAccessory ? 'thung' : 'kien'
 
       rows.push({
         po,
@@ -223,7 +244,10 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer): Promise<
         loading_date: loadingDate,
         qty,
         pcs_per_pkg: pcsPerPkg,
-        pkg: 0, // Sẽ được nhóm tính toán
+        pkg: 0, // Sẽ được tính toán phân nhóm
+        is_accessory: isAccessory,
+        is_special: isSpecial,
+        unit_type: unitType,
         status: 'pending'
       })
 
@@ -246,59 +270,96 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer): Promise<
 }
 
 /**
- * Tạo và tải xuống file Excel mẫu (.xlsx) chuẩn
+ * Tạo và tải xuống file Excel mẫu (.xlsx) chuẩn theo file nhà máy:
+ * Tham khảo cấu trúc chuẩn từ "September shipment -update SEP10.xlsx" (Sheet: Data-full info.)
  */
 export function downloadForecastSampleTemplate() {
   const sampleData = [
     {
-      'LPVN Item code': '8163210604',
-      'Loading Date': '15/09/2026',
-      'Qty': 480,
-      'Pcs/pkg': 240,
-      'PO': 'PO-9001',
-      'SO': 'SO-4001',
-      'Container No': 'CONT-01'
-    },
-    {
-      'LPVN Item code': '8163220604',
-      'Loading Date': '15/09/2026',
-      'Qty': 480,
-      'Pcs/pkg': 240,
-      'PO': 'PO-9001',
-      'SO': 'SO-4001',
-      'Container No': 'CONT-01'
-    },
-    {
+      'PO': '0N64-0003004870',
+      'SO': '2610000099',
       'LPVN Item code': '1220190004',
-      'Loading Date': '18/09/2026',
-      'Qty': 500,
-      'Pcs/pkg': 250,
-      'PO': 'PO-9002',
-      'SO': 'SO-4002',
-      'Container No': 'CONT-02'
+      'Loading date': '17/09/2026',
+      'Qty': 4400,
+      'PCS/pkg': 200,
+      'Feature': 'special code'
     },
     {
+      'PO': '0N64-0003004870',
+      'SO': '2610000099',
       'LPVN Item code': '1220200004',
-      'Loading Date': '18/09/2026',
-      'Qty': 500,
-      'Pcs/pkg': 250,
-      'PO': 'PO-9002',
-      'SO': 'SO-4002',
-      'Container No': 'CONT-02'
+      'Loading date': '17/09/2026',
+      'Qty': 4400,
+      'PCS/pkg': 200,
+      'Feature': 'special code'
     },
     {
+      'PO': '64853',
+      'SO': '2610000112',
       'LPVN Item code': '8515210204',
-      'Loading Date': '22/09/2026',
-      'Qty': 300,
-      'Pcs/pkg': 150,
-      'PO': 'PO-9003',
-      'SO': 'SO-4003',
-      'Container No': 'CONT-03'
+      'Loading date': '14/09/2026',
+      'Qty': 1750,
+      'PCS/pkg': 70,
+      'Feature': ''
+    },
+    {
+      'PO': '64853',
+      'SO': '2610000112',
+      'LPVN Item code': '8515220204',
+      'Loading date': '14/09/2026',
+      'Qty': 1750,
+      'PCS/pkg': 70,
+      'Feature': ''
+    },
+    {
+      'PO': '64853',
+      'SO': '2610000112',
+      'LPVN Item code': '1325730001',
+      'Loading date': '14/09/2026',
+      'Qty': 1750,
+      'PCS/pkg': 25,
+      'Feature': 'accessories'
+    },
+    {
+      'PO': '64853',
+      'SO': '2610000112',
+      'LPVN Item code': '1326830101',
+      'Loading date': '14/09/2026',
+      'Qty': 1750,
+      'PCS/pkg': 25,
+      'Feature': 'accessories'
+    },
+    {
+      'PO': '93957',
+      'SO': '2610000145',
+      'LPVN Item code': '8869510104',
+      'Loading date': '12/09/2026',
+      'Qty': 1508,
+      'PCS/pkg': 52,
+      'Feature': ''
+    },
+    {
+      'PO': '93957',
+      'SO': '2610000145',
+      'LPVN Item code': '8869520104',
+      'Loading date': '12/09/2026',
+      'Qty': 1508,
+      'PCS/pkg': 52,
+      'Feature': ''
+    },
+    {
+      'PO': '93957',
+      'SO': '2610000145',
+      'LPVN Item code': '1455350001',
+      'Loading date': '12/09/2026',
+      'Qty': 1700,
+      'PCS/pkg': 50,
+      'Feature': 'accessories'
     }
   ]
 
   const ws = XLSX.utils.json_to_sheet(sampleData)
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Shipment Forecast')
+  XLSX.utils.book_append_sheet(wb, ws, 'Data-full info.')
   XLSX.writeFile(wb, 'Mau_Xuat_Hang_Du_Kien.xlsx')
 }

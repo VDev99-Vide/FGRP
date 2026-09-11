@@ -5,103 +5,180 @@ import {
   ForecastContainerGroup,
   groupAndSortForecastData, 
   filterOutExpiredItems,
-  extractFeatureFromItemCode
+  extractFeatureFromItemCode,
+  isSpecialStockCode
 } from '@/utils/forecast'
 
-// Dữ liệu mẫu ban đầu trong bộ nhớ (In-memory Demo Data) khi chưa cấu hình Supabase
+// Dữ liệu mẫu ban đầu trong bộ nhớ (In-memory Demo Data) dựa theo file thực tế của nhà máy
 // TUYỆT ĐỐI KHÔNG DÙNG LOCALSTORAGE theo đúng yêu cầu người dùng: "đồng bộ trực tiếp supabase không lưu localstorage tránh cache"
 const DEFAULT_IN_MEMORY_FORECAST: ForecastRawItem[] = [
-  // Container 1: PO-9001, SO-4001, Ngày 15/09/2026. Cặp mã hàng Feature 1632
+  // Container 1: PO: 0N64-0003004870, SO: 2610000099 (Ngày 17/09/2026)
+  // Mã đặc biệt 1220 (1220190004 & 1220200004): 4 số đầu "1220", (8800 / 2) / 200 = 22 Kiện
   {
     id: 'demo-fc-01',
-    po: 'PO-9001',
-    so: 'SO-4001',
+    po: '0N64-0003004870',
+    so: '2610000099',
     container_no: 'TGHU-882103',
-    item_code: '8163210604',
-    feature: '1632',
-    loading_date: '15/09/2026',
-    qty: 480,
-    pcs_per_pkg: 240,
-    pkg: 2,
+    item_code: '1220190004',
+    feature: '1220',
+    loading_date: '17/09/2026',
+    qty: 4400,
+    pcs_per_pkg: 200,
+    pkg: 22,
+    is_accessory: false,
+    is_special: true,
+    unit_type: 'kien',
     status: 'pending',
     status_changed_at: null,
     created_at: new Date().toISOString()
   },
   {
     id: 'demo-fc-02',
-    po: 'PO-9001',
-    so: 'SO-4001',
+    po: '0N64-0003004870',
+    so: '2610000099',
     container_no: 'TGHU-882103',
-    item_code: '8163220604',
-    feature: '1632',
-    loading_date: '15/09/2026',
-    qty: 480,
-    pcs_per_pkg: 240,
-    pkg: 2,
+    item_code: '1220200004',
+    feature: '1220',
+    loading_date: '17/09/2026',
+    qty: 4400,
+    pcs_per_pkg: 200,
+    pkg: 22,
+    is_accessory: false,
+    is_special: true,
+    unit_type: 'kien',
     status: 'pending',
     status_changed_at: null,
     created_at: new Date().toISOString()
   },
 
-  // Container 2: PO-9002, SO-4002, Ngày 18/09/2026. Cặp mã hàng Feature 5152
+  // Container 2: PO: 64853, SO: 2610000112 (Ngày 14/09/2026)
+  // Bao gồm Cặp thành phẩm (Feature 5152) và Hàng phụ kiện (Accessories đóng thùng)
   {
     id: 'demo-fc-03',
-    po: 'PO-9002',
-    so: 'SO-4002',
+    po: '64853',
+    so: '2610000112',
     container_no: 'MSKU-551920',
     item_code: '8515210204',
     feature: '5152',
-    loading_date: '18/09/2026',
-    qty: 500,
-    pcs_per_pkg: 250,
-    pkg: 2,
+    loading_date: '14/09/2026',
+    qty: 1750,
+    pcs_per_pkg: 70,
+    pkg: 25,
+    is_accessory: false,
+    is_special: false,
+    unit_type: 'kien',
     status: 'pending',
     status_changed_at: null,
     created_at: new Date().toISOString()
   },
   {
     id: 'demo-fc-04',
-    po: 'PO-9002',
-    so: 'SO-4002',
+    po: '64853',
+    so: '2610000112',
     container_no: 'MSKU-551920',
     item_code: '8515220204',
     feature: '5152',
-    loading_date: '18/09/2026',
-    qty: 500,
-    pcs_per_pkg: 250,
-    pkg: 2,
+    loading_date: '14/09/2026',
+    qty: 1750,
+    pcs_per_pkg: 70,
+    pkg: 25,
+    is_accessory: false,
+    is_special: false,
+    unit_type: 'kien',
     status: 'pending',
     status_changed_at: null,
     created_at: new Date().toISOString()
   },
-
-  // Container 3: PO-9003, SO-4003, Ngày 22/09/2026. Mã hàng 1220190004 & 1220200004
+  // Hàng phụ kiện (Accessories): không /2, 1750 / 25 = 70 Thùng
   {
     id: 'demo-fc-05',
-    po: 'PO-9003',
-    so: 'SO-4003',
-    container_no: 'CMAU-112098',
-    item_code: '1220190004',
-    feature: '2201',
-    loading_date: '22/09/2026',
-    qty: 360,
-    pcs_per_pkg: 180,
-    pkg: 2,
+    po: '64853',
+    so: '2610000112',
+    container_no: 'MSKU-551920',
+    item_code: '1325730001',
+    feature: '1325730001',
+    loading_date: '14/09/2026',
+    qty: 1750,
+    pcs_per_pkg: 25,
+    pkg: 70,
+    is_accessory: true,
+    is_special: false,
+    unit_type: 'thung',
     status: 'pending',
     status_changed_at: null,
     created_at: new Date().toISOString()
   },
   {
     id: 'demo-fc-06',
-    po: 'PO-9003',
-    so: 'SO-4003',
+    po: '64853',
+    so: '2610000112',
+    container_no: 'MSKU-551920',
+    item_code: '1326830101',
+    feature: '1326830101',
+    loading_date: '14/09/2026',
+    qty: 1750,
+    pcs_per_pkg: 25,
+    pkg: 70,
+    is_accessory: true,
+    is_special: false,
+    unit_type: 'thung',
+    status: 'pending',
+    status_changed_at: null,
+    created_at: new Date().toISOString()
+  },
+
+  // Container 3: PO: 93957, SO: 2610000145 (Ngày 12/09/2026)
+  {
+    id: 'demo-fc-07',
+    po: '93957',
+    so: '2610000145',
     container_no: 'CMAU-112098',
-    item_code: '1220200004',
-    feature: '2202',
-    loading_date: '22/09/2026',
-    qty: 360,
-    pcs_per_pkg: 180,
-    pkg: 2,
+    item_code: '8869510104',
+    feature: '8695',
+    loading_date: '12/09/2026',
+    qty: 1508,
+    pcs_per_pkg: 52,
+    pkg: 29,
+    is_accessory: false,
+    is_special: false,
+    unit_type: 'kien',
+    status: 'pending',
+    status_changed_at: null,
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'demo-fc-08',
+    po: '93957',
+    so: '2610000145',
+    container_no: 'CMAU-112098',
+    item_code: '8869520104',
+    feature: '8695',
+    loading_date: '12/09/2026',
+    qty: 1508,
+    pcs_per_pkg: 52,
+    pkg: 29,
+    is_accessory: false,
+    is_special: false,
+    unit_type: 'kien',
+    status: 'pending',
+    status_changed_at: null,
+    created_at: new Date().toISOString()
+  },
+  // Hàng phụ kiện: 1700 / 50 = 34 Thùng
+  {
+    id: 'demo-fc-09',
+    po: '93957',
+    so: '2610000145',
+    container_no: 'CMAU-112098',
+    item_code: '1455350001',
+    feature: '1455350001',
+    loading_date: '12/09/2026',
+    qty: 1700,
+    pcs_per_pkg: 50,
+    pkg: 34,
+    is_accessory: true,
+    is_special: false,
+    unit_type: 'thung',
     status: 'pending',
     status_changed_at: null,
     created_at: new Date().toISOString()
@@ -188,8 +265,12 @@ export function useShippingForecast() {
   const addForecastItems = async (items: ForecastRawItem[]) => {
     loading.value = true
     try {
-      const preparedItems = items.map(it => {
-        const feature = it.feature || extractFeatureFromItemCode(it.item_code)
+      const preparedItems: ForecastRawItem[] = items.map(it => {
+        const isAcc = Boolean(it.is_accessory)
+        const isSpec = Boolean(it.is_special || isSpecialStockCode(it.item_code))
+        const feature = it.feature || extractFeatureFromItemCode(it.item_code, isAcc)
+        const unitType: 'kien' | 'thung' = isAcc ? 'thung' : 'kien'
+
         return {
           id: it.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `fc-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`),
           po: (it.po || '').trim(),
@@ -201,6 +282,9 @@ export function useShippingForecast() {
           qty: Number(it.qty) || 0,
           pcs_per_pkg: Number(it.pcs_per_pkg) || 0,
           pkg: Number(it.pkg) || 0,
+          is_accessory: isAcc,
+          is_special: isSpec,
+          unit_type: unitType,
           status: (it.status || 'pending') as 'pending' | 'ready',
           status_changed_at: it.status_changed_at || null,
           created_at: it.created_at || new Date().toISOString(),
@@ -234,10 +318,17 @@ export function useShippingForecast() {
   const editForecastItem = async (updatedItem: ForecastRawItem) => {
     loading.value = true
     try {
-      const feature = extractFeatureFromItemCode(updatedItem.item_code)
-      const payload = {
+      const isAcc = Boolean(updatedItem.is_accessory)
+      const isSpec = Boolean(updatedItem.is_special || isSpecialStockCode(updatedItem.item_code))
+      const feature = extractFeatureFromItemCode(updatedItem.item_code, isAcc)
+      const unitType: 'kien' | 'thung' = isAcc ? 'thung' : 'kien'
+
+      const payload: ForecastRawItem = {
         ...updatedItem,
         feature,
+        is_accessory: isAcc,
+        is_special: isSpec,
+        unit_type: unitType,
         updated_at: new Date().toISOString()
       }
 
@@ -372,6 +463,7 @@ export function useShippingForecast() {
         container.so,
         container.container_no,
         container.loading_date,
+        container.hasAccessories ? 'accessories phu kien thung' : '',
         container.status === 'ready' ? 'chuẩn bị xong ready' : 'chờ chuẩn bị pending'
       ].join(' ').toLowerCase()
 
@@ -383,7 +475,9 @@ export function useShippingForecast() {
           item.item_code,
           item.feature,
           item.po,
-          item.so
+          item.so,
+          item.is_accessory ? 'accessories phukien' : '',
+          item.is_special ? 'special 1220' : ''
         ].join(' ').toLowerCase()
         return itemStr.includes(q)
       })
@@ -397,6 +491,7 @@ export function useShippingForecast() {
     const containers = allGroupedContainers.value
     const totalContainers = containers.length
     const totalPkg = containers.reduce((s, c) => s + c.totalPkg, 0)
+    const totalBoxes = containers.reduce((s, c) => s + c.totalBoxes, 0)
     const totalQty = containers.reduce((s, c) => s + c.totalQty, 0)
     const pendingCount = containers.filter(c => c.status === 'pending').length
     const readyCount = containers.filter(c => c.status === 'ready').length
@@ -404,6 +499,7 @@ export function useShippingForecast() {
     return {
       totalContainers,
       totalPkg: Math.round(totalPkg * 100) / 100,
+      totalBoxes: Math.round(totalBoxes * 100) / 100,
       totalQty,
       pendingCount,
       readyCount

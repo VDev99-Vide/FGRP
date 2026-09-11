@@ -90,9 +90,17 @@
               required
               class="w-full h-[38px] px-3 bg-[#18202D]/90 border border-white/15 rounded-lg text-xs text-[#00C2FF] font-bold outline-none focus:border-[#00C2FF] focus:ring-1 ring-[#00C2FF] transition font-mono"
             >
-            <span class="text-[10px] text-[#AEB9E1] mt-0.5 block">
-              Feature tách MID(2,4): <b class="text-[#CB3CFF]">{{ previewFeature }}</b>
-            </span>
+            <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span class="text-[10px] text-[#AEB9E1]">
+                Feature: <b class="text-[#CB3CFF]">{{ previewFeature }}</b>
+              </span>
+              <span 
+                v-if="isSpecial"
+                class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#CB3CFF]/20 text-[#CB3CFF] border border-[#CB3CFF]/40"
+              >
+                ★ Mã đặc biệt (1220)
+              </span>
+            </div>
           </div>
 
           <!-- Trạng Thái -->
@@ -105,6 +113,19 @@
               <option value="pending">Chờ chuẩn bị</option>
               <option value="ready">Chuẩn bị xong</option>
             </select>
+            
+            <!-- Checkbox Phụ kiện -->
+            <label class="flex items-center gap-2 mt-2 cursor-pointer select-none">
+              <input 
+                type="checkbox" 
+                v-model="editForm.is_accessory"
+                class="rounded border-white/20 text-[#CB3CFF] focus:ring-0 cursor-pointer"
+              >
+              <span class="text-[11px] font-medium text-[#FDB52A] flex items-center gap-1">
+                <Package class="w-3.5 h-3.5" />
+                Hàng phụ kiện (Accessories - Đóng thùng)
+              </span>
+            </label>
           </div>
         </div>
 
@@ -138,11 +159,13 @@
           </div>
         </div>
 
-        <!-- Live Preview Kiện -->
+        <!-- Live Preview Kiện / Thùng -->
         <div class="p-3 bg-white/[0.04] border border-white/10 rounded-xl flex items-center justify-between">
-          <span class="text-xs text-[#AEB9E1]">Quy đổi số kiện đơn lẻ:</span>
-          <span class="text-xs font-bold text-[#CB3CFF]">
-            {{ previewSinglePkg }} Kiện
+          <span class="text-xs text-[#AEB9E1]">
+            Quy đổi {{ editForm.is_accessory ? 'số thùng xuất' : 'số kiện đơn lẻ' }}:
+          </span>
+          <span :class="['text-xs font-bold', editForm.is_accessory ? 'text-[#FDB52A]' : 'text-[#CB3CFF]']">
+            {{ previewSinglePkg }} {{ editForm.is_accessory ? 'Thùng' : 'Kiện' }}
           </span>
         </div>
 
@@ -183,8 +206,8 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { Edit3, X, Save, Trash2 } from 'lucide-vue-next'
-import { extractFeatureFromItemCode, ForecastRawItem } from '@/utils/forecast'
+import { Edit3, X, Save, Trash2, Package } from 'lucide-vue-next'
+import { extractFeatureFromItemCode, isSpecialStockCode, ForecastRawItem } from '@/utils/forecast'
 
 const props = defineProps<{
   visible: boolean
@@ -209,9 +232,14 @@ watch(() => props.target, (newTarget) => {
   }
 }, { immediate: true })
 
+const isSpecial = computed(() => {
+  if (!editForm.value?.item_code) return false
+  return isSpecialStockCode(editForm.value.item_code)
+})
+
 const previewFeature = computed(() => {
   if (!editForm.value?.item_code) return 'No data'
-  return extractFeatureFromItemCode(editForm.value.item_code)
+  return extractFeatureFromItemCode(editForm.value.item_code, Boolean(editForm.value.is_accessory))
 })
 
 const previewSinglePkg = computed(() => {
