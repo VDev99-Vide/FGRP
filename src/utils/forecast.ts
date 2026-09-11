@@ -15,6 +15,7 @@ export interface ForecastRawItem {
   pkg?: number
   is_accessory?: boolean
   is_special?: boolean
+  is_box?: boolean
   unit_type?: 'kien' | 'thung'
   status?: 'pending' | 'ready'
   status_changed_at?: string | null
@@ -30,6 +31,7 @@ export interface ForecastFeatureGroup {
   pkgCount: number
   is_accessory: boolean
   is_special: boolean
+  is_box?: boolean
   unit_type: 'kien' | 'thung'
 }
 
@@ -59,7 +61,8 @@ export interface ForecastContainerGroup {
  */
 export function isSpecialStockCode(code: string): boolean {
   if (!code || typeof code !== 'string') return false
-  return code.trim().startsWith('1220')
+  const clean = code.trim()
+  return clean.startsWith('1220') || (clean.length >= 5 && clean.substring(1, 5) === '1220')
 }
 
 /**
@@ -151,13 +154,16 @@ export function formatLoadingDate(dateInput: any): string {
 /**
  * Tính số kiện (#pkg) hoặc số thùng cho một nhóm Feature theo quy tắc:
  * - Hàng Accessories: không chia 2, số thùng = Tổng Qty / Pcs/pkg
- * - Hàng thành phẩm:
+ * - Hàng đánh dấu 'Box' (áp dụng cho mã đặc biệt 1220 hoặc mã đánh dấu Box): không gộp chia đôi,
+ *   tính giống mã phụ kiện: số lượng 1 LPVN ITEM CODE / quy cách đóng gói = số kiện
+ * - Hàng thành phẩm thông thường:
  *   + Nếu nhóm có từ 2 mã hàng trở lên: (Tổng Qty / 2) / (Pcs/pkg)
  *   + Nếu nhóm chỉ có 1 mã đơn lẻ: Tổng Qty / (Pcs/pkg) (không chia 2)
  */
 export function calculateFeaturePkg(
-  items: { qty: number; pcs_per_pkg: number; is_accessory?: boolean }[],
-  isAccessoryGroup: boolean = false
+  items: { qty: number; pcs_per_pkg: number; is_accessory?: boolean; is_box?: boolean }[],
+  isAccessoryGroup: boolean = false,
+  isBoxGroup: boolean = false
 ): number {
   if (!items || items.length === 0) return 0
 
@@ -174,7 +180,18 @@ export function calculateFeaturePkg(
     return Math.round((totalQty / pcsPerPkg) * 100) / 100
   }
 
-  // 2. Thành phẩm:
+  // 2. Nhóm đánh dấu Box (áp dụng cho mã đặc biệt 1220 hoặc mã có feature ghi 'Box'):
+  // Không gộp chia đôi như các item code khác mà tính giống với mã phụ kiện:
+  // số lượng 1 LPVN ITEM CODE / quy cách đóng gói = số kiện
+  if (isBoxGroup || items.some(it => it.is_box)) {
+    const totalBoxPkg = items.reduce((sum, it) => {
+      const itPcs = Number(it.pcs_per_pkg) || pcsPerPkg
+      return sum + (itPcs > 0 ? (Number(it.qty) || 0) / itPcs : 0)
+    }, 0)
+    return Math.round(totalBoxPkg * 100) / 100
+  }
+
+  // 3. Thành phẩm thông thường:
   if (items.length >= 2) {
     return Math.round(((totalQty / 2) / pcsPerPkg) * 100) / 100
   } else {
@@ -238,8 +255,14 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
     const containerKey = `${po}___${so}`
 
     const isAcc = Boolean(item.is_accessory)
-    const isSpec = isSpecialStockCode(item.item_code)
-    const feat = item.feature || extractFeatureFromItemCode(item.item_code, isAcc)
+    const isSpec = isSpecialStockCode(item.item_code) || Boolean(item.is_special) || (typeof item.feature === 'string' && item.feature.includes('1220'))
+    const isBox = Boolean(item.is_box) || (typeof item.feature === 'string' && item.feature.toLowerCase().includes('box'))
+
+    // Nếu item.feature là 'Box' hoặc 'box' hoặc trống: trích xuất feature từ item_code
+    let feat = item.feature
+    if (!feat || feat.toLowerCase() === 'box' || feat === 'No data') {
+      feat = extractFeatureFromItemCode(item.item_code, isAcc)
+    }
     const unitType = isAcc ? 'thung' : 'kien'
 
     if (!containerMap.has(containerKey)) {
@@ -250,6 +273,7 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
       feature: feat,
       is_accessory: isAcc,
       is_special: isSpec,
+      is_box: isBox,
       unit_type: unitType
     })
   })
@@ -272,7 +296,10 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
     // Nhóm cấp 2: Theo Feature trong Container
     const featureMap = new Map<string, ForecastRawItem[]>()
     cItems.forEach(it => {
-      const feat = it.feature || extractFeatureFromItemCode(it.item_code, Boolean(it.is_accessory))
+      let feat = it.feature || extractFeatureFromItemCode(it.item_code, Boolean(it.is_accessory))
+      if (!feat || feat.toLowerCase() === 'box' || feat === 'No data') {
+        feat = extractFeatureFromItemCode(it.item_code, Boolean(it.is_accessory))
+      }
       if (!featureMap.has(feat)) {
         featureMap.set(feat, [])
       }
@@ -298,7 +325,8 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
     sortedFeatures.forEach(feat => {
       const fItems = featureMap.get(feat)!
       const isAccGroup = Boolean(fItems[0]?.is_accessory)
-      const isSpecGroup = Boolean(fItems[0]?.is_special || isSpecialStockCode(fItems[0]?.item_code))
+      const isSpecGroup = Boolean(fItems.some(it => it.is_special) || isSpecialStockCode(fItems[0]?.item_code) || feat === '1220')
+      const isBoxGroup = Boolean(fItems.some(it => it.is_box) || isSpecGroup || feat.toLowerCase().includes('box') || feat === '1220')
       const unitType: 'kien' | 'thung' = isAccGroup ? 'thung' : 'kien'
 
       if (isAccGroup) {
@@ -306,7 +334,7 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
       }
 
       const featQty = fItems.reduce((s, it) => s + (Number(it.qty) || 0), 0)
-      const featPkg = calculateFeaturePkg(fItems, isAccGroup)
+      const featPkg = calculateFeaturePkg(fItems, isAccGroup, isBoxGroup)
       const pcsPerPkg = fItems[0]?.pcs_per_pkg || 0
 
       totalContainerQty += featQty
@@ -322,6 +350,7 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
         it.unit_type = unitType
         it.is_accessory = isAccGroup
         it.is_special = isSpecGroup
+        it.is_box = isBoxGroup
       })
 
       featureGroups.push({
@@ -332,6 +361,7 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
         pkgCount: featPkg,
         is_accessory: isAccGroup,
         is_special: isSpecGroup,
+        is_box: isBoxGroup,
         unit_type: unitType
       })
     })

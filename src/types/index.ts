@@ -56,6 +56,7 @@ export interface ForecastItem {
   pkg: number;
   is_accessory?: boolean;
   is_special?: boolean;
+  is_box?: boolean;
   unit_type?: 'kien' | 'thung';
   status: 'pending' | 'ready';
   status_changed_at?: string | null;
@@ -71,6 +72,7 @@ export interface ForecastFeatureGroup {
   pkgCount: number;
   is_accessory: boolean;
   is_special: boolean;
+  is_box?: boolean;
   unit_type: 'kien' | 'thung';
 }
 

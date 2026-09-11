@@ -175,7 +175,7 @@
             <tr>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE (MÃ CON)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">TỔNG QTY (PCS)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN / THÙNG (#PKG)</th>
@@ -326,6 +326,12 @@
                       <span>{{ row.featureGroup.feature }}</span>
                     </span>
                     <span 
+                      v-else-if="row.featureGroup.feature === '1220' || row.featureGroup.is_special"
+                      class="font-mono font-black text-[#CB3CFF] text-xs px-2.5 py-1 rounded-[6px] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30 shadow-[0_0_8px_rgba(203,60,255,0.2)]"
+                    >
+                      ★ Mã 1220
+                    </span>
+                    <span 
                       v-else
                       class="font-mono font-black text-[#CB3CFF] text-xs px-2.5 py-1 rounded-[6px] bg-[#CB3CFF]/15 border border-[#CB3CFF]/30 shadow-[0_0_8px_rgba(203,60,255,0.2)]"
                     >
@@ -340,39 +346,23 @@
                       Phụ kiện
                     </span>
                     <span 
-                      v-else-if="row.featureGroup.is_special"
-                      class="text-[9px] font-bold text-[#CB3CFF] bg-[#CB3CFF]/15 px-1.5 py-0.5 rounded border border-[#CB3CFF]/30"
-                    >
-                      ★ Mã 1220
-                    </span>
-                    <span 
-                      v-else-if="row.featureGroup.items.length >= 2"
+                      v-else-if="row.featureGroup.is_box && row.featureGroup.feature !== '1220' && !row.featureGroup.is_special"
                       class="text-[9px] font-bold text-[#00C2FF] bg-[#00C2FF]/10 px-1.5 py-0.5 rounded border border-[#00C2FF]/20"
                     >
-                      Cặp {{ row.featureGroup.items.length }} mã
+                      Box
                     </span>
                   </div>
                 </td>
 
-                <!-- LPVN Item code (Danh sách các mã hàng con trong Feature kèm QTY từng mã) -->
+                <!-- LPVN Item code (Chỉ hiển thị danh sách LPVN ITEM CODE) -->
                 <td class="py-3 px-4">
-                  <div class="flex flex-col gap-1.5 min-w-[240px]">
+                  <div class="flex flex-col gap-1.5 min-w-[180px]">
                     <div 
                       v-for="it in row.featureGroup.items" 
                       :key="it.id || it.item_code"
-                      class="flex items-center justify-between gap-3 px-2.5 py-1 rounded-[6px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition"
+                      class="flex items-center gap-2 px-2.5 py-1 rounded-[6px] bg-white/[0.04] border border-white/10"
                     >
-                      <div class="flex items-center gap-2">
-                        <span class="font-mono font-bold text-[#00C2FF] text-xs">{{ it.item_code }}</span>
-                        <span class="text-white/70 text-[11px] font-mono">({{ Number(it.qty || 0).toLocaleString() }} PCS)</span>
-                      </div>
-                      <button 
-                        @click.stop="triggerEdit(it)" 
-                        title="Chỉnh sửa mã này"
-                        class="p-1 text-[#AEB9E1] hover:text-[#CB3CFF] hover:bg-white/10 rounded transition cursor-pointer"
-                      >
-                        <Edit3 class="w-3 h-3" />
-                      </button>
+                      <span class="font-mono font-bold text-[#00C2FF] text-xs">{{ it.item_code }}</span>
                     </div>
                   </div>
                 </td>
@@ -428,13 +418,23 @@
 
                 <!-- Thao Tác -->
                 <td class="py-3 px-4 text-center">
-                  <button 
-                    @click="triggerEdit(row.featureGroup.items[0])"
-                    title="Chỉnh sửa dòng Feature này" 
-                    class="p-1.5 bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 text-[#CB3CFF] rounded-[6px] border border-[#CB3CFF]/30 cursor-pointer transition active:scale-90"
-                  >
-                    <Edit3 class="w-3.5 h-3.5" />
-                  </button>
+                  <div class="flex items-center justify-center gap-1.5">
+                    <button 
+                      @click="handleJumpToInventoryForFeature(row.featureGroup)"
+                      title="Lọc tồn kho theo Feature này" 
+                      class="px-2.5 py-1 bg-[#00C2FF]/15 hover:bg-[#00C2FF]/25 text-[#00C2FF] rounded-[6px] border border-[#00C2FF]/30 cursor-pointer transition active:scale-95 flex items-center gap-1 text-[11px] font-semibold"
+                    >
+                      <ExternalLink class="w-3.5 h-3.5" />
+                      <span>Lọc tồn</span>
+                    </button>
+                    <button 
+                      @click="triggerEditGroup(row.container, row.featureGroup)"
+                      title="Chỉnh sửa toàn bộ Group Feature này" 
+                      class="p-1.5 bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 text-[#CB3CFF] rounded-[6px] border border-[#CB3CFF]/30 cursor-pointer transition active:scale-90"
+                    >
+                      <Edit3 class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
 
@@ -503,14 +503,15 @@
       @upload="handleUploadSubmit"
     />
 
-    <!-- 2. Modal Chỉnh Sửa Dòng Xuất Hàng -->
+    <!-- 2. Modal Chỉnh Sửa Dòng Xuất Hàng (Toàn bộ Group Feature) -->
     <ForecastEditModal 
       v-model:visible="showEditModal"
-      :target="editingTarget"
+      :group="editingTargetGroup"
+      :container="editingTargetContainer"
       :loading="loading"
       @cancel="showEditModal = false"
-      @save="handleEditSubmit"
-      @delete="handleDeleteSubmit"
+      @save-group="handleSaveGroup"
+      @delete-group="handleDeleteGroup"
     />
 
     <!-- 3. Floating UI Confirm Modal Xóa Toàn Bộ (Thay thế hoàn toàn confirm trình duyệt) -->
@@ -576,7 +577,8 @@ const {
 const showUploadModal = ref(false)
 const showEditModal = ref(false)
 const showClearAllModal = ref(false)
-const editingTarget = ref<ForecastRawItem | null>(null)
+const editingTargetGroup = ref<ForecastFeatureGroup | null>(null)
+const editingTargetContainer = ref<ForecastContainerGroup | null>(null)
 
 // Virtual Scrolling State (Mặc định 50 dòng, tự động render thêm khi cuộn xuống, ẩn dòng 51 trở đi khi cuộn lên)
 const visibleCount = ref(50)
@@ -772,20 +774,33 @@ const handleJumpToInventory = (container: ForecastContainerGroup) => {
   })
 }
 
-// Chỉnh sửa dòng
-const triggerEdit = (item: ForecastRawItem) => {
-  editingTarget.value = item
+// Chỉnh sửa toàn bộ Group Feature (áp dụng cả cặp mã nếu có)
+const triggerEditGroup = (container: ForecastContainerGroup, fg: ForecastFeatureGroup) => {
+  editingTargetContainer.value = container
+  editingTargetGroup.value = fg
   showEditModal.value = true
 }
 
-const handleEditSubmit = async (item: ForecastRawItem) => {
+// Nút Lọc nhanh theo Group Feature sang Bảng Chi Tiết Tồn Kho Thành Phẩm
+const handleJumpToInventoryForFeature = (fg: ForecastFeatureGroup) => {
+  const filterKey = fg.feature || fg.items[0]?.item_code || ''
+  emit('jump-to-inventory', {
+    filterText: filterKey,
+    feature: fg.feature
+  })
+}
+
+// Lưu toàn bộ thay đổi cho Group Feature
+const handleSaveGroup = async (items: ForecastRawItem[]) => {
   try {
-    await editForecastItem(item)
+    for (const item of items) {
+      await editForecastItem(item)
+    }
     showEditModal.value = false
     toast.add({
       severity: 'success',
       summary: 'Cập nhật thành công',
-      detail: `Đã lưu thay đổi cho mã hàng ${item.item_code}`,
+      detail: `Đã lưu thay đổi cho toàn bộ ${items.length} mã hàng trong Feature!`,
       life: 3000
     })
   } catch (err: any) {
@@ -798,14 +813,19 @@ const handleEditSubmit = async (item: ForecastRawItem) => {
   }
 }
 
-const handleDeleteSubmit = async (id: string) => {
+// Xóa toàn bộ Group Feature
+const handleDeleteGroup = async (items: ForecastRawItem[]) => {
   try {
-    await deleteForecastItem(id)
+    for (const item of items) {
+      if (item.id) {
+        await deleteForecastItem(item.id)
+      }
+    }
     showEditModal.value = false
     toast.add({
       severity: 'success',
-      summary: 'Đã xóa',
-      detail: 'Đã xóa dòng mã hàng khỏi danh sách xuất',
+      summary: 'Đã xóa group',
+      detail: `Đã xóa toàn bộ ${items.length} mã hàng trong group khỏi danh sách xuất`,
       life: 3000
     })
   } catch (err: any) {

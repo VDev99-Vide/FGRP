@@ -229,9 +229,11 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer | Uint8Arr
       const containerNo = detectedMapping.container_no ? String(row[detectedMapping.container_no] || '').trim() : ''
 
       // Cột nhận diện Accessories / Feature
-      const featRaw = detectedMapping.feature_or_accessory ? String(row[detectedMapping.feature_or_accessory] || '').trim().toLowerCase() : ''
-      const isAccessory = featRaw.includes('acc') // "accessories", "accessory"
-      const isSpecial = isSpecialStockCode(itemCode) || featRaw.includes('special')
+      const featRaw = detectedMapping.feature_or_accessory ? String(row[detectedMapping.feature_or_accessory] || '').trim() : ''
+      const featLower = featRaw.toLowerCase()
+      const isAccessory = featLower.includes('acc') // "accessories", "accessory"
+      const isBox = featLower === 'box' || featLower.includes('box')
+      const isSpecial = isSpecialStockCode(itemCode) || featLower.includes('special')
       const feature = extractFeatureFromItemCode(itemCode, isAccessory)
       const unitType: 'kien' | 'thung' = isAccessory ? 'thung' : 'kien'
 
@@ -247,6 +249,7 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer | Uint8Arr
         pkg: 0, // Sẽ được tính toán phân nhóm
         is_accessory: isAccessory,
         is_special: isSpecial,
+        is_box: isBox,
         unit_type: unitType,
         status: 'pending'
       })

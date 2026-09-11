@@ -68,15 +68,15 @@ describe('calculateFeaturePkg (Công thức tính Kiện & Thùng)', () => {
     expect(boxes2).toBe(70)
   })
 
-  it('mã đặc biệt 1220 có cặp: (Tổng Qty / 2) / (Pcs/pkg)', () => {
+  it('mã đặc biệt 1220 hoặc hàng đánh dấu Box: không chia đôi, tính giống phụ kiện: số lượng 1 LPVN ITEM CODE / quy cách = số kiện', () => {
     // 1220190004 & 1220200004: mỗi mã Qty = 4400, Pcs/pkg = 200
-    // Tổng Qty = 8800 -> (8800 / 2) / 200 = 4400 / 200 = 22 Kiện
+    // Không gộp chia đôi: (4400 / 200) + (4400 / 200) = 22 + 22 = 44 Kiện
     const items = [
-      { qty: 4400, pcs_per_pkg: 200 },
-      { qty: 4400, pcs_per_pkg: 200 }
+      { qty: 4400, pcs_per_pkg: 200, is_box: true },
+      { qty: 4400, pcs_per_pkg: 200, is_box: true }
     ]
-    const pkg = calculateFeaturePkg(items, false)
-    expect(pkg).toBe(22)
+    const pkg = calculateFeaturePkg(items, false, true)
+    expect(pkg).toBe(44)
   })
 
   it('thành phẩm thông thường có cặp: (Tổng Qty / 2) / (Pcs/pkg)', () => {
@@ -187,6 +187,6 @@ describe('groupAndSortForecastData (Phân nhóm PO-SO, Phụ kiện thùng và M
     expect(cont2.po).toBe('0N64')
     expect(cont2.featureGroups[0].feature).toBe('1220')
     expect(cont2.featureGroups[0].is_special).toBe(true)
-    expect(cont2.totalPkg).toBe(22) // (8800 / 2) / 200 = 22 Kiện
+    expect(cont2.totalPkg).toBe(44) // (4400 / 200) + (4400 / 200) = 44 Kiện (tính giống phụ kiện, không gộp chia đôi)
   })
 })
