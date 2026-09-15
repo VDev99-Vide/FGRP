@@ -203,14 +203,26 @@ const openEditModal = (row: MetadataPacking) => {
   showModal.value = true
 }
 
+const MEMORY_WARN_DETAIL =
+  'Supabase chưa có bảng metadata_quy_cach nên dữ liệu mới CHỈ nằm trên máy này — xóa cache/reload sẽ MẤT. Hãy chạy file database/metadata.sql rồi bấm Đồng bộ!'
+
+const warnIfMemory = (successSummary: string, successDetail: string) => {
+  if (needsMigration.value) {
+    toast.add({ severity: 'warn', summary: `${successSummary} (lưu tạm)`, detail: MEMORY_WARN_DETAIL, life: 6000 })
+    return true
+  }
+  toast.add({ severity: 'success', summary: successSummary, detail: successDetail, life: 3000 })
+  return false
+}
+
 const handleSave = async (payload: PackingSpecInput, id: string | null) => {
   try {
     if (id) {
       await updatePackingSpec(id, payload)
-      toast.add({ severity: 'success', summary: 'Cập nhật thành công', detail: 'Đã lưu thay đổi dòng quy cách.', life: 3000 })
+      warnIfMemory('Cập nhật thành công', 'Đã lưu thay đổi dòng quy cách lên Supabase.')
     } else {
       await createPackingSpec(payload)
-      toast.add({ severity: 'success', summary: 'Thêm thành công', detail: 'Đã thêm dòng quy cách mới.', life: 3000 })
+      warnIfMemory('Thêm thành công', 'Đã thêm dòng quy cách mới lên Supabase.')
     }
     showModal.value = false
   } catch (err: unknown) {
@@ -221,12 +233,10 @@ const handleSave = async (payload: PackingSpecInput, id: string | null) => {
 const handleSeedSample = async () => {
   try {
     const res = await seedSampleData()
-    toast.add({
-      severity: 'success',
-      summary: 'Nạp dữ liệu mẫu thành công',
-      detail: `Đã nạp ${res.imported} dòng${res.skipped ? `, bỏ qua ${res.skipped} dòng trùng` : ''}!`,
-      life: 4000,
-    })
+    warnIfMemory(
+      'Nạp dữ liệu mẫu thành công',
+      `Đã nạp ${res.imported} dòng${res.skipped ? `, bỏ qua ${res.skipped} dòng trùng` : ''} lên Supabase!`,
+    )
   } catch (err: unknown) {
     toast.add({ severity: 'error', summary: 'Lỗi nạp mẫu', detail: err instanceof Error ? err.message : 'Không nạp được!', life: 4000 })
   }
@@ -236,12 +246,10 @@ const handleImport = async (rows: MetadataExcelRow[]) => {
   try {
     const res = await importPackingSpecs(rows)
     showImportModal.value = false
-    toast.add({
-      severity: 'success',
-      summary: 'Import thành công',
-      detail: `Đã nạp ${res.imported} dòng${res.skipped.length ? `, bỏ qua ${res.skipped.length} dòng lỗi/trùng` : ''}!`,
-      life: 4000,
-    })
+    warnIfMemory(
+      'Import thành công',
+      `Đã nạp ${res.imported} dòng${res.skipped.length ? `, bỏ qua ${res.skipped.length} dòng lỗi/trùng` : ''} lên Supabase!`,
+    )
   } catch (err: unknown) {
     toast.add({ severity: 'error', summary: 'Lỗi import', detail: err instanceof Error ? err.message : 'Không import được file!', life: 4000 })
   }

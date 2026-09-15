@@ -322,6 +322,17 @@ const deletingPo = ref<PurchaseOrderWithProgress | null>(null)
 
 const historyLogs = computed(() => (historyPo.value ? getPoLogs(historyPo.value.id) : []))
 
+const MEMORY_WARN_DETAIL =
+  'Supabase chưa đủ bảng/cột PO nên dữ liệu mới CHỈ nằm trên máy này — xóa cache/reload sẽ MẤT. Hãy chạy file database/purchase_orders.sql rồi bấm Đồng bộ!'
+
+const warnIfMemory = (successSummary: string, successDetail: string) => {
+  if (needsMigration.value) {
+    toast.add({ severity: 'warn', summary: `${successSummary} (lưu tạm)`, detail: MEMORY_WARN_DETAIL, life: 6000 })
+    return
+  }
+  toast.add({ severity: 'success', summary: successSummary, detail: successDetail, life: 3000 })
+}
+
 onMounted(() => {
   fetchPurchaseOrders()
 })
@@ -345,10 +356,10 @@ const handleSavePo = async (payload: PoInput, id: string | null) => {
   try {
     if (id) {
       await updatePurchaseOrder(id, payload)
-      toast.add({ severity: 'success', summary: 'Cập nhật thành công', detail: `Đã lưu thay đổi PO [${payload.po_no}]`, life: 3000 })
+      warnIfMemory('Cập nhật thành công', `Đã lưu thay đổi PO [${payload.po_no}] lên Supabase.`)
     } else {
       await createPurchaseOrder(payload)
-      toast.add({ severity: 'success', summary: 'Tạo PO thành công', detail: `PO [${payload.po_no}] mục tiêu ${Number(payload.target_qty).toLocaleString()} PCS`, life: 3000 })
+      warnIfMemory('Tạo PO thành công', `PO [${payload.po_no}] mục tiêu ${Number(payload.target_qty).toLocaleString()} PCS đã lên Supabase.`)
     }
     showPoModal.value = false
   } catch (err: unknown) {
@@ -366,6 +377,10 @@ const handleSaveReceipt = async (poId: string, payload: ReceiptInput) => {
     await addReceipt(poId, payload)
     showReceiptModal.value = false
     const updated = filteredOrders.value.find((o) => o.id === poId)
+    if (needsMigration.value) {
+      toast.add({ severity: 'warn', summary: 'Nhập hàng (lưu tạm)', detail: MEMORY_WARN_DETAIL, life: 6000 })
+      return
+    }
     toast.add({
       severity: 'success',
       summary: updated?.status === 'completed' ? 'Đạt mục tiêu — PO tự đóng!' : 'Nhập hàng thành công',
@@ -398,12 +413,10 @@ const handleImport = async (rows: PoExcelRow[]) => {
   try {
     const res = await importPurchaseOrders(rows)
     showImportModal.value = false
-    toast.add({
-      severity: 'success',
-      summary: 'Import thành công',
-      detail: `Đã nạp ${res.imported} PO${res.skipped.length ? `, bỏ qua ${res.skipped.length} dòng lỗi` : ''}!`,
-      life: 4000,
-    })
+    warnIfMemory(
+      'Import thành công',
+      `Đã nạp ${res.imported} PO${res.skipped.length ? `, bỏ qua ${res.skipped.length} dòng lỗi` : ''} lên Supabase!`,
+    )
   } catch (err: unknown) {
     toast.add({ severity: 'error', summary: 'Lỗi import', detail: err instanceof Error ? err.message : 'Không import được file!', life: 4000 })
   }
