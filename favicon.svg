@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
+  <defs>
+    <linearGradient id="neonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C2FF"/>
+      <stop offset="50%" stop-color="#CB3CFF"/>
+      <stop offset="100%" stop-color="#7e14ff"/>
+    </linearGradient>
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#CB3CFF" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <!-- Background Rounded Badge -->
+  <rect width="48" height="48" rx="12" fill="#081028"/>
+  <rect x="1" y="1" width="46" height="46" rx="11" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+  <!-- Dashdark V Shield/V Isometric Icon -->
+  <g filter="url(#neonGlow)">
+    <path d="M12 12C12 9.79086 13.7909 8 16 8H24V22H12V12Z" fill="#00C2FF"/>
+    <path d="M24 22H36V32C36 34.2091 34.2091 36 32 36H24V22Z" fill="#00C2FF"/>
+    <path d="M24 8H32C34.2091 8 36 9.79086 36 12V22H24V8Z" fill="#CB3CFF"/>
+    <path d="M12 22H24V36H16C13.7909 36 12 34.2091 12 32V22Z" fill="#CB3CFF"/>
+    <circle cx="24" cy="22" r="3" fill="#FFFFFF"/>
+  </g>
+</svg>
