@@ -17,6 +17,16 @@
     </div>
     
     <div class="flex items-center gap-2">
+      <!-- Nút làm mới trên Mobile Header (sidebar đã bỏ nút này) -->
+      <button 
+        @click="$emit('refresh')"
+        :disabled="loading"
+        class="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[#AEB9E1] hover:text-white transition cursor-pointer disabled:opacity-50 active:scale-95"
+        title="Làm mới dữ liệu từ Database"
+      >
+        <RefreshCw :class="['w-3.5 h-3.5 text-[#00C2FF]', loading ? 'animate-spin' : '']" />
+      </button>
+
       <!-- Nút tải trên Mobile Header -->
       <button 
         @click="$emit('install')"
@@ -112,50 +122,7 @@
 
     <!-- Bottom Info & Data Actions -->
     <div class="p-6 border-t border-white/10 bg-white/[0.02] backdrop-blur-sm">
-      <!-- User Profile in Sidebar (Đồng bộ kính mờ với toàn hệ thống) -->
-      <div v-if="currentUser" class="mb-3.5 p-2.5 rounded-[12px] glass-user-card flex items-center justify-between">
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-[0_0_8px_rgba(203,60,255,0.4)]">
-            {{ currentUser.name.charAt(0).toUpperCase() }}
-          </div>
-          <div class="min-w-0 text-left">
-            <p class="text-xs font-bold text-white truncate">{{ currentUser.name }}</p>
-            <p class="text-[9px] text-[#AEB9E1] truncate">{{ currentUser.email }}</p>
-          </div>
-        </div>
-        <button 
-          @click="$emit('logout')"
-          title="Đăng xuất khỏi thiết bị"
-          class="p-1.5 hover:bg-white/10 text-[#AEB9E1] hover:text-red-400 rounded-lg transition cursor-pointer shrink-0"
-        >
-          <LogOut class="w-4 h-4" />
-        </button>
-      </div>
-
-      <!-- Sync Button & Nút Tải App ở góc phải khu vực làm mới dữ liệu -->
-      <div class="flex items-center gap-2">
-        <button 
-          @click="$emit('refresh')"
-          :disabled="loading"
-          class="flex-1 h-[42px] flex items-center justify-center gap-2 px-3 rounded-[10px] bg-white/5 hover:bg-[#CB3CFF]/20 border border-white/15 text-[#AEB9E1] hover:text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-sm active:scale-98"
-          title="Làm mới dữ liệu từ Database (Bỏ qua Cache)"
-        >
-          <RefreshCw :class="['w-4 h-4 text-[#00C2FF]', loading ? 'animate-spin' : '']" />
-          <span class="truncate">LÀM MỚI DỮ LIỆU</span>
-        </button>
-
-        <!-- Nút Tải App ở góc phải khu vực làm mới dữ liệu -->
-        <button 
-          @click="$emit('install')"
-          class="h-[42px] px-3 flex items-center justify-center gap-1.5 rounded-[10px] bg-gradient-to-r from-[#00C2FF]/15 via-[#CB3CFF]/20 to-[#7e14ff]/20 hover:from-[#00C2FF]/30 hover:via-[#CB3CFF]/35 hover:to-[#7e14ff]/35 border border-[#CB3CFF]/40 text-white text-xs font-bold transition-all cursor-pointer shadow-[0_0_14px_rgba(203,60,255,0.2)] shrink-0 active:scale-95"
-          :title="isInstalled ? 'Dashdark V (Đã cài đặt)' : 'Tải App Dashdark V về máy'"
-        >
-          <Download class="w-4 h-4 text-[#00C2FF]" />
-          <span class="text-[11px] font-bold text-[#CB3CFF]">TẢI APP</span>
-        </button>
-      </div>
-
-      <div class="mt-4 flex flex-col gap-1.5 text-[10px] text-[#AEB9E1]/80 font-medium">
+      <div class="flex flex-col gap-1.5 text-[10px] text-[#AEB9E1]/80 font-medium">
         <div class="flex justify-between items-center">
           <span>Đồng bộ cuối:</span>
           <span class="text-white font-mono font-bold">{{ lastSync }}</span>
@@ -180,10 +147,8 @@ import {
   Users,
   Truck,
   ShoppingCart,
-  Package,
-  LogOut
+  Package
 } from 'lucide-vue-next'
-import { useAuth } from '@/composables/useAuth'
 
 defineProps<{
   modelValue: string
@@ -197,10 +162,8 @@ const emit = defineEmits<{
   (e: 'update:modelValue', val: string): void
   (e: 'refresh'): void
   (e: 'install'): void
-  (e: 'logout'): void
 }>()
 
-const { currentUser } = useAuth()
 const isOpen = ref(false)
 
 const menuItems = [

@@ -12,7 +12,6 @@
       :is-installed="isInstalled"
       @refresh="loadAllData" 
       @install="handleOpenInstallModal"
-      @logout="showLogoutConfirm = true"
     />
 
     <!-- Main Content wrapper -->
@@ -59,6 +58,17 @@
             <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74] animate-pulse"></span>
             <span>Database kết nối</span>
           </div>
+
+          <!-- Nút Làm Mới Dữ Liệu ở Header (chuyển từ sidebar trái lên) -->
+          <button 
+            @click="loadAllData"
+            :disabled="loading"
+            title="Làm mới dữ liệu từ Database (Bỏ qua Cache)"
+            class="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-[#CB3CFF]/20 border border-white/15 text-[#AEB9E1] hover:text-white rounded-[8px] text-xs font-semibold transition cursor-pointer disabled:opacity-50 shadow-sm active:scale-95"
+          >
+            <RefreshCw :class="['w-3.5 h-3.5 text-[#00C2FF]', loading ? 'animate-spin' : '']" />
+            <span>LÀM MỚI DỮ LIỆU</span>
+          </button>
 
           <!-- Nút Tải App ở Header -->
           <button 
@@ -383,7 +393,8 @@ import {
   UploadCloud, 
   Search,
   Download,
-  LogOut
+  LogOut,
+  RefreshCw
 } from 'lucide-vue-next'
 
 // Layout & Dashboard Components
