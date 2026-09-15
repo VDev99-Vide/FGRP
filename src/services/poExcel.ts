@@ -159,27 +159,8 @@ export async function parsePoExcelFile(file: File): Promise<ParsePoExcelResult> 
 
 /** Tải file Excel mẫu để người dùng điền hàng loạt rồi nạp lại. */
 export function downloadPoSampleTemplate(): void {
-  const sample = [
-    {
-      'Số PO': 'PO-2026-0001',
-      'Nhà cung cấp': 'CÔNG TY TNHH ABC',
-      'Mã hàng': '8101010104',
-      'Mô tả sản phẩm': 'Ghế gaming chân xoay',
-      'Ghi chú': 'Giao 2 đợt',
-      'Mục tiêu': 10000,
-      'Ngày tạo': '15/09/2026',
-    },
-    {
-      'Số PO': 'PO-2026-0002',
-      'Nhà cung cấp': 'CÔNG TY TNHH XYZ',
-      'Mã hàng': '8515210204',
-      'Mô tả sản phẩm': 'Tay vịn điều chỉnh',
-      'Ghi chú': '',
-      'Mục tiêu': 5000,
-      'Ngày tạo': '15/09/2026',
-    },
-  ]
-  const ws = XLSX.utils.json_to_sheet(sample)
+  const headers = ['Số PO', 'Nhà cung cấp', 'Mã hàng', 'Mô tả sản phẩm', 'Ghi chú', 'Mục tiêu', 'Ngày tạo']
+  const ws = XLSX.utils.json_to_sheet([], { header: headers })
   ws['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 16 }, { wch: 26 }, { wch: 20 }, { wch: 12 }, { wch: 14 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'PO_Template')

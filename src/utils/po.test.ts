@@ -7,9 +7,11 @@ import {
   filterPurchaseOrders,
   formatIsoDate,
   getPoProgressLevel,
+  hexWithAlpha,
   interpolatePoColor,
   isValidIsoDate,
   normalizePoNo,
+  shadeHex,
   sortPoForDisplay,
   todayIsoDate,
   validatePoInput,
@@ -84,6 +86,26 @@ describe('interpolatePoColor (xanh biển nhạt -> xanh lá theo %)', () => {
     expect(interpolatePoColor(150)).toBe('#14CA74')
   })
 })
+describe('shadeHex & hexWithAlpha (màu ống sóng nước)', () => {
+  it('percent 0 giữ nguyên màu', () => {
+    expect(shadeHex('#14CA74', 0)).toBe('#14CA74')
+  })
+
+  it('-100 về đen, +100 về trắng', () => {
+    expect(shadeHex('#FFFFFF', -100)).toBe('#000000')
+    expect(shadeHex('#000000', 100)).toBe('#FFFFFF')
+  })
+
+  it('-50 tối một nửa xanh lá', () => {
+    expect(shadeHex('#14CA74', -50)).toBe('#0A653A')
+  })
+
+  it('hexWithAlpha ra rgba chuẩn', () => {
+    expect(hexWithAlpha('#7DD3FC', 0.45)).toBe('rgba(125, 211, 252, 0.45)')
+    expect(hexWithAlpha('#14CA74', 2)).toBe('rgba(20, 202, 116, 1)')
+  })
+})
+
 describe('calcPoProgress', () => {
   it('ví dụ nghiệp vụ: target 10000, đã nhập 2500 -> 25%', () => {
     expect(calcPoProgress(10000, 2500)).toBe(25)
@@ -215,6 +237,13 @@ describe('validatePoInput & validateReceiptInput', () => {
     ).toBeNull()
   })
 
+  it('mục tiêu bỏ trống hoặc <= 0 thì chặn (modal không điền sẵn)', () => {
+    const base = { po_no: 'P', supplier: 'N', item_code: 'M', created_date: '2026-09-15' }
+    expect(validatePoInput({ ...base, target_qty: '' })).toContain('Mục tiêu')
+    expect(validatePoInput({ ...base, target_qty: 0 })).toContain('Mục tiêu')
+    expect(validatePoInput({ ...base, target_qty: 10000 })).toBeNull()
+  })
+
   it('bắt lỗi thiếu trường và target sai', () => {
     expect(
       validatePoInput({ po_no: '', supplier: 'N', item_code: 'M', target_qty: 1, created_date: '2026-09-15' }),
@@ -227,7 +256,7 @@ describe('validatePoInput & validateReceiptInput', () => {
     ).toContain('Mã hàng')
     expect(
       validatePoInput({ po_no: 'P', supplier: 'N', item_code: 'M', target_qty: 0, created_date: '2026-09-15' }),
-    ).toContain('Target')
+    ).toContain('Mục tiêu')
     expect(
       validatePoInput({ po_no: 'P', supplier: 'N', item_code: 'M', target_qty: 5, created_date: '15/09/2026' }),
     ).toContain('Ngày tạo')

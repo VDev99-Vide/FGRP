@@ -19,7 +19,7 @@ export interface PoInput {
   item_code: string
   description?: string
   note?: string
-  target_qty: number
+  target_qty: number | string
   created_date: string
 }
 

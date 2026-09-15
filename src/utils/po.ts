@@ -48,6 +48,22 @@ const rgbToHex = (r: number, g: number, b: number): string => {
   return `#${to2(r)}${to2(g)}${to2(b)}`
 }
 
+/** Làm sáng (percent > 0) hoặc tối (percent < 0) một màu hex (-100..100). */
+export function shadeHex(hex: string, percent: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  const t = Math.min(100, Math.max(-100, Number(percent) || 0)) / 100
+  const target = t < 0 ? 0 : 255
+  const p = Math.abs(t)
+  return rgbToHex(r + (target - r) * p, g + (target - g) * p, b + (target - b) * p)
+}
+
+/** Đổi hex sang rgba với alpha 0..1 (dùng cho lớp sóng phủ). */
+export function hexWithAlpha(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  const a = Math.min(1, Math.max(0, Number(alpha)))
+  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${a})`
+}
+
 /** Nội suy màu ống theo % (kẹp 0-100): 0% = xanh biển nhạt, 100% = xanh lá. */
 export function interpolatePoColor(progressCapped: number): string {
   const t = Math.min(100, Math.max(0, Number(progressCapped) || 0)) / 100
@@ -111,7 +127,7 @@ export function validatePoInput(input: {
   if (!String(input.supplier || '').trim()) return 'Vui lòng nhập Nhà cung cấp!'
   if (!String(input.item_code || '').trim()) return 'Vui lòng nhập Mã hàng!'
   const target = Number(input.target_qty)
-  if (!Number.isFinite(target) || target <= 0) return 'Target phải là số lớn hơn 0!'
+  if (!Number.isFinite(target) || target <= 0) return 'Mục tiêu phải là số lớn hơn 0!'
   if (!isValidIsoDate(input.created_date)) return 'Ngày tạo PO không hợp lệ (yyyy-mm-dd)!'
   return null
 }

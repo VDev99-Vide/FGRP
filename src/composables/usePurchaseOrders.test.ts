@@ -203,7 +203,7 @@ describe('usePurchaseOrders composable', () => {
   it('validate đầu vào: chặn target <= 0 và ngày sai', async () => {
     await expect(
       po.createPurchaseOrder({ po_no: poNo('PO-T-V'), supplier: 'N', item_code: 'M', target_qty: 0, created_date: todayIsoDate() }),
-    ).rejects.toThrow('Target')
+    ).rejects.toThrow('Mục tiêu')
     const created = await makePo('PO-T-V2', 100)
     track(created.id)
     await expect(po.addReceipt(created.id, { receipt_date: todayIsoDate(), qty: -5 })).rejects.toThrow('Số lượng')

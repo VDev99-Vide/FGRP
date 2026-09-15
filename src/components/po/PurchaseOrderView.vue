@@ -135,8 +135,7 @@
           <thead class="glass-table-sticky-head">
             <tr>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Số PO / NCC</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Mã hàng</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Mô tả sản phẩm</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Mã hàng / Mô tả</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Mục tiêu</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Đã nhập</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Tiến độ</th>
@@ -152,22 +151,14 @@
                 <p class="font-mono font-black text-white text-xs">{{ order.po_no }}</p>
                 <p class="text-[10px] text-[#AEB9E1] mt-0.5">{{ order.supplier }}</p>
               </td>
-              <td class="py-3 px-4 font-mono font-bold text-[#00C2FF] text-xs">{{ order.item_code }}</td>
-              <td class="py-3 px-4 text-white/80 text-xs max-w-[200px] truncate" :title="order.description || ''">{{ order.description || '—' }}</td>
+              <td class="py-3 px-4">
+                <p class="font-mono font-bold text-[#00C2FF] text-xs">{{ order.item_code }}</p>
+                <p class="text-[10px] text-white/70 mt-0.5 max-w-[220px] truncate" :title="order.description || ''">{{ order.description || '—' }}</p>
+              </td>
               <td class="py-3 px-4 text-right font-mono text-white/90">{{ order.target_qty.toLocaleString() }}</td>
               <td class="py-3 px-4 text-right font-mono font-bold text-[#14CA74]">{{ order.received_qty.toLocaleString() }}</td>
-              <td class="py-3 px-4 min-w-[160px]">
-                <div class="flex items-center gap-2">
-                  <div class="flex-1 h-[10px] rounded-full bg-white/10 overflow-hidden border border-white/10">
-                    <div
-                      class="h-full rounded-full transition-all duration-500"
-                      :style="{ width: `${order.progressCapped}%`, background: interpolatePoColor(order.progressCapped) }"
-                    ></div>
-                  </div>
-                  <span class="font-mono font-bold text-[11px] w-[52px] text-right" :style="{ color: interpolatePoColor(order.progressCapped) }">
-                    {{ order.progress }}%
-                  </span>
-                </div>
+              <td class="py-3 px-4 min-w-[260px]">
+                <PoWavePipe :fill="order.progressCapped" :label="`${order.progress}%`" />
               </td>
               <td class="py-3 px-4 text-center">
                 <span
@@ -218,7 +209,7 @@
               </td>
             </tr>
             <tr v-if="filteredOrders.length === 0">
-              <td colspan="10" class="text-center py-12 text-[#AEB9E1] italic text-xs">Không tìm thấy đơn đặt hàng phù hợp!</td>
+              <td colspan="9" class="text-center py-12 text-[#AEB9E1] italic text-xs">Không tìm thấy đơn đặt hàng phù hợp!</td>
             </tr>
           </tbody>
         </table>
@@ -288,8 +279,9 @@ import {
 import { useToast } from 'primevue/usetoast'
 import { usePurchaseOrders, type PoInput, type ReceiptInput } from '@/composables/usePurchaseOrders'
 import type { PurchaseOrderWithProgress } from '@/types'
-import { interpolatePoColor, formatIsoDate } from '@/utils/po'
+import { formatIsoDate } from '@/utils/po'
 import type { PoExcelRow } from '@/services/poExcel'
+import PoWavePipe from './PoWavePipe.vue'
 import PurchaseOrderModal from './PurchaseOrderModal.vue'
 import PoReceiptModal from './PoReceiptModal.vue'
 import PoHistoryModal from './PoHistoryModal.vue'

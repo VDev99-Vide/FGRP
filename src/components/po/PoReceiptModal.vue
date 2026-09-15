@@ -47,7 +47,7 @@
             <input
               v-model="form.receipt_date"
               type="date"
-              class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white font-mono outline-none focus:border-[#14CA74] focus:ring-1 ring-[#14CA74] transition [color-scheme:dark]"
+              class="w-full h-[40px] px-3.5 bg-white/[0.05] backdrop-blur-md border border-white/15 rounded-[10px] text-xs text-white font-mono outline-none focus:border-[#14CA74] focus:ring-1 ring-[#14CA74] transition [color-scheme:dark]"
             />
             <p class="text-[10px] text-[#AEB9E1]/70 mt-1">Mặc định hôm nay, sửa được tự do.</p>
           </div>
@@ -59,7 +59,7 @@
               min="1"
               step="1"
               placeholder="VD: 1500"
-              class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-[#14CA74] font-mono font-bold placeholder-[#AEB9E1]/40 outline-none focus:border-[#14CA74] focus:ring-1 ring-[#14CA74] transition"
+              class="w-full h-[40px] px-3.5 bg-white/[0.05] backdrop-blur-md border border-white/15 rounded-[10px] text-xs text-[#14CA74] font-mono font-bold placeholder-[#AEB9E1]/40 outline-none focus:border-[#14CA74] focus:ring-1 ring-[#14CA74] transition"
             />
           </div>
         </div>
@@ -70,7 +70,7 @@
             v-model="form.note"
             type="text"
             placeholder="VD: Đợt 3 - cont về kho 62..."
-            class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#14CA74] focus:ring-1 ring-[#14CA74] transition"
+            class="w-full h-[40px] px-3.5 bg-white/[0.05] backdrop-blur-md border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#14CA74] focus:ring-1 ring-[#14CA74] transition"
           />
         </div>
 
