@@ -45,7 +45,7 @@ const streamStyle = computed(() => {
   position: relative;
   flex: 1;
   min-width: 0;
-  height: 24px;
+  height: 22px;
   /* Kính mờ xuyên thấu: không viền, không bóng khung — chỉ thấy animation nước chảy */
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(14px) saturate(160%);
