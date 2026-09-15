@@ -47,7 +47,7 @@
   <!-- Main Sidebar Container -->
   <aside 
     :class="[
-      'fixed top-0 bottom-0 left-0 z-40 flex flex-col justify-between w-[280px] lg:w-[290px] glass-sidebar transition-transform lg:translate-x-0',
+      'fixed top-0 bottom-0 left-0 z-40 flex flex-col justify-between w-[280px] lg:w-[304px] glass-sidebar transition-transform lg:translate-x-0',
       isOpen ? 'translate-x-0' : '-translate-x-full',
       'lg:sticky lg:h-screen shrink-0'
     ]"
@@ -72,35 +72,41 @@
         </div>
       </div>
 
-      <!-- Navigation Menu Items -->
+      <!-- Navigation Menu Items (Nghiệp vụ + Meta-data) -->
       <nav class="mt-6 flex flex-col gap-2">
-        <button 
-          v-for="item in menuItems" 
-          :key="item.value"
-          @click="selectTab(item.value)"
-          :class="[
-            'w-full h-[44px] flex items-center gap-3.5 px-4 rounded-[10px] text-sm font-medium transition-all cursor-pointer',
-            modelValue === item.value 
-              ? 'bg-[#18202D]/90 text-[#CB3CFF] border border-[#CB3CFF]/40 shadow-[0_0_16px_rgba(203,60,255,0.2)] font-semibold backdrop-blur-md' 
-              : 'text-[#AEB9E1] hover:bg-white/10 hover:text-white border border-transparent'
-          ]"
-        >
-          <component 
-            :is="item.icon" 
+        <template v-for="section in navSections" :key="section.header ?? 'core'">
+          <p v-if="section.header" class="text-[10px] font-bold text-[#AEB9E1]/60 tracking-[0.2em] uppercase px-4 pt-3">
+            {{ section.header }}
+          </p>
+          <button 
+            v-for="item in section.items" 
+            :key="item.value"
+            @click="selectTab(item.value)"
+            :title="item.label"
             :class="[
-              'w-[18px] h-[18px] shrink-0',
-              modelValue === item.value ? 'text-[#CB3CFF]' : 'text-[#AEB9E1]'
-            ]" 
-          />
-          <span class="truncate">{{ item.label }}</span>
-          
-          <span 
-            v-if="item.badge" 
-            class="ml-auto text-[10px] px-2 py-0.5 rounded-[4px] bg-[#CB3CFF]/20 text-[#CB3CFF] font-bold border border-[#CB3CFF]/30"
+              'w-full h-[44px] flex items-center gap-3 px-3.5 rounded-[10px] text-[13px] font-medium transition-all cursor-pointer',
+              modelValue === item.value 
+                ? 'bg-[#18202D]/90 text-[#CB3CFF] border border-[#CB3CFF]/40 shadow-[0_0_16px_rgba(203,60,255,0.2)] font-semibold backdrop-blur-md' 
+                : 'text-[#AEB9E1] hover:bg-white/10 hover:text-white border border-transparent'
+            ]"
           >
-            {{ item.badge }}
-          </span>
-        </button>
+            <component 
+              :is="item.icon" 
+              :class="[
+                'w-[18px] h-[18px] shrink-0',
+                modelValue === item.value ? 'text-[#CB3CFF]' : 'text-[#AEB9E1]'
+              ]" 
+            />
+            <span class="truncate">{{ item.label }}</span>
+            
+            <span 
+              v-if="item.badge" 
+              class="ml-auto text-[10px] px-2 py-0.5 rounded-[4px] bg-[#CB3CFF]/20 text-[#CB3CFF] font-bold border border-[#CB3CFF]/30 shrink-0"
+            >
+              {{ item.badge }}
+            </span>
+          </button>
+        </template>
       </nav>
     </div>
 
@@ -163,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { 
   Menu, 
   X, 
@@ -174,6 +180,7 @@ import {
   Users,
   Truck,
   ShoppingCart,
+  Package,
   LogOut
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
@@ -203,6 +210,15 @@ const menuItems = [
   { label: 'Quản Lý Đơn Đặt Hàng', value: 'purchase', icon: ShoppingCart, badge: 'Mới' },
   { label: 'Quản Lý Phụ Kiện', value: 'accessories', icon: Users }
 ]
+
+const metaMenuItems = [
+  { label: 'Quy Cách Đóng Gói', value: 'metadata', icon: Package, badge: 'Mới' }
+]
+
+const navSections = computed(() => [
+  { header: null as string | null, items: menuItems },
+  { header: 'Meta-data', items: metaMenuItems }
+])
 
 const selectTab = (tab: string) => {
   emit('update:modelValue', tab)

@@ -253,6 +253,11 @@
             <div v-else-if="currentTab === 'purchase'">
               <PurchaseOrderView />
             </div>
+
+            <!-- 6. TAB META-DATA: QUY CÁCH ĐÓNG GÓI CHUẨN -->
+            <div v-else-if="currentTab === 'metadata'">
+              <MetadataView />
+            </div>
           </transition>
 
         </div>
@@ -394,6 +399,7 @@ import WorldDotMapCard from '@/components/dashboard/WorldDotMapCard.vue'
 import InventoryGrid from '@/components/inventory/InventoryGrid.vue'
 import ShippingForecastView from '@/components/forecast/ShippingForecastView.vue'
 import PurchaseOrderView from '@/components/po/PurchaseOrderView.vue'
+import MetadataView from '@/components/metadata/MetadataView.vue'
 
 // Modals
 import InboundModal from '@/components/inventory/InboundModal.vue'
@@ -517,6 +523,7 @@ const currentTabName = computed(() => {
     case 'inventory': return 'Tồn Kho Thành Phẩm'
     case 'forecast': return 'Kế Hoạch Xuất Hàng'
     case 'purchase': return 'Quản Lý Đơn Đặt Hàng'
+    case 'metadata': return 'Quy Cách Đóng Gói'
     case 'accessories': return 'Quản Lý Phụ Kiện'
     default: return ''
   }
