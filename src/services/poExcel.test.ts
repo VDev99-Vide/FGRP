@@ -8,21 +8,30 @@ import {
 
 describe('detectPoColumnMapping (nhận diện cột tiếng Việt linh hoạt)', () => {
   it('nhận diện đúng file mẫu chuẩn', () => {
-    const m = detectPoColumnMapping(['Số PO', 'Nhà cung cấp', 'Mã hàng', 'Target', 'Ngày tạo'])
+    const m = detectPoColumnMapping(['Số PO', 'Nhà cung cấp', 'Mã hàng', 'Mô tả sản phẩm', 'Ghi chú', 'Mục tiêu', 'Ngày tạo'])
     expect(m.po_no).toBe('Số PO')
     expect(m.supplier).toBe('Nhà cung cấp')
     expect(m.item_code).toBe('Mã hàng')
-    expect(m.target_qty).toBe('Target')
+    expect(m.description).toBe('Mô tả sản phẩm')
+    expect(m.note).toBe('Ghi chú')
+    expect(m.target_qty).toBe('Mục tiêu')
     expect(m.created_date).toBe('Ngày tạo')
   })
 
   it('nhận diện tiêu đề viết kiểu khác (không dấu / tiếng Anh)', () => {
-    const m = detectPoColumnMapping(['PO', 'NCC', 'ITEM CODE', 'SO LUONG', 'NGAY'])
+    const m = detectPoColumnMapping(['PO', 'NCC', 'ITEM CODE', 'MO TA', 'GHI CHU', 'TARGET', 'NGAY'])
     expect(m.po_no).toBe('PO')
     expect(m.supplier).toBe('NCC')
     expect(m.item_code).toBe('ITEM CODE')
-    expect(m.target_qty).toBe('SO LUONG')
+    expect(m.description).toBe('MO TA')
+    expect(m.note).toBe('GHI CHU')
+    expect(m.target_qty).toBe('TARGET')
     expect(m.created_date).toBe('NGAY')
+  })
+
+  it('nhận diện cột "Mục tiêu" mới thay cho "Target"', () => {
+    const m = detectPoColumnMapping(['Số PO', 'Mục tiêu'])
+    expect(m.target_qty).toBe('Mục tiêu')
   })
 
   it('không nhầm cột "Số PO" với cột khác chứa chữ po', () => {
@@ -54,16 +63,18 @@ describe('mapRowsToPurchaseOrders', () => {
     po_no: 'Số PO',
     supplier: 'Nhà cung cấp',
     item_code: 'Mã hàng',
-    target_qty: 'Target',
+    description: 'Mô tả sản phẩm',
+    note: 'Ghi chú',
+    target_qty: 'Mục tiêu',
     created_date: 'Ngày tạo',
   }
 
   it('ánh xạ đúng và lọc dòng thiếu Số PO / Target', () => {
     const rows = mapRowsToPurchaseOrders(
       [
-        { 'Số PO': 'PO-001', 'Nhà cung cấp': 'NCC A', 'Mã hàng': '8101010104', Target: 10000, 'Ngày tạo': '15/09/2026' },
-        { 'Số PO': '', 'Nhà cung cấp': 'NCC B', 'Mã hàng': 'X', Target: 5000, 'Ngày tạo': '' },
-        { 'Số PO': 'PO-003', 'Nhà cung cấp': 'NCC C', 'Mã hàng': 'Y', Target: 0, 'Ngày tạo': '' },
+        { 'Số PO': 'PO-001', 'Nhà cung cấp': 'NCC A', 'Mã hàng': '8101010104', 'Mô tả sản phẩm': 'Ghế', 'Ghi chú': 'Gấp', 'Mục tiêu': 10000, 'Ngày tạo': '15/09/2026' },
+        { 'Số PO': '', 'Nhà cung cấp': 'NCC B', 'Mã hàng': 'X', 'Mục tiêu': 5000, 'Ngày tạo': '' },
+        { 'Số PO': 'PO-003', 'Nhà cung cấp': 'NCC C', 'Mã hàng': 'Y', 'Mục tiêu': 0, 'Ngày tạo': '' },
       ],
       mapping,
     )
@@ -72,6 +83,8 @@ describe('mapRowsToPurchaseOrders', () => {
       po_no: 'PO-001',
       supplier: 'NCC A',
       item_code: '8101010104',
+      description: 'Ghế',
+      note: 'Gấp',
       target_qty: 10000,
       created_date: '2026-09-15',
     })

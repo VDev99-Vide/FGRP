@@ -104,6 +104,8 @@ export interface PurchaseOrder {
   po_no: string;
   supplier: string;
   item_code: string;
+  description?: string; // mô tả sản phẩm (tùy chọn)
+  note?: string; // ghi chú PO (tùy chọn)
   target_qty: number;
   created_date: string; // yyyy-mm-dd (ngày tạo PO, mặc định hôm nay nhưng sửa được)
   status: PurchaseOrderStatus;
@@ -139,6 +141,21 @@ export interface PoStats {
   totalTarget: number;
   totalReceived: number;
   overallPercent: number;
+}
+
+// ================= META-DATA: QUY CÁCH ĐÓNG GÓI CHUẨN =================
+// Class module gốc (trích từ Sample.xlsx), phân phối cho toàn hệ thống ở task sau.
+
+export interface MetadataPacking {
+  id: string;
+  customer: string;
+  item_code: string;
+  pack_qty: number;
+  weight_per_unit: number;
+  carton_spec: string;
+  carton_type: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 

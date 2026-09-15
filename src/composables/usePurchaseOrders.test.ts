@@ -111,6 +111,49 @@ describe('usePurchaseOrders composable', () => {
     expect(progress?.received_qty).toBe(0)
   })
 
+  it('lưu mô tả sản phẩm + ghi chú (tùy chọn) khi tạo và sửa PO', async () => {
+    const created = await po.createPurchaseOrder({
+      po_no: poNo('PO-T-META'),
+      supplier: 'NCC A',
+      item_code: 'M1',
+      description: 'Ghế gaming',
+      note: 'Giao 2 đợt',
+      target_qty: 500,
+      created_date: todayIsoDate(),
+    })
+    track(created.id)
+    expect(created.description).toBe('Ghế gaming')
+    expect(created.note).toBe('Giao 2 đợt')
+
+    const updated = await po.updatePurchaseOrder(created.id, {
+      po_no: poNo('PO-T-META'),
+      supplier: 'NCC A',
+      item_code: 'M1',
+      description: 'Ghế văn phòng',
+      note: '',
+      target_qty: 500,
+      created_date: todayIsoDate(),
+    })
+    expect(updated.description).toBe('Ghế văn phòng')
+    expect(updated.note).toBe('')
+  })
+
+  it('xóa PO đã giao đủ thì KPI PO Đã Giao Đủ tự cập nhật giảm', async () => {
+    const done = await makePo('PO-T-KPI-DONE', 100)
+    const open = await makePo('PO-T-KPI-OPEN', 100)
+    track(done.id)
+    track(open.id)
+    await po.addReceipt(done.id, { receipt_date: todayIsoDate(), qty: 100 })
+    expect(po.stats.value.completedCount).toBe(1)
+    expect(po.stats.value.openCount).toBe(1)
+
+    await po.deletePurchaseOrder(done.id)
+    createdIds = createdIds.filter((id) => id !== done.id)
+    expect(po.stats.value.completedCount).toBe(0)
+    expect(po.stats.value.openCount).toBe(1)
+    expect(po.stats.value.totalOrders).toBe(1)
+  })
+
   it('xóa PO thì xóa luôn toàn bộ log đi kèm', async () => {
     const created = await makePo('PO-T-DEL', 1000)
     track(created.id)
@@ -125,15 +168,17 @@ describe('usePurchaseOrders composable', () => {
     const existing = await makePo('PO-T-IMP1', 1000, { supplier: 'NCC CU', item_code: 'M-CU' })
     track(existing.id)
     const res = await po.importPurchaseOrders([
-      { po_no: poNo('PO-T-IMP1'), supplier: 'NCC MOI', item_code: 'M-MOI', target_qty: 5000, created_date: todayIsoDate() },
-      { po_no: poNo('PO-T-IMP2'), supplier: 'NCC B', item_code: 'M2', target_qty: 2000, created_date: todayIsoDate() },
-      { po_no: '', supplier: 'NCC X', item_code: 'MX', target_qty: 0, created_date: todayIsoDate() },
+      { po_no: poNo('PO-T-IMP1'), supplier: 'NCC MOI', item_code: 'M-MOI', description: '', note: '', target_qty: 5000, created_date: todayIsoDate() },
+      { po_no: poNo('PO-T-IMP2'), supplier: 'NCC B', item_code: 'M2', description: '', note: '', target_qty: 2000, created_date: todayIsoDate() },
+      { po_no: '', supplier: 'NCC X', item_code: 'MX', description: '', note: '', target_qty: 0, created_date: todayIsoDate() },
     ])
     const imp2 = po.purchaseOrders.value.find((p) => p.po_no === poNo('PO-T-IMP2'))
     if (imp2) track(imp2.id)
     expect(res.imported).toBe(2)
     expect(res.skipped).toHaveLength(1)
-    expect(po.purchaseOrders.value).toHaveLength(2)
+    // DB dùng chung có thể chứa PO thật của người dùng nên chỉ assert trên PO của test
+    const mine = po.purchaseOrders.value.filter((p) => p.po_no.startsWith('PO-T-IMP'))
+    expect(mine).toHaveLength(2)
     const updated = po.purchaseOrders.value.find((p) => p.po_no === poNo('PO-T-IMP1'))
     expect(updated?.target_qty).toBe(5000)
     expect(updated?.supplier).toBe('NCC MOI')

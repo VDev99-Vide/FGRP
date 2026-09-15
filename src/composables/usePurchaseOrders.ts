@@ -17,6 +17,8 @@ export interface PoInput {
   po_no: string
   supplier: string
   item_code: string
+  description?: string
+  note?: string
   target_qty: number
   created_date: string
 }
@@ -43,6 +45,8 @@ const lastSync = ref('--:--')
 // tự rơi về memory để app vẫn chạy, đồng thời báo banner hướng dẫn migration
 const backendAvailable = ref(true)
 
+const cleanOpt = (v: unknown) => String(v ?? '').trim()
+
 const isMemoryId = (id: string) => id.startsWith('po-seed-') || id.startsWith('log-seed-')
 
 const isMissingTableError = (e: unknown): boolean => {
@@ -56,37 +60,76 @@ const isRlsError = (e: unknown): boolean => {
   return message.includes('row-level security') || message.includes('violates row-level security')
 }
 
+// true khi Supabase thiếu cột description/note (chưa chạy file SQL mới):
+// app vẫn chạy, tự ghi bản legacy, đồng thời báo banner chạy lại migration
+const needsColumnMigration = ref(false)
+
+const isMissingColumnError = (e: unknown): boolean => {
+  const code = (e as { code?: string })?.code
+  const message = (e as { message?: string })?.message || String(e || '')
+  return code === 'PGRST204' || message.includes("in the schema cache")
+}
+
+/** Bỏ 2 cột mới để ghi tương thích với bảng Supabase cũ (pattern giống forecast). */
+const toLegacyPoPayload = <T extends object>(payload: T): Omit<T, 'description' | 'note'> => {
+  const { description: _d, note: _n, ...rest } = payload as T & { description?: unknown; note?: unknown }
+  return rest
+}
+
 /**
  * Ghi/đọc xuống Supabase.
  * - Bảng chưa tạo (PGRST205): tự fallback memory, bật cờ needsMigration, không throw.
+ * - Thiếu cột mới (PGRST204): thử lại bản legacy (bỏ description/note), bật cờ migration.
  * - Lỗi RLS: throw message hướng dẫn chạy file database/purchase_orders.sql.
  */
-const callSupabase = async <T>(fn: () => PromiseLike<{ data: T | null; error: unknown }>): Promise<T | null> => {
+const callSupabase = async <T>(
+  fn: () => PromiseLike<{ data: T | null; error: unknown }>,
+  legacyFn?: () => PromiseLike<{ data: T | null; error: unknown }>,
+): Promise<T | null> => {
   if (!isSupabaseConfigured || !backendAvailable.value) return null
-  let res: { data: T | null; error: unknown }
-  try {
-    res = await fn()
-  } catch (e) {
-    if (isMissingTableError(e)) {
+  const run = async (thunk: () => PromiseLike<{ data: T | null; error: unknown }>) => {
+    try {
+      return { result: await thunk(), thrown: null as unknown }
+    } catch (e) {
+      return { result: null, thrown: e as unknown }
+    }
+  }
+
+  let { result: res, thrown } = await run(fn)
+  if (thrown) {
+    if (isMissingTableError(thrown)) {
       backendAvailable.value = false
       warnMissingTable()
       return null
     }
-    throw e
+    throw thrown
   }
-  if (res.error) {
-    if (isMissingTableError(res.error)) {
+  if (res!.error) {
+    const err = res!.error
+    if (isMissingTableError(err)) {
       backendAvailable.value = false
       warnMissingTable()
       return null
     }
-    if (isRlsError(res.error)) {
-      throw new Error('Supabase chặn quyền ghi (RLS). Hãy chạy file database/purchase_orders.sql trong Supabase SQL Editor.')
+    if (isMissingColumnError(err) && legacyFn) {
+      needsColumnMigration.value = true
+      console.warn('[PO] Supabase chưa có cột description/note. Hãy chạy lại database/purchase_orders.sql. Tạm ghi bản tương thích.')
+      const retry = await run(legacyFn)
+      if (retry.thrown) throw retry.thrown
+      if (retry.result!.error) {
+        if (isRlsError(retry.result!.error)) throw rlsError()
+        throw retry.result!.error
+      }
+      return retry.result!.data
     }
-    throw res.error
+    if (isRlsError(err)) throw rlsError()
+    throw err
   }
-  return res.data
+  return res!.data
 }
+
+const rlsError = () =>
+  new Error('Supabase chặn quyền ghi (RLS). Hãy chạy file database/purchase_orders.sql trong Supabase SQL Editor.')
 
 const warnMissingTable = () => {
   console.warn(
@@ -96,7 +139,9 @@ const warnMissingTable = () => {
 
 export function usePurchaseOrders() {
   /** true khi cần chạy migration database/purchase_orders.sql trên Supabase. */
-  const needsMigration = computed(() => isSupabaseConfigured && !backendAvailable.value)
+  const needsMigration = computed(
+    () => isSupabaseConfigured && (!backendAvailable.value || needsColumnMigration.value),
+  )
 
   /** Nạp toàn bộ PO + log nhập hàng từ Supabase (rỗng 100% nếu DB chưa có gì). */
   const fetchPurchaseOrders = async () => {
@@ -111,7 +156,12 @@ export function usePurchaseOrders() {
         ),
       ])
       if (poData) {
-        purchaseOrders.value = poData.map((p) => ({ ...p, target_qty: Number(p.target_qty) || 0 }))
+        purchaseOrders.value = poData.map((p) => ({
+          ...p,
+          description: cleanOpt(p.description),
+          note: cleanOpt(p.note),
+          target_qty: Number(p.target_qty) || 0,
+        }))
       }
       if (logData) {
         receiptLogs.value = logData.map((l) => ({ ...l, qty: Number(l.qty) || 0 }))
@@ -136,6 +186,8 @@ export function usePurchaseOrders() {
       po_no: poNo,
       supplier: String(input.supplier).trim(),
       item_code: String(input.item_code).trim(),
+      description: cleanOpt(input.description),
+      note: cleanOpt(input.note),
       target_qty: Number(input.target_qty),
       created_date: input.created_date,
       status: 'open',
@@ -144,7 +196,10 @@ export function usePurchaseOrders() {
       updated_at: now,
     }
 
-    await callSupabase(() => supabase.from('purchase_orders').insert(po).select())
+    await callSupabase(
+      () => supabase.from('purchase_orders').insert(po).select(),
+      () => supabase.from('purchase_orders').insert(toLegacyPoPayload(po)).select(),
+    )
     purchaseOrders.value = [po, ...purchaseOrders.value]
     return po
   }
@@ -169,6 +224,8 @@ export function usePurchaseOrders() {
       po_no: poNo,
       supplier: String(input.supplier).trim(),
       item_code: String(input.item_code).trim(),
+      description: cleanOpt(input.description),
+      note: cleanOpt(input.note),
       target_qty: Number(input.target_qty),
       created_date: input.created_date,
       status: completed ? 'completed' : 'open',
@@ -177,7 +234,10 @@ export function usePurchaseOrders() {
     }
 
     if (!isMemoryId(id)) {
-      await callSupabase(() => supabase.from('purchase_orders').update(updated).eq('id', id).select())
+      await callSupabase(
+        () => supabase.from('purchase_orders').update(updated).eq('id', id).select(),
+        () => supabase.from('purchase_orders').update(toLegacyPoPayload(updated)).eq('id', id).select(),
+      )
     }
     purchaseOrders.value = purchaseOrders.value.map((p) => (p.id === id ? updated : p))
     return updated
@@ -203,7 +263,10 @@ export function usePurchaseOrders() {
       updated_at: new Date().toISOString(),
     }
     if (!isMemoryId(poId)) {
-      await callSupabase(() => supabase.from('purchase_orders').update(updated).eq('id', poId).select())
+      await callSupabase(
+        () => supabase.from('purchase_orders').update(updated).eq('id', poId).select(),
+        () => supabase.from('purchase_orders').update(toLegacyPoPayload(updated)).eq('id', poId).select(),
+      )
     }
     purchaseOrders.value = purchaseOrders.value.map((p) => (p.id === poId ? updated : p))
   }
@@ -279,6 +342,8 @@ export function usePurchaseOrders() {
         po_no: String(r.po_no).trim(),
         supplier: String(r.supplier || 'N/A').trim(),
         item_code: String(r.item_code || 'N/A').trim(),
+        description: cleanOpt(r.description),
+        note: cleanOpt(r.note),
         target_qty: Number(r.target_qty),
         created_date: r.created_date || todayIsoDate(),
         status: 'open',
@@ -294,21 +359,24 @@ export function usePurchaseOrders() {
         const exists = purchaseOrders.value.find((p) => normalizePoNo(p.po_no) === normalizePoNo(po.po_no))
         try {
           if (exists && !isMemoryId(exists.id)) {
-            await callSupabase(() =>
-              supabase
-                .from('purchase_orders')
-                .update({
-                  supplier: po.supplier,
-                  item_code: po.item_code,
-                  target_qty: po.target_qty,
-                  created_date: po.created_date,
-                  updated_at: now,
-                })
-                .eq('id', exists.id)
-                .select(),
+            const poUpdate = {
+              supplier: po.supplier,
+              item_code: po.item_code,
+              description: po.description,
+              note: po.note,
+              target_qty: po.target_qty,
+              created_date: po.created_date,
+              updated_at: now,
+            }
+            await callSupabase(
+              () => supabase.from('purchase_orders').update(poUpdate).eq('id', exists.id).select(),
+              () => supabase.from('purchase_orders').update(toLegacyPoPayload(poUpdate)).eq('id', exists.id).select(),
             )
           } else if (!exists) {
-            await callSupabase(() => supabase.from('purchase_orders').insert(po).select())
+            await callSupabase(
+      () => supabase.from('purchase_orders').insert(po).select(),
+      () => supabase.from('purchase_orders').insert(toLegacyPoPayload(po)).select(),
+    )
           }
         } catch (e) {
           throw e
@@ -415,6 +483,7 @@ export function usePurchaseOrders() {
     lastSync,
     backendAvailable,
     needsMigration,
+    needsColumnMigration,
     ordersWithProgress,
     sortedOrders,
     filteredOrders,
@@ -426,7 +495,6 @@ export function usePurchaseOrders() {
     deletePurchaseOrder,
     addReceipt,
     deleteReceipt,
-    markPoCompleted,
     importPurchaseOrders,
     clearAllPurchaseOrders,
     seedDemoData,

@@ -31,7 +31,7 @@
             <FileSpreadsheet class="w-5 h-5 text-[#14CA74]" />
             <div>
               <p class="text-xs font-bold text-white">Chưa có file mẫu chuẩn?</p>
-              <p class="text-[10px] text-[#AEB9E1]">Tải file mẫu: Số PO, Nhà cung cấp, Mã hàng, Target, Ngày tạo</p>
+              <p class="text-[10px] text-[#AEB9E1]">Tải file mẫu: Số PO, Nhà cung cấp, Mã hàng, Mô tả, Ghi chú, Mục tiêu, Ngày tạo</p>
             </div>
           </div>
           <button
@@ -97,7 +97,8 @@
                   <th class="py-2 px-3">SỐ PO</th>
                   <th class="py-2 px-3">NHÀ CUNG CẤP</th>
                   <th class="py-2 px-3">MÃ HÀNG</th>
-                  <th class="py-2 px-3 text-right">TARGET</th>
+                  <th class="py-2 px-3">MÔ TẢ</th>
+                  <th class="py-2 px-3 text-right">MỤC TIÊU</th>
                   <th class="py-2 px-3">NGÀY TẠO</th>
                 </tr>
               </thead>
@@ -106,6 +107,7 @@
                   <td class="py-2 px-3 font-mono font-bold text-[#CB3CFF]">{{ r.po_no }}</td>
                   <td class="py-2 px-3 text-white/85">{{ r.supplier }}</td>
                   <td class="py-2 px-3 font-mono text-[#00C2FF]">{{ r.item_code }}</td>
+                  <td class="py-2 px-3 text-white/80">{{ r.description || '—' }}</td>
                   <td class="py-2 px-3 text-right font-mono font-bold text-[#14CA74]">{{ r.target_qty.toLocaleString() }}</td>
                   <td class="py-2 px-3 font-mono text-[#AEB9E1]">{{ r.created_date }}</td>
                 </tr>
@@ -160,7 +162,9 @@ const mappingFields: { key: keyof PoColumnMapping; label: string }[] = [
   { key: 'po_no', label: 'Số PO *' },
   { key: 'supplier', label: 'Nhà cung cấp' },
   { key: 'item_code', label: 'Mã hàng' },
-  { key: 'target_qty', label: 'Target *' },
+  { key: 'description', label: 'Mô tả sản phẩm' },
+  { key: 'note', label: 'Ghi chú' },
+  { key: 'target_qty', label: 'Mục tiêu *' },
   { key: 'created_date', label: 'Ngày tạo' },
 ]
 
@@ -176,6 +180,8 @@ const customMapping = reactive<PoColumnMapping>({
   po_no: '',
   supplier: '',
   item_code: '',
+  description: '',
+  note: '',
   target_qty: '',
   created_date: '',
 })

@@ -5,6 +5,8 @@ export interface PoColumnMapping {
   po_no: string
   supplier: string
   item_code: string
+  description: string
+  note: string
   target_qty: string
   created_date: string
 }
@@ -13,6 +15,8 @@ export interface PoExcelRow {
   po_no: string
   supplier: string
   item_code: string
+  description: string
+  note: string
   target_qty: number
   created_date: string
 }
@@ -58,7 +62,9 @@ export function detectPoColumnMapping(headers: string[]): PoColumnMapping {
     po_no: findHeader(normHeaders, ['sopo', 'mapo', 'ponumber', 'purchaseorder', 'po'], true),
     supplier: findHeader(normHeaders, ['nhacungcap', 'ncc', 'supplier', 'vendor', 'nhasanxuat']),
     item_code: findHeader(normHeaders, ['mahang', 'masanpham', 'itemcode', 'stockcode', 'code', 'item']),
-    target_qty: findHeader(normHeaders, ['target', 'soluongtarget', 'soluongdat', 'soluong', 'qty', 'quantity']),
+    description: findHeader(normHeaders, ['motasanpham', 'mota', 'description', 'tensanpham', 'product']),
+    note: findHeader(normHeaders, ['ghichu', 'note', 'remark', 'diengiai']),
+    target_qty: findHeader(normHeaders, ['muctieu', 'target', 'soluongtarget', 'soluongdat', 'soluong', 'qty', 'quantity']),
     created_date: findHeader(normHeaders, ['ngaytao', 'createddate', 'ngaydat', 'ngay', 'date']),
   }
 }
@@ -103,6 +109,8 @@ export function mapRowsToPurchaseOrders(
       po_no,
       supplier: String(mapping.supplier ? (r[mapping.supplier] ?? '') : '').trim(),
       item_code: String(mapping.item_code ? (r[mapping.item_code] ?? '') : '').trim(),
+      description: String(mapping.description ? (r[mapping.description] ?? '') : '').trim(),
+      note: String(mapping.note ? (r[mapping.note] ?? '') : '').trim(),
       target_qty,
       created_date: normalizePoDateCell(mapping.created_date ? r[mapping.created_date] : undefined),
     })
@@ -156,19 +164,23 @@ export function downloadPoSampleTemplate(): void {
       'Số PO': 'PO-2026-0001',
       'Nhà cung cấp': 'CÔNG TY TNHH ABC',
       'Mã hàng': '8101010104',
-      Target: 10000,
+      'Mô tả sản phẩm': 'Ghế gaming chân xoay',
+      'Ghi chú': 'Giao 2 đợt',
+      'Mục tiêu': 10000,
       'Ngày tạo': '15/09/2026',
     },
     {
       'Số PO': 'PO-2026-0002',
       'Nhà cung cấp': 'CÔNG TY TNHH XYZ',
       'Mã hàng': '8515210204',
-      Target: 5000,
+      'Mô tả sản phẩm': 'Tay vịn điều chỉnh',
+      'Ghi chú': '',
+      'Mục tiêu': 5000,
       'Ngày tạo': '15/09/2026',
     },
   ]
   const ws = XLSX.utils.json_to_sheet(sample)
-  ws['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 16 }, { wch: 12 }, { wch: 14 }]
+  ws['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 16 }, { wch: 26 }, { wch: 20 }, { wch: 12 }, { wch: 14 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'PO_Template')
   XLSX.writeFile(wb, 'PO_Template_Mau.xlsx')

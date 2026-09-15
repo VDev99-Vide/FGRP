@@ -1,13 +1,13 @@
 <template>
   <div class="flex flex-col flex-1 space-y-6">
-    <!-- Banner hướng dẫn migration khi Supabase chưa có bảng PO -->
+    <!-- Banner hướng dẫn migration khi Supabase chưa đủ schema PO -->
     <div
       v-if="needsMigration"
       class="glass-card-dark p-4 rounded-2xl border border-[#FDB52A]/40 flex items-start gap-3"
     >
       <AlertTriangle class="w-5 h-5 text-[#FDB52A] shrink-0 mt-0.5" />
       <div class="text-xs leading-relaxed">
-        <p class="font-bold text-[#FDB52A]">Supabase chưa có bảng đơn đặt hàng — đang chạy tạm bằng bộ nhớ máy.</p>
+        <p class="font-bold text-[#FDB52A]">Supabase chưa đủ bảng/cột đơn đặt hàng — đang chạy tạm bằng bộ nhớ máy.</p>
         <p class="text-[#AEB9E1] mt-0.5">
           Để đồng bộ đa thiết bị, anh mở <b class="text-white">Supabase Dashboard → SQL Editor</b> rồi chạy toàn bộ file
           <span class="font-mono text-[#00C2FF]">database/purchase_orders.sql</span>, sau đó bấm đồng bộ lại.
@@ -16,7 +16,7 @@
     </div>
 
     <!-- 1. Thẻ KPI -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
       <div class="glass-card-dark p-4 rounded-2xl border border-white/10 flex items-center gap-3.5">
         <div class="w-11 h-11 rounded-xl bg-[#FDB52A]/15 border border-[#FDB52A]/30 flex items-center justify-center text-[#FDB52A] shrink-0">
           <Clock class="w-5 h-5" />
@@ -27,7 +27,6 @@
             <span class="text-2xl font-bold text-[#FDB52A] font-mono">{{ stats.openCount }}</span>
             <span class="text-[10px] text-[#AEB9E1]">/ {{ stats.totalOrders }} PO</span>
           </div>
-          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Đang nhập hàng cộng dồn</p>
         </div>
       </div>
 
@@ -41,21 +40,6 @@
             <span class="text-2xl font-bold text-[#14CA74] font-mono">{{ stats.completedCount }}</span>
             <span class="text-[10px] text-[#AEB9E1]">PO đóng</span>
           </div>
-          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Đạt 100% target tự đóng</p>
-        </div>
-      </div>
-
-      <div class="glass-card-dark p-4 rounded-2xl border border-white/10 flex items-center gap-3.5">
-        <div class="w-11 h-11 rounded-xl bg-[#00C2FF]/15 border border-[#00C2FF]/30 flex items-center justify-center text-[#00C2FF] shrink-0">
-          <Box class="w-5 h-5" />
-        </div>
-        <div>
-          <p class="text-[11px] font-semibold text-[#AEB9E1]">Đã Nhập / Tổng Target</p>
-          <div class="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
-            <span class="text-xl font-bold text-[#00C2FF] font-mono">{{ stats.totalReceived.toLocaleString() }}</span>
-            <span class="text-[10px] text-[#AEB9E1]">/ {{ stats.totalTarget.toLocaleString() }} PCS</span>
-          </div>
-          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Cộng dồn mọi PO</p>
         </div>
       </div>
 
@@ -68,101 +52,15 @@
           <div class="flex items-baseline gap-2 mt-0.5">
             <span class="text-2xl font-bold text-[#CB3CFF] font-mono">{{ stats.overallPercent }}%</span>
           </div>
-          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Đã nhập / tổng target</p>
         </div>
       </div>
     </div>
 
-    <!-- 2. Chart ống dòng chảy tiến độ PO (trái -> phải, đổi màu theo ngưỡng) -->
-    <div class="glass-card-dark p-5 sm:p-6 flex flex-col gap-4">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
-        <div>
-          <p class="text-[10px] font-bold text-[#CB3CFF] uppercase tracking-widest mb-1">Streaming · Trái → Phải</p>
-          <h2 class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-            <span>Ống Dòng Chảy Tiến Độ PO</span>
-            <span class="text-xs px-2.5 py-0.5 rounded-full bg-[#00C2FF]/15 border border-[#00C2FF]/30 text-[#00C2FF] font-mono font-semibold">
-              {{ filteredOrders.length }} PO
-            </span>
-          </h2>
-        </div>
-        <div class="flex items-center gap-4 text-[11px] font-semibold">
-          <span class="flex items-center gap-1.5 text-[#AEB9E1]">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#FF5A65] shadow-[0_0_8px_#FF5A65]"></span> &lt; 50%
-          </span>
-          <span class="flex items-center gap-1.5 text-[#AEB9E1]">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#FDB52A] shadow-[0_0_8px_#FDB52A]"></span> 50 – 99%
-          </span>
-          <span class="flex items-center gap-1.5 text-[#AEB9E1]">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#14CA74] shadow-[0_0_8px_#14CA74]"></span> 100% đóng PO
-          </span>
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-4 max-h-[460px] overflow-y-auto custom-scroll pr-1">
-        <div v-for="order in filteredOrders" :key="order.id" data-testid="po-pipe" class="glass-panel-subtle p-3.5 sm:p-4">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="font-mono font-black text-white text-sm truncate">{{ order.po_no }}</span>
-              <span
-                :class="[
-                  'text-[10px] font-bold px-2 py-0.5 rounded-[5px] border shrink-0',
-                  order.status === 'completed'
-                    ? 'bg-[#14CA74]/15 text-[#14CA74] border-[#14CA74]/30'
-                    : 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30',
-                ]"
-              >
-                {{ order.status === 'completed' ? 'Đã đóng' : 'Đang nhập' }}
-              </span>
-            </div>
-            <div class="text-[11px] text-[#AEB9E1] truncate">
-              {{ order.supplier }} · <span class="font-mono text-[#00C2FF]">{{ order.item_code }}</span>
-            </div>
-          </div>
-
-          <!-- Ống chảy -->
-          <div
-            class="po-pipe-track"
-            role="img"
-            :aria-label="`PO ${order.po_no} đạt ${order.progress}%`"
-            :title="`${order.po_no}: ${order.received_qty.toLocaleString()} / ${order.target_qty.toLocaleString()} PCS (${order.progress}%)`"
-          >
-            <div
-              class="po-pipe-fill"
-              :style="{ width: `${order.progressCapped}%`, background: PO_FLOW_COLORS[order.level].gradient, boxShadow: `0 0 14px ${PO_FLOW_COLORS[order.level].glow}` }"
-            >
-              <span class="po-pipe-stripes"></span>
-            </div>
-            <span class="po-pipe-target-flag" title="Vạch target 100%"></span>
-          </div>
-
-          <div class="flex items-center justify-between mt-1.5 text-[11px]">
-            <span class="font-mono text-[#AEB9E1]">
-              <b class="text-white">{{ order.received_qty.toLocaleString() }}</b> / {{ order.target_qty.toLocaleString() }} PCS
-              <span class="text-white/30">· còn {{ order.remaining_qty.toLocaleString() }}</span>
-            </span>
-            <span class="font-mono font-black text-sm" :style="{ color: PO_FLOW_COLORS[order.level].solid }">
-              {{ order.progress }}%
-            </span>
-          </div>
-        </div>
-
-        <div v-if="filteredOrders.length === 0" class="flex flex-col items-center justify-center gap-2.5 py-12 text-center">
-          <div class="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-1">
-            <PackageOpen class="w-6 h-6 text-[#AEB9E1]/70" />
-          </div>
-          <span class="text-sm font-semibold text-white/90">Chưa có đơn đặt hàng nào</span>
-          <p class="text-[11px] text-[#AEB9E1]/70 max-w-md leading-relaxed">
-            Bấm <b>"Tạo PO"</b> để nhập Số PO + Target, hoặc <b>"Import Excel"</b> để nạp hàng loạt từ file mẫu.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. Bảng chi tiết PO -->
+    <!-- 2. Bảng chi tiết PO -->
     <div class="glass-card-dark p-5 sm:p-6 flex flex-col gap-4">
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <p class="text-[10px] font-bold text-[#CB3CFF] uppercase tracking-widest mb-1">Purchasing · Theo dõi cộng dồn</p>
+          <p class="text-[10px] font-bold text-[#CB3CFF] uppercase tracking-widest mb-1">Purchasing · theo dõi đơn hàng</p>
           <h2 class="text-xl font-bold text-white tracking-tight">Danh Sách Đơn Đặt Hàng</h2>
         </div>
         <div class="flex flex-wrap gap-2.5 w-full lg:w-auto items-center">
@@ -232,16 +130,18 @@
         </button>
       </div>
 
-      <div class="w-full max-h-[440px] rounded-[14px] border border-white/15 bg-white/[0.02] relative custom-scroll" style="overflow-y: auto; overflow-x: auto">
+      <div class="w-full max-h-[640px] rounded-[14px] border border-white/15 bg-white/[0.02] relative custom-scroll" style="overflow-y: auto; overflow-x: auto">
         <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
           <thead class="glass-table-sticky-head">
             <tr>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Số PO / NCC</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Mã hàng</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Target</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Mô tả sản phẩm</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Mục tiêu</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Đã nhập</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Tiến độ</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">Trạng thái</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Ghi chú</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">Ngày tạo</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">Thao tác</th>
             </tr>
@@ -253,17 +153,18 @@
                 <p class="text-[10px] text-[#AEB9E1] mt-0.5">{{ order.supplier }}</p>
               </td>
               <td class="py-3 px-4 font-mono font-bold text-[#00C2FF] text-xs">{{ order.item_code }}</td>
+              <td class="py-3 px-4 text-white/80 text-xs max-w-[200px] truncate" :title="order.description || ''">{{ order.description || '—' }}</td>
               <td class="py-3 px-4 text-right font-mono text-white/90">{{ order.target_qty.toLocaleString() }}</td>
               <td class="py-3 px-4 text-right font-mono font-bold text-[#14CA74]">{{ order.received_qty.toLocaleString() }}</td>
               <td class="py-3 px-4 min-w-[160px]">
                 <div class="flex items-center gap-2">
-                  <div class="flex-1 h-[8px] rounded-full bg-white/10 overflow-hidden">
+                  <div class="flex-1 h-[10px] rounded-full bg-white/10 overflow-hidden border border-white/10">
                     <div
                       class="h-full rounded-full transition-all duration-500"
-                      :style="{ width: `${order.progressCapped}%`, background: PO_FLOW_COLORS[order.level].gradient }"
+                      :style="{ width: `${order.progressCapped}%`, background: interpolatePoColor(order.progressCapped) }"
                     ></div>
                   </div>
-                  <span class="font-mono font-bold text-[11px] w-[52px] text-right" :style="{ color: PO_FLOW_COLORS[order.level].solid }">
+                  <span class="font-mono font-bold text-[11px] w-[52px] text-right" :style="{ color: interpolatePoColor(order.progressCapped) }">
                     {{ order.progress }}%
                   </span>
                 </div>
@@ -280,6 +181,7 @@
                   {{ order.status === 'completed' ? 'Đã giao đủ' : 'Chưa xong' }}
                 </span>
               </td>
+              <td class="py-3 px-4 text-white/70 text-xs max-w-[180px] truncate" :title="order.note || ''">{{ order.note || '—' }}</td>
               <td class="py-3 px-4 text-center font-mono text-[#AEB9E1] text-[11px]">{{ formatIsoDate(order.created_date) }}</td>
               <td class="py-3 px-4">
                 <div class="flex items-center justify-center gap-1.5">
@@ -306,22 +208,6 @@
                     <Pencil class="w-3.5 h-3.5" />
                   </button>
                   <button
-                    v-if="order.status === 'open'"
-                    @click="handleManualClose(order)"
-                    title="Đóng PO thủ công"
-                    class="p-1.5 bg-white/5 hover:bg-white/10 text-[#AEB9E1] hover:text-white rounded-[6px] border border-white/15 cursor-pointer transition active:scale-90"
-                  >
-                    <Archive class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    v-else
-                    @click="handleReopen(order)"
-                    title="Mở lại PO"
-                    class="p-1.5 bg-white/5 hover:bg-white/10 text-[#AEB9E1] hover:text-white rounded-[6px] border border-white/15 cursor-pointer transition active:scale-90"
-                  >
-                    <RotateCcw class="w-3.5 h-3.5" />
-                  </button>
-                  <button
                     @click="askDeletePo(order)"
                     title="Xóa PO và toàn bộ log"
                     class="p-1.5 bg-[#FF5A65]/15 hover:bg-[#FF5A65]/25 text-[#FF5A65] rounded-[6px] border border-[#FF5A65]/30 cursor-pointer transition active:scale-90"
@@ -332,7 +218,7 @@
               </td>
             </tr>
             <tr v-if="filteredOrders.length === 0">
-              <td colspan="8" class="text-center py-12 text-[#AEB9E1] italic text-xs">Không tìm thấy đơn đặt hàng phù hợp!</td>
+              <td colspan="10" class="text-center py-12 text-[#AEB9E1] italic text-xs">Không tìm thấy đơn đặt hàng phù hợp!</td>
             </tr>
           </tbody>
         </table>
@@ -388,16 +274,12 @@
 import { ref, computed, onMounted } from 'vue'
 import {
   AlertTriangle,
-  Archive,
-  Box,
   CheckCircle2,
   Clock,
   History,
-  PackageOpen,
   Pencil,
   PlusCircle,
   RefreshCw,
-  RotateCcw,
   Search,
   Trash2,
   TrendingUp,
@@ -406,7 +288,7 @@ import {
 import { useToast } from 'primevue/usetoast'
 import { usePurchaseOrders, type PoInput, type ReceiptInput } from '@/composables/usePurchaseOrders'
 import type { PurchaseOrderWithProgress } from '@/types'
-import { PO_FLOW_COLORS, formatIsoDate } from '@/utils/po'
+import { interpolatePoColor, formatIsoDate } from '@/utils/po'
 import type { PoExcelRow } from '@/services/poExcel'
 import PurchaseOrderModal from './PurchaseOrderModal.vue'
 import PoReceiptModal from './PoReceiptModal.vue'
@@ -430,7 +312,6 @@ const {
   deletePurchaseOrder,
   addReceipt,
   deleteReceipt,
-  markPoCompleted,
   importPurchaseOrders,
   clearAllPurchaseOrders,
 } = usePurchaseOrders()
@@ -475,7 +356,7 @@ const handleSavePo = async (payload: PoInput, id: string | null) => {
       toast.add({ severity: 'success', summary: 'Cập nhật thành công', detail: `Đã lưu thay đổi PO [${payload.po_no}]`, life: 3000 })
     } else {
       await createPurchaseOrder(payload)
-      toast.add({ severity: 'success', summary: 'Tạo PO thành công', detail: `PO [${payload.po_no}] target ${Number(payload.target_qty).toLocaleString()} PCS`, life: 3000 })
+      toast.add({ severity: 'success', summary: 'Tạo PO thành công', detail: `PO [${payload.po_no}] mục tiêu ${Number(payload.target_qty).toLocaleString()} PCS`, life: 3000 })
     }
     showPoModal.value = false
   } catch (err: unknown) {
@@ -495,7 +376,7 @@ const handleSaveReceipt = async (poId: string, payload: ReceiptInput) => {
     const updated = filteredOrders.value.find((o) => o.id === poId)
     toast.add({
       severity: 'success',
-      summary: updated?.status === 'completed' ? 'Đạt target — PO tự đóng!' : 'Nhập hàng thành công',
+      summary: updated?.status === 'completed' ? 'Đạt mục tiêu — PO tự đóng!' : 'Nhập hàng thành công',
       detail: `Đã nhập ${Number(payload.qty).toLocaleString()} PCS vào PO [${receiptPo.value?.po_no}]`,
       life: 3500,
     })
@@ -536,24 +417,6 @@ const handleImport = async (rows: PoExcelRow[]) => {
   }
 }
 
-const handleManualClose = async (order: PurchaseOrderWithProgress) => {
-  try {
-    await markPoCompleted(order.id, true)
-    toast.add({ severity: 'success', summary: 'Đã đóng PO', detail: `PO [${order.po_no}] đã được đóng thủ công.`, life: 3000 })
-  } catch (err: unknown) {
-    toast.add({ severity: 'error', summary: 'Lỗi đóng PO', detail: err instanceof Error ? err.message : 'Không đóng được PO!', life: 4000 })
-  }
-}
-
-const handleReopen = async (order: PurchaseOrderWithProgress) => {
-  try {
-    await markPoCompleted(order.id, false)
-    toast.add({ severity: 'info', summary: 'Đã mở lại PO', detail: `PO [${order.po_no}] chuyển về Chưa hoàn thành.`, life: 3000 })
-  } catch (err: unknown) {
-    toast.add({ severity: 'error', summary: 'Lỗi mở lại PO', detail: err instanceof Error ? err.message : 'Không mở lại được PO!', life: 4000 })
-  }
-}
-
 const askDeletePo = (order: PurchaseOrderWithProgress) => {
   deletingPo.value = order
   showDeleteModal.value = true
@@ -563,7 +426,7 @@ const executeDeletePo = async () => {
   if (!deletingPo.value) return
   try {
     await deletePurchaseOrder(deletingPo.value.id)
-    toast.add({ severity: 'success', summary: 'Đã xóa PO', detail: `PO [${deletingPo.value.po_no}] và log đi kèm đã bị xóa.`, life: 3000 })
+    toast.add({ severity: 'success', summary: 'Đã xóa PO', detail: `PO [${deletingPo.value.po_no}] và log đi kèm đã bị xóa. KPI tự cập nhật.`, life: 3000 })
   } catch (err: unknown) {
     toast.add({ severity: 'error', summary: 'Lỗi xóa PO', detail: err instanceof Error ? err.message : 'Không xóa được PO!', life: 4000 })
   }
@@ -578,62 +441,3 @@ const executeClearAll = async () => {
   }
 }
 </script>
-
-<style scoped>
-/* Ống dòng chảy tiến độ PO: track kính mờ + fill gradient chảy trái -> phải */
-.po-pipe-track {
-  position: relative;
-  height: 26px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.po-pipe-fill {
-  position: relative;
-  height: 100%;
-  border-radius: 9999px;
-  min-width: 26px;
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-}
-
-/* Vệt sọc sáng trôi liên tục tạo hiệu ứng streaming */
-.po-pipe-stripes {
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    -55deg,
-    rgba(255, 255, 255, 0.28) 0 10px,
-    rgba(255, 255, 255, 0) 10px 22px
-  );
-  background-size: 200% 100%;
-  animation: po-flow 1.6s linear infinite;
-}
-
-@keyframes po-flow {
-  from { background-position: 0 0; }
-  to { background-position: 44px 0; }
-}
-
-/* Vạch target 100% ở cuối ống */
-.po-pipe-target-flag {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  right: 3px;
-  width: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.75);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .po-pipe-stripes { animation: none; }
-  .po-pipe-fill { transition: none; }
-}
-</style>

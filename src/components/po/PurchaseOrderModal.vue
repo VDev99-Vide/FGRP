@@ -15,7 +15,7 @@
             <h3 class="text-base font-bold text-white tracking-wide">
               {{ editing ? 'Chỉnh Sửa Đơn Đặt Hàng' : 'Tạo Đơn Đặt Hàng Mới' }}
             </h3>
-            <p class="text-[11px] text-[#AEB9E1]">Số PO + Nhà cung cấp + Mã hàng + Target + Ngày tạo</p>
+            
           </div>
         </div>
         <button
@@ -33,7 +33,7 @@
           <input
             v-model="form.po_no"
             type="text"
-            placeholder="VD: PO-2026-0001"
+            placeholder=""
             class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white font-mono font-bold placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
           />
         </div>
@@ -44,7 +44,7 @@
             <input
               v-model="form.supplier"
               type="text"
-              placeholder="VD: CÔNG TY TNHH ABC"
+              placeholder=""
               class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             />
           </div>
@@ -53,21 +53,41 @@
             <input
               v-model="form.item_code"
               type="text"
-              placeholder="VD: 8101010104"
+              placeholder=""
               class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-[#00C2FF] font-mono font-bold placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             />
           </div>
         </div>
 
+        <div>
+          <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Mô tả sản phẩm</label>
+          <input
+            v-model="form.description"
+            type="text"
+            placeholder=""
+            class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Ghi chú</label>
+          <input
+            v-model="form.note"
+            type="text"
+            placeholder=""
+            class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
+          />
+        </div>
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Số lượng Target (PCS) <span class="text-[#FF5A65]">*</span></label>
+            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Mục tiêu (PCS) <span class="text-[#FF5A65]">*</span></label>
             <input
               v-model.number="form.target_qty"
               type="number"
               min="1"
               step="1"
-              placeholder="VD: 10000"
+              placeholder=""
               class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-[#14CA74] font-mono font-bold placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             />
           </div>
@@ -131,6 +151,8 @@ const form = reactive<PoInput>({
   po_no: '',
   supplier: '',
   item_code: '',
+  description: '',
+  note: '',
   target_qty: 10000,
   created_date: todayIsoDate(),
 })
@@ -145,12 +167,16 @@ watch(
       form.po_no = editing.po_no
       form.supplier = editing.supplier
       form.item_code = editing.item_code
+      form.description = editing.description ?? ''
+      form.note = editing.note ?? ''
       form.target_qty = editing.target_qty
       form.created_date = editing.created_date
     } else {
       form.po_no = ''
       form.supplier = ''
       form.item_code = ''
+      form.description = ''
+      form.note = ''
       form.target_qty = 10000
       form.created_date = todayIsoDate()
     }

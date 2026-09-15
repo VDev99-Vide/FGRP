@@ -29,7 +29,7 @@
       <!-- Summary -->
       <div class="grid grid-cols-3 gap-2.5 shrink-0">
         <div class="glass-panel-subtle p-3 text-center">
-          <p class="text-[10px] text-[#AEB9E1] uppercase tracking-wider font-bold">Target</p>
+          <p class="text-[10px] text-[#AEB9E1] uppercase tracking-wider font-bold">Mục tiêu</p>
           <p class="font-mono font-bold text-white text-sm mt-0.5">{{ po.target_qty.toLocaleString() }}</p>
         </div>
         <div class="glass-panel-subtle p-3 text-center">
@@ -91,7 +91,7 @@
 import { computed } from 'vue'
 import { History, X, Trash2 } from 'lucide-vue-next'
 import type { PoReceiptLog, PurchaseOrderWithProgress } from '@/types'
-import { PO_FLOW_COLORS, formatIsoDate } from '@/utils/po'
+import { interpolatePoColor, formatIsoDate } from '@/utils/po'
 
 const props = defineProps<{
   visible: boolean
@@ -104,5 +104,5 @@ defineEmits<{
   (e: 'delete-log', logId: string): void
 }>()
 
-const levelColor = computed(() => PO_FLOW_COLORS[props.po?.level ?? 'danger'].solid)
+const levelColor = computed(() => interpolatePoColor(props.po?.progressCapped ?? 0))
 </script>

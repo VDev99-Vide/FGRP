@@ -11,6 +11,8 @@ create table if not exists purchase_orders (
   po_no text not null,
   supplier text not null default '',
   item_code text not null default '',
+  description text not null default '',
+  note text not null default '',
   target_qty numeric not null default 0,
   created_date date not null default current_date,
   status text not null default 'open', -- 'open' (chưa hoàn thành) | 'completed' (đã giao đủ)
@@ -39,6 +41,11 @@ create table if not exists po_receipt_logs (
 
 create index if not exists idx_po_receipt_logs_po_id on po_receipt_logs (po_id);
 create index if not exists idx_po_receipt_logs_receipt_date on po_receipt_logs (receipt_date);
+
+-- Bổ sung cột mới nếu bảng đã tồn tại từ trước (mô tả sản phẩm + ghi chú)
+alter table purchase_orders
+  add column if not exists description text not null default '',
+  add column if not exists note text not null default '';
 
 -- ==========================================
 -- PHÂN QUYỀN (đồng bộ với shipping_forecast: tắt RLS cho hệ thống nội bộ)

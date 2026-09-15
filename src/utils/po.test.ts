@@ -7,6 +7,7 @@ import {
   filterPurchaseOrders,
   formatIsoDate,
   getPoProgressLevel,
+  interpolatePoColor,
   isValidIsoDate,
   normalizePoNo,
   sortPoForDisplay,
@@ -59,6 +60,30 @@ describe('getPoProgressLevel (3 ngưỡng màu tự động)', () => {
   })
 })
 
+describe('interpolatePoColor (xanh biển nhạt -> xanh lá theo %)', () => {
+  it('0% là xanh nước biển nhạt', () => {
+    expect(interpolatePoColor(0)).toBe('#7DD3FC')
+  })
+
+  it('100% là xanh lá', () => {
+    expect(interpolatePoColor(100)).toBe('#14CA74')
+  })
+
+  it('50% là điểm giữa 2 màu', () => {
+    expect(interpolatePoColor(50)).toBe('#49CFB8')
+  })
+
+  it('màu chuyển dần đều: % càng cao kênh đỏ càng giảm', () => {
+    const c25 = interpolatePoColor(25)
+    const c75 = interpolatePoColor(75)
+    expect(parseInt(c25.slice(1, 3), 16)).toBeGreaterThan(parseInt(c75.slice(1, 3), 16))
+  })
+
+  it('kẹp ngoài khoảng 0-100', () => {
+    expect(interpolatePoColor(-10)).toBe('#7DD3FC')
+    expect(interpolatePoColor(150)).toBe('#14CA74')
+  })
+})
 describe('calcPoProgress', () => {
   it('ví dụ nghiệp vụ: target 10000, đã nhập 2500 -> 25%', () => {
     expect(calcPoProgress(10000, 2500)).toBe(25)
