@@ -224,26 +224,32 @@ onBeforeUnmount(() => {
   position: relative;
   flex: 1;
   min-width: 0;
-  height: 30px;
-  background: rgba(10, 15, 26, 0.85);
-  border-radius: 20px;
-  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  height: 27px;
+  /* Kính mờ: chỉ thấy hiệu ứng nước chảy bên trong */
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 3px 6px rgba(0, 0, 0, 0.9),
-    inset 0 -1px 3px rgba(255, 255, 255, 0.1),
-    0 4px 12px rgba(0, 0, 0, 0.5);
+    inset 0 2px 8px rgba(0, 0, 0, 0.35),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+  /* Mờ dần ở 2 điểm cuối tạo độ tinh tế */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
 }
 
 .po-wave-track::after {
   content: "";
   position: absolute;
   top: 1.5px;
-  left: 10px;
-  right: 10px;
-  height: 4px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
-  border-radius: 10px;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
+  border-radius: 999px;
   z-index: 10;
   pointer-events: none;
 }
@@ -256,8 +262,8 @@ onBeforeUnmount(() => {
 
 .po-wave-label {
   font-weight: 800;
-  font-size: 14px;
-  min-width: 56px;
+  font-size: 13px;
+  min-width: 52px;
   text-align: right;
   font-family: ui-monospace, monospace;
 }
