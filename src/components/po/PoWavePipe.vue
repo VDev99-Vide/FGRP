@@ -46,33 +46,17 @@ const streamStyle = computed(() => {
   flex: 1;
   min-width: 0;
   height: 24px;
-  /* Kính mờ: chỉ thấy hiệu ứng nước chảy bên trong */
-  background: rgba(255, 255, 255, 0.06);
+  /* Kính mờ xuyên thấu: không viền, không bóng khung — chỉ thấy animation nước chảy */
+  background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(14px) saturate(160%);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: none;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow:
-    inset 0 2px 8px rgba(0, 0, 0, 0.35),
-    inset 0 -1px 2px rgba(255, 255, 255, 0.08),
-    0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: none;
   overflow: hidden;
   /* Mờ dần ở 2 điểm cuối tạo độ tinh tế */
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-}
-
-.po-wave-track::after {
-  content: "";
-  position: absolute;
-  top: 1.5px;
-  left: 12px;
-  right: 12px;
-  height: 3px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
-  border-radius: 999px;
-  z-index: 10;
-  pointer-events: none;
 }
 
 /* Khối dòng chất lỏng */
