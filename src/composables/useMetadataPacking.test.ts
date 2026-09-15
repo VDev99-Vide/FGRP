@@ -83,6 +83,29 @@ describe('useMetadataPacking composable', () => {
     expect(second.imported).toBe(0)
   })
 
+  it('import Excel: dòng mới thì thêm, trùng khóa và sai thì bỏ qua', async () => {
+    const first = await meta.createPackingSpec({
+      customer: 'KH IMP',
+      item_code: itemCode('IM1'),
+      pack_qty: 50,
+      weight_per_unit: 1,
+      carton_spec: 'S1',
+      carton_type: 'T1',
+    })
+    createdIds.push(first.id)
+
+    const res = await meta.importPackingSpecs([
+      { customer: 'KH IMP', item_code: itemCode('IM1'), pack_qty: 50, weight_per_unit: 1, carton_spec: 'S1', carton_type: 'T1' },
+      { customer: 'KH IMP', item_code: itemCode('IM2'), pack_qty: 70, weight_per_unit: 2, carton_spec: 'S2', carton_type: 'T2' },
+      { customer: '', item_code: itemCode('IM3'), pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' },
+    ])
+    const imp2 = meta.rows.value.find((r) => r.item_code === itemCode('IM2'))
+    if (imp2) createdIds.push(imp2.id)
+    expect(res.imported).toBe(1)
+    expect(res.skipped).toHaveLength(2)
+    expect(imp2?.pack_qty).toBe(70)
+  })
+
   it('lọc theo từ khóa khách hàng / mã hàng', async () => {
     const a = await meta.createPackingSpec({
       customer: 'KH LOCA',

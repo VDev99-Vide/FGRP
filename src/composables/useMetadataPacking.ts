@@ -9,6 +9,7 @@ import {
   type PackingSpecInput,
 } from '@/utils/metadata'
 import { PACKING_SPEC_SEED } from '@/services/metadataSeed'
+import type { MetadataExcelRow } from '@/services/metadataExcel'
 
 const genId = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -166,6 +167,56 @@ export function useMetadataPacking() {
     return { imported: fresh.length, skipped: PACKING_SPEC_SEED.length - fresh.length }
   }
 
+  /**
+   * Import hàng loạt từ Excel: validate từng dòng, trùng khóa tự nhiên thì bỏ qua.
+   */
+  const importPackingSpecs = async (inputRows: MetadataExcelRow[]): Promise<{ imported: number; skipped: string[] }> => {
+    const now = new Date().toISOString()
+    const prepared: MetadataPacking[] = []
+    const skipped: string[] = []
+    const existingKeys = new Set(rows.value.map(packingSpecKey))
+
+    inputRows.forEach((r) => {
+      const err = validatePackingSpec(r)
+      if (err) {
+        skipped.push(`${r.customer || '?'} - ${r.item_code || '?'}: ${err}`)
+        return
+      }
+      const normalized = normalizePackingSpec(r)
+      const key = packingSpecKey(normalized)
+      if (existingKeys.has(key)) {
+        skipped.push(`${normalized.customer} - ${normalized.item_code}: trùng dòng đã có`)
+        return
+      }
+      existingKeys.add(key)
+      prepared.push({ id: genId(), ...normalized, created_at: now, updated_at: now })
+    })
+
+    if (prepared.length > 0) {
+      if (isSupabaseConfigured && backendAvailable.value) {
+        const chunkSize = 100
+        for (let i = 0; i < prepared.length; i += chunkSize) {
+          const { error } = await supabase.from('metadata_quy_cach').insert(prepared.slice(i, i + chunkSize))
+          if (error) {
+            if (isMissingTableError(error)) {
+              backendAvailable.value = false
+              break
+            }
+            if (isRlsError(error)) {
+              throw new Error('Supabase chặn quyền ghi (RLS). Hãy chạy file database/metadata.sql trong Supabase SQL Editor.')
+            }
+            throw error
+          }
+        }
+        if (backendAvailable.value) await fetchPackingSpecs()
+        else rows.value = [...rows.value, ...prepared]
+      } else {
+        rows.value = [...rows.value, ...prepared]
+      }
+    }
+    return { imported: prepared.length, skipped }
+  }
+
   const clearMemory = () => {
     rows.value = []
   }
@@ -182,6 +233,7 @@ export function useMetadataPacking() {
     createPackingSpec,
     updatePackingSpec,
     deletePackingSpec,
+    importPackingSpecs,
     seedSampleData,
     clearMemory,
   }

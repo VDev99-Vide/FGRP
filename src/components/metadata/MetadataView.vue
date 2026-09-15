@@ -54,6 +54,13 @@
           <span>NẠP DỮ LIỆU MẪU (136)</span>
         </button>
         <button
+          @click="showImportModal = true"
+          class="h-[38px] px-4 bg-[#00C2FF]/15 hover:bg-[#00C2FF]/25 border border-[#00C2FF]/40 text-[#00C2FF] hover:text-white rounded-[8px] text-xs font-bold flex items-center gap-2 transition cursor-pointer active:scale-95"
+        >
+          <UploadCloud class="w-4 h-4" />
+          <span>IMPORT EXCEL</span>
+        </button>
+        <button
           @click="handleManualSync"
           class="h-[38px] px-4 bg-white/5 hover:bg-white/10 border border-white/15 rounded-[8px] text-[#AEB9E1] hover:text-white text-xs font-bold flex items-center gap-2 transition cursor-pointer active:scale-95"
         >
@@ -118,6 +125,11 @@
       :editing="editingRow"
       @save="handleSave"
     />
+    <MetadataImportModal
+      v-model:visible="showImportModal"
+      :loading="loading"
+      @import="handleImport"
+    />
     <ConfirmModal
       v-model:visible="showDeleteModal"
       title="Xác nhận xóa dòng quy cách"
@@ -140,12 +152,15 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  UploadCloud,
 } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { useMetadataPacking } from '@/composables/useMetadataPacking'
 import type { MetadataPacking } from '@/types'
 import type { PackingSpecInput } from '@/utils/metadata'
+import type { MetadataExcelRow } from '@/services/metadataExcel'
 import PackingSpecModal from './PackingSpecModal.vue'
+import MetadataImportModal from './MetadataImportModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const toast = useToast()
@@ -159,10 +174,12 @@ const {
   createPackingSpec,
   updatePackingSpec,
   deletePackingSpec,
+  importPackingSpecs,
   seedSampleData,
 } = useMetadataPacking()
 
 const showModal = ref(false)
+const showImportModal = ref(false)
 const showDeleteModal = ref(false)
 const editingRow = ref<MetadataPacking | null>(null)
 const deletingRow = ref<MetadataPacking | null>(null)
@@ -212,6 +229,21 @@ const handleSeedSample = async () => {
     })
   } catch (err: unknown) {
     toast.add({ severity: 'error', summary: 'Lỗi nạp mẫu', detail: err instanceof Error ? err.message : 'Không nạp được!', life: 4000 })
+  }
+}
+
+const handleImport = async (rows: MetadataExcelRow[]) => {
+  try {
+    const res = await importPackingSpecs(rows)
+    showImportModal.value = false
+    toast.add({
+      severity: 'success',
+      summary: 'Import thành công',
+      detail: `Đã nạp ${res.imported} dòng${res.skipped.length ? `, bỏ qua ${res.skipped.length} dòng lỗi/trùng` : ''}!`,
+      life: 4000,
+    })
+  } catch (err: unknown) {
+    toast.add({ severity: 'error', summary: 'Lỗi import', detail: err instanceof Error ? err.message : 'Không import được file!', life: 4000 })
   }
 }
 
