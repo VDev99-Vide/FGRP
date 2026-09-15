@@ -157,7 +157,7 @@
               </td>
               <td class="py-3 px-4 text-right font-mono text-white/90">{{ order.target_qty.toLocaleString() }}</td>
               <td class="py-3 px-4 text-right font-mono font-bold text-[#14CA74]">{{ order.received_qty.toLocaleString() }}</td>
-              <td class="py-3 px-4 min-w-[234px]">
+              <td class="py-3 px-4 min-w-[210px]">
                 <PoWavePipe :fill="order.progressCapped" :label="`${order.progress}%`" />
               </td>
               <td class="py-3 px-4 text-center">
