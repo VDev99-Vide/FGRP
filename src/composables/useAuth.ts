@@ -10,11 +10,12 @@ export interface AuthUser {
   loggedInAt: string
 }
 
-// 3 tài khoản được phân quyền sử dụng hệ thống
+// 4 tài khoản được phân quyền sử dụng hệ thống
 export const ALLOWED_USERS: { email: string; name: string }[] = [
   { email: 'Vinh@gmail.com', name: 'Vinh' },
   { email: 'Hung@gmail.com', name: 'Hùng' },
-  { email: 'Luu@gmail.com', name: 'Lưu' }
+  { email: 'Luu@gmail.com', name: 'Lưu' },
+  { email: 'Tiennguyen@legget.com', name: 'Tiên Nguyễn' }
 ]
 
 const STORAGE_KEY = 'fgrp_auth_device_session'
@@ -33,7 +34,7 @@ const authError = ref<string | null>(null)
 const isAuthInitialized = ref(false)
 
 /**
- * Kiểm tra xem email có nằm trong danh sách 3 tài khoản được cấp quyền không
+ * Kiểm tra xem email có nằm trong danh sách tài khoản được cấp quyền không
  */
 export function isAllowedUser(email: string): { email: string; name: string } | undefined {
   const cleanEmail = (email || '').trim().toLowerCase()
@@ -109,7 +110,7 @@ export function useAuth() {
 
   /**
    * Đăng nhập với email và password
-   * Cho phép 3 user: Vinh@gmail.com, Hung@gmail.com, Luu@gmail.com
+   * Cho phép 4 user: Vinh@gmail.com, Hung@gmail.com, Luu@gmail.com, Tiennguyen@legget.com
    * Mật khẩu mặc định: 123 (hoặc 123123 nếu Supabase GoTrue yêu cầu >= 6 ký tự)
    */
   const login = async (emailInput: string, passwordInput: string): Promise<boolean> => {
@@ -124,10 +125,10 @@ export function useAuth() {
         throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.')
       }
 
-      // 1. Kiểm tra email có thuộc danh sách 3 tài khoản cho phép không
+      // 1. Kiểm tra email có thuộc danh sách tài khoản cho phép không
       const matchedUser = isAllowedUser(email)
       if (!matchedUser) {
-        throw new Error(`Email "${email}" không có quyền truy cập. Hệ thống chỉ cho phép: Vinh@gmail.com, Hung@gmail.com, Luu@gmail.com`)
+        throw new Error(`Email "${email}" không có quyền truy cập. Hệ thống chỉ cho phép: Vinh@gmail.com, Hung@gmail.com, Luu@gmail.com, Tiennguyen@legget.com`)
       }
 
       let loginSuccessful = false

@@ -25,31 +25,6 @@
         <h2 class="text-xl font-bold text-white tracking-tight">ĐĂNG NHẬP HỆ THỐNG</h2>
       </div>
 
-      <!-- Quick Account Selector Chips (Gợi ý user) -->
-      <div class="mb-5">
-        <p class="text-[11px] font-semibold text-[#AEB9E1] mb-2 flex items-center gap-1.5">
-          <UserCheck class="w-3.5 h-3.5 text-[#00C2FF]" />
-          <span>Gợi ý người dùng:</span>
-        </p>
-        <div class="grid grid-cols-3 gap-2">
-          <button
-            v-for="user in ALLOWED_USERS"
-            :key="user.email"
-            type="button"
-            @click="selectAccount(user.email)"
-            :class="[
-              'py-2 px-2.5 rounded-[8px] border text-xs font-semibold transition cursor-pointer flex flex-col items-center gap-0.5',
-              formEmail.toLowerCase() === user.email.toLowerCase()
-                ? 'bg-[#CB3CFF]/20 border-[#CB3CFF] text-white shadow-[0_0_12px_rgba(203,60,255,0.3)]'
-                : 'bg-white/5 border-white/10 text-[#AEB9E1] hover:text-white hover:bg-white/10'
-            ]"
-          >
-            <span class="text-[11px] font-bold">{{ user.name }}</span>
-            <span class="text-[9px] opacity-70 truncate max-w-full">{{ user.email.split('@')[0] }}</span>
-          </button>
-        </div>
-      </div>
-
       <!-- Error Notification (Floating Alert) -->
       <div v-if="authError" class="mb-4 p-3 rounded-[10px] bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2.5 animate-shake">
         <AlertCircle class="w-4 h-4 shrink-0 text-red-400" />
@@ -66,7 +41,7 @@
               type="email"
               v-model="formEmail"
               required
-              placeholder="Chọn tài khoản hoặc nhập email..."
+              placeholder="Nhập email của bạn..."
               class="w-full h-[42px] px-3.5 pl-10 bg-[#18202D]/90 border border-white/15 rounded-[10px] text-xs text-white placeholder-[#AEB9E1]/40 outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition font-medium"
             />
             <Mail class="w-4 h-4 text-[#AEB9E1] absolute left-3 top-3" />
@@ -130,7 +105,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { 
-  UserCheck, 
   Mail, 
   Lock, 
   Eye, 
@@ -139,7 +113,7 @@ import {
   Loader2, 
   AlertCircle 
 } from 'lucide-vue-next'
-import { useAuth, ALLOWED_USERS } from '@/composables/useAuth'
+import { useAuth } from '@/composables/useAuth'
 
 const emit = defineEmits<{
   (e: 'login-success'): void
@@ -151,11 +125,6 @@ const formEmail = ref('')
 const formPassword = ref('')
 const showPassword = ref(false)
 const rememberDevice = ref(true)
-
-const selectAccount = (email: string) => {
-  formEmail.value = email
-  formPassword.value = ''
-}
 
 const handleSubmit = async () => {
   try {

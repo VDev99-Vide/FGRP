@@ -22,14 +22,16 @@ describe('useAuth composable', () => {
     await auth.logout()
   })
 
-  it('isAllowedUser chỉ chấp nhận 3 tài khoản Vinh, Hung, Luu (không phân biệt hoa thường)', () => {
-    expect(ALLOWED_USERS.length).toBe(3)
+  it('isAllowedUser chấp nhận 4 tài khoản Vinh, Hung, Luu, Tiennguyen (không phân biệt hoa thường)', () => {
+    expect(ALLOWED_USERS.length).toBe(4)
     expect(isAllowedUser('Vinh@gmail.com')).toBeDefined()
     expect(isAllowedUser('vinh@gmail.com')).toBeDefined()
     expect(isAllowedUser('Hung@gmail.com')).toBeDefined()
     expect(isAllowedUser('hung@gmail.com')).toBeDefined()
     expect(isAllowedUser('Luu@gmail.com')).toBeDefined()
     expect(isAllowedUser('luu@gmail.com')).toBeDefined()
+    expect(isAllowedUser('Tiennguyen@legget.com')).toBeDefined()
+    expect(isAllowedUser('tiennguyen@legget.com')).toBeDefined()
 
     expect(isAllowedUser('hacker@gmail.com')).toBeUndefined()
     expect(isAllowedUser('admin@gmail.com')).toBeUndefined()
@@ -46,6 +48,14 @@ describe('useAuth composable', () => {
     const saved = mockStorage.getItem('fgrp_auth_device_session')
     expect(saved).not.toBeNull()
     expect(JSON.parse(saved!).email).toBe('Vinh@gmail.com')
+  })
+
+  it('đăng nhập thành công với user mới Tiennguyen@legget.com / 123', async () => {
+    const success = await auth.login('Tiennguyen@legget.com', '123')
+    expect(success).toBe(true)
+    expect(auth.isAuthenticated.value).toBe(true)
+    expect(auth.currentUser.value?.email).toBe('Tiennguyen@legget.com')
+    expect(auth.currentUser.value?.name).toBe('Tiên Nguyễn')
   })
 
   it('từ chối đăng nhập khi sai mật khẩu', async () => {
