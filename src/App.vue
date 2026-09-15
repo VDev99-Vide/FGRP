@@ -248,6 +248,11 @@
                 @jump-to-inventory="handleJumpToInventory"
               />
             </div>
+
+            <!-- 5. TAB QUẢN LÝ ĐƠN ĐẶT HÀNG (PURCHASING - PO) -->
+            <div v-else-if="currentTab === 'purchase'">
+              <PurchaseOrderView />
+            </div>
           </transition>
 
         </div>
@@ -388,6 +393,7 @@ import RecentOrdersTable from '@/components/dashboard/RecentOrdersTable.vue'
 import WorldDotMapCard from '@/components/dashboard/WorldDotMapCard.vue'
 import InventoryGrid from '@/components/inventory/InventoryGrid.vue'
 import ShippingForecastView from '@/components/forecast/ShippingForecastView.vue'
+import PurchaseOrderView from '@/components/po/PurchaseOrderView.vue'
 
 // Modals
 import InboundModal from '@/components/inventory/InboundModal.vue'
@@ -510,6 +516,7 @@ const currentTabName = computed(() => {
     case 'dashboard': return 'Bảng Điều Khiển'
     case 'inventory': return 'Tồn Kho Thành Phẩm'
     case 'forecast': return 'Kế Hoạch Xuất Hàng'
+    case 'purchase': return 'Quản Lý Đơn Đặt Hàng'
     case 'accessories': return 'Quản Lý Phụ Kiện'
     default: return ''
   }

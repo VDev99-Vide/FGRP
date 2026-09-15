@@ -1,0 +1,163 @@
+import type {
+  PoProgressLevel,
+  PoReceiptLog,
+  PoStats,
+  PurchaseOrder,
+  PurchaseOrderWithProgress,
+} from '@/types'
+
+// ================= NGƯỠNG MÀU ỐNG DÒNG CHẢY (AUTO 3 NGƯỠNG) =================
+// danger  < 50%   : đỏ Coral   #FF5A65 (mới nạp / tiến độ thấp)
+// warning 50-99%  : vàng Amber #FDB52A (đang về gần đủ)
+// success >= 100% : xanh lá   #14CA74 (đạt target -> tự đóng PO)
+export const PO_PROGRESS_THRESHOLDS = {
+  dangerMax: 50,
+  successMin: 100,
+} as const
+
+export const PO_FLOW_COLORS: Record<PoProgressLevel, { solid: string; glow: string; gradient: string }> = {
+  danger: {
+    solid: '#FF5A65',
+    glow: 'rgba(255, 90, 101, 0.55)',
+    gradient: 'linear-gradient(90deg, #FF5A65 0%, #FF8A5B 100%)',
+  },
+  warning: {
+    solid: '#FDB52A',
+    glow: 'rgba(253, 181, 42, 0.55)',
+    gradient: 'linear-gradient(90deg, #FDB52A 0%, #FFE29A 100%)',
+  },
+  success: {
+    solid: '#14CA74',
+    glow: 'rgba(20, 202, 116, 0.55)',
+    gradient: 'linear-gradient(90deg, #00C2FF 0%, #14CA74 100%)',
+  },
+}
+
+/** Phân loại ngưỡng màu từ % tiến độ thực tế (cho phép > 100 khi nhập vượt). */
+export function getPoProgressLevel(progress: number): PoProgressLevel {
+  if (progress >= PO_PROGRESS_THRESHOLDS.successMin) return 'success'
+  if (progress >= PO_PROGRESS_THRESHOLDS.dangerMax) return 'warning'
+  return 'danger'
+}
+
+/** % tiến độ = đã nhập / target * 100 (target <= 0 coi như 0%). */
+export function calcPoProgress(targetQty: number, receivedQty: number): number {
+  const target = Number(targetQty) || 0
+  const received = Number(receivedQty) || 0
+  if (target <= 0) return 0
+  return Math.round((received / target) * 10000) / 100
+}
+
+/** Chuẩn hóa số PO để so sánh / chống trùng (trim + uppercase). */
+export function normalizePoNo(poNo: string): string {
+  return String(poNo || '').trim().toUpperCase()
+}
+
+/** Ngày hôm nay dạng yyyy-mm-dd (dùng làm giá trị mặc định, không khóa cứng). */
+export function todayIsoDate(d = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Hiển thị yyyy-mm-dd -> dd/mm/yyyy cho giao diện. */
+export function formatIsoDate(iso: string): string {
+  if (!iso) return ''
+  const m = String(iso).trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`
+  return String(iso)
+}
+
+/** Kiểm tra chuỗi yyyy-mm-dd hợp lệ. */
+export function isValidIsoDate(iso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || '').trim())) return false
+  const d = new Date(`${String(iso).trim()}T00:00:00`)
+  return !Number.isNaN(d.getTime())
+}
+
+/** Validate dữ liệu tạo / sửa PO. Trả về message lỗi hoặc null khi hợp lệ. */
+export function validatePoInput(input: {
+  po_no: string
+  supplier: string
+  item_code: string
+  target_qty: number | string
+  created_date: string
+}): string | null {
+  if (!String(input.po_no || '').trim()) return 'Vui lòng nhập Số PO!'
+  if (!String(input.supplier || '').trim()) return 'Vui lòng nhập Nhà cung cấp!'
+  if (!String(input.item_code || '').trim()) return 'Vui lòng nhập Mã hàng!'
+  const target = Number(input.target_qty)
+  if (!Number.isFinite(target) || target <= 0) return 'Target phải là số lớn hơn 0!'
+  if (!isValidIsoDate(input.created_date)) return 'Ngày tạo PO không hợp lệ (yyyy-mm-dd)!'
+  return null
+}
+
+/** Validate 1 lần nhập hàng vào PO. */
+export function validateReceiptInput(input: { qty: number | string; receipt_date: string }): string | null {
+  const qty = Number(input.qty)
+  if (!Number.isFinite(qty) || qty <= 0) return 'Số lượng nhập phải lớn hơn 0!'
+  if (!isValidIsoDate(input.receipt_date)) return 'Ngày nhập hàng không hợp lệ (yyyy-mm-dd)!'
+  return null
+}
+
+/**
+ * Gộp PO + toàn bộ log nhập hàng thành bản ghi tiến độ.
+ * Quy tắc đóng PO: received >= target -> 'completed' (tự động), ngược lại 'open'.
+ */
+export function buildPoProgress(po: PurchaseOrder, logs: PoReceiptLog[]): PurchaseOrderWithProgress {
+  const poLogs = logs.filter((l) => l.po_id === po.id)
+  const received_qty = poLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+  const target = Number(po.target_qty) || 0
+  const remaining_qty = Math.max(0, target - received_qty)
+  const progress = calcPoProgress(target, received_qty)
+  const progressCapped = Math.min(100, Math.max(0, progress))
+  const level = getPoProgressLevel(progress)
+  const status = progress >= 100 ? 'completed' : 'open'
+
+  return {
+    ...po,
+    status,
+    received_qty,
+    remaining_qty,
+    progress,
+    progressCapped,
+    level,
+    receipt_count: poLogs.length,
+  }
+}
+
+/** Thống kê KPI tổng hợp cho thẻ hiển thị. */
+export function computePoStats(orders: PurchaseOrderWithProgress[]): PoStats {
+  const totalOrders = orders.length
+  const completedCount = orders.filter((o) => o.status === 'completed').length
+  const openCount = totalOrders - completedCount
+  const totalTarget = orders.reduce((s, o) => s + (Number(o.target_qty) || 0), 0)
+  const totalReceived = orders.reduce((s, o) => s + (Number(o.received_qty) || 0), 0)
+  const overallPercent = calcPoProgress(totalTarget, totalReceived)
+
+  return { totalOrders, openCount, completedCount, totalTarget, totalReceived, overallPercent }
+}
+
+/** Sắp xếp hiển thị: PO đang mở (tiến độ cao trước) lên trên, PO đã xong xuống dưới. */
+export function sortPoForDisplay(orders: PurchaseOrderWithProgress[]): PurchaseOrderWithProgress[] {
+  return [...orders].sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'open' ? -1 : 1
+    if (b.progress !== a.progress) return b.progress - a.progress
+    return String(b.created_date || '').localeCompare(String(a.created_date || ''))
+  })
+}
+
+/** Lọc PO theo từ khóa (số PO / NCC / mã hàng) + trạng thái. */
+export function filterPurchaseOrders(
+  orders: PurchaseOrderWithProgress[],
+  searchText: string,
+  status: 'all' | 'open' | 'completed',
+): PurchaseOrderWithProgress[] {
+  const q = String(searchText || '').toLowerCase().trim()
+  return orders.filter((o) => {
+    if (status !== 'all' && o.status !== status) return false
+    if (!q) return true
+    return [o.po_no, o.supplier, o.item_code].join(' ').toLowerCase().includes(q)
+  })
+}

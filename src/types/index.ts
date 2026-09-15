@@ -76,8 +76,7 @@ export interface ForecastFeatureGroup {
   unit_type: 'kien' | 'thung';
 }
 
-export interface ForecastContainerGroup {
-  containerKey: string;
+export interface ForecastContainerGroup {  containerKey: string;
   po: string;
   so: string;
   container_no: string;
@@ -94,6 +93,52 @@ export interface ForecastContainerGroup {
   hasAccessories: boolean;
   featureGroups: ForecastFeatureGroup[];
   allItems: ForecastItem[];
+}
+
+// ================= QUẢN LÝ ĐƠN ĐẶT HÀNG (PURCHASING - PO) =================
+
+export type PurchaseOrderStatus = 'open' | 'completed';
+
+export interface PurchaseOrder {
+  id: string;
+  po_no: string;
+  supplier: string;
+  item_code: string;
+  target_qty: number;
+  created_date: string; // yyyy-mm-dd (ngày tạo PO, mặc định hôm nay nhưng sửa được)
+  status: PurchaseOrderStatus;
+  closed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PoReceiptLog {
+  id: string;
+  po_id: string;
+  receipt_date: string; // yyyy-mm-dd (mặc định hôm nay nhưng sửa được)
+  qty: number;
+  note?: string;
+  created_at?: string;
+}
+
+export type PoProgressLevel = 'danger' | 'warning' | 'success';
+
+export interface PurchaseOrderWithProgress extends PurchaseOrder {
+  received_qty: number;
+  remaining_qty: number;
+  progress: number; // % thực tế (có thể > 100 khi nhập vượt)
+  progressCapped: number; // % hiển thị trên ống (giới hạn 0-100)
+  level: PoProgressLevel; // danger <50%, warning 50-<100%, success >=100%
+  receipt_count: number;
+}
+
+export interface PoStats {
+  totalOrders: number;
+  openCount: number;
+  completedCount: number;
+  totalTarget: number;
+  totalReceived: number;
+  overallPercent: number;
 }
 
 

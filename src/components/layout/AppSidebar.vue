@@ -173,6 +173,7 @@ import {
   Star, 
   Users,
   Truck,
+  ShoppingCart,
   LogOut
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
@@ -199,6 +200,7 @@ const menuItems = [
   { label: 'Dashboard', value: 'dashboard', icon: Home, badge: 'Active' },
   { label: 'Tồn Kho Thành Phẩm', value: 'inventory', icon: Star },
   { label: 'Kế Hoạch Xuất Hàng', value: 'forecast', icon: Truck, badge: 'Mới' },
+  { label: 'Quản Lý Đơn Đặt Hàng', value: 'purchase', icon: ShoppingCart, badge: 'Mới' },
   { label: 'Quản Lý Phụ Kiện', value: 'accessories', icon: Users }
 ]
 
