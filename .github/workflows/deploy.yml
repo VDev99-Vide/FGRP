@@ -51,14 +51,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Sync dist to gh-pages branch (fallback)
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          cd dist
-          git init
-          git checkout -b gh-pages
-          git add -A
-          git commit -m "deploy: update GitHub Pages build [skip ci]"
-          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages
