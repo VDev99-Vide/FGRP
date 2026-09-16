@@ -130,6 +130,9 @@ export interface PoLine {
 export interface PoReceiptLog {
   id: string;
   po_id: string;
+  /** T2: nhập hàng theo từng mã. null/rỗng = log gộp cũ ở cấp PO (giữ tương thích ngược). */
+  po_line_id?: string | null;
+  item_code?: string;
   receipt_date: string; // yyyy-mm-dd (mặc định hôm nay nhưng sửa được)
   qty: number;
   note?: string;
@@ -138,6 +141,17 @@ export interface PoReceiptLog {
 
 export type PoProgressLevel = 'danger' | 'warning' | 'success';
 
+/** Tiến độ của 1 mã hàng trong PO (dùng cho dòng con + modal nhập theo mã). */
+export interface PoLineWithProgress extends PoLine {
+  received_qty: number;
+  remaining_qty: number;
+  progress: number;
+  progressCapped: number;
+  level: PoProgressLevel;
+  status: 'open' | 'completed';
+  receipt_count: number;
+}
+
 export interface PurchaseOrderWithProgress extends PurchaseOrder {
   received_qty: number;
   remaining_qty: number;
@@ -145,6 +159,11 @@ export interface PurchaseOrderWithProgress extends PurchaseOrder {
   progressCapped: number; // % hiển thị trên ống (giới hạn 0-100)
   level: PoProgressLevel; // danger <50%, warning 50-<100%, success >=100%
   receipt_count: number;
+  /** T2: tiến độ chi tiết từng mã (dòng con). PO 1 mã cũ -> 1 phần tử suy ra từ PO. */
+  linesProgress: PoLineWithProgress[];
+  /** T2: tổng SL nhập gộp cũ chưa gán mã (log po_line_id rỗng) — chỉ để hiển thị giải thích. */
+  legacy_received_qty: number;
+  legacy_receipt_count: number;
 }
 
 export interface PoStats {

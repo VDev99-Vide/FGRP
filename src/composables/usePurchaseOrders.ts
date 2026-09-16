@@ -2,14 +2,16 @@ import { ref, computed } from 'vue'
 import { supabase, isSupabaseConfigured } from '@/services/supabase'
 import type { PoLine, PoReceiptLog, PurchaseOrder, PurchaseOrderWithProgress } from '@/types'
 import {
+  buildPoLineProgress,
   buildPoProgress,
   computePoStats,
   filterPurchaseOrders,
+  getEffectivePoLines,
   normalizePoNo,
   sortPoForDisplay,
   todayIsoDate,
+  validateLineReceiptInput,
   validatePoInput,
-  validateReceiptInput,
   type PoLineInput,
 } from '@/utils/po'
 import type { PoExcelRow } from '@/services/poExcel'
@@ -30,6 +32,9 @@ export interface ReceiptInput {
   receipt_date: string
   qty: number
   note?: string
+  /** T2: nhập cho mã nào trong PO. null/rỗng = gộp cũ (chỉ cho PO 1 mã). */
+  po_line_id?: string | null
+  item_code?: string
 }
 
 const genId = () =>
@@ -51,20 +56,48 @@ const backendAvailable = ref(true)
 
 const cleanOpt = (v: unknown) => String(v ?? '').trim()
 
+const normalizeLogRow = (l: PoReceiptLog): PoReceiptLog => ({
+  ...l,
+  po_line_id: (l as PoReceiptLog).po_line_id ?? null,
+  item_code: String((l as PoReceiptLog).item_code ?? ''),
+  qty: Number(l.qty) || 0,
+})
+
 /** Chuẩn hóa input T1: lines (nếu có) quyết định item_code/description/target_qty hiển thị. */
-const normalizePoLinesInput = (input: PoInput, poId: string, poNo: string, now: string): { lines: PoLine[]; item_code: string; description: string; target_qty: number } => {
+const normalizePoLinesInput = (
+  input: PoInput,
+  poId: string,
+  poNo: string,
+  now: string,
+  existingLines: PoLine[] = [],
+): { lines: PoLine[]; item_code: string; description: string; target_qty: number } => {
   const rawLines = (input.lines || []).filter((l) => String(l.item_code || '').trim() || Number(l.target_qty) > 0)
   if (rawLines.length > 0) {
-    const lines: PoLine[] = rawLines.map((l) => ({
-      id: genId(),
-      po_id: poId,
-      po_no: poNo,
-      item_code: String(l.item_code).trim(),
-      description: cleanOpt(l.description),
-      target_qty: Number(l.target_qty),
-      created_at: now,
-      updated_at: now,
-    }))
+    // T2: giữ lại id dòng cũ theo mã hàng để log nhập theo mã không bị mồ côi khi sửa PO.
+    const byCode = new Map<string, PoLine[]>()
+    existingLines.forEach((l) => {
+      const k = String(l.item_code || '').trim().toUpperCase()
+      if (!k) return
+      if (!byCode.has(k)) byCode.set(k, [])
+      byCode.get(k)!.push(l)
+    })
+    const usedIds = new Set<string>()
+    const lines: PoLine[] = rawLines.map((l) => {
+      const code = String(l.item_code).trim()
+      const candidates = byCode.get(code.toUpperCase()) || []
+      const reuse = candidates.find((c) => !usedIds.has(c.id))
+      if (reuse) usedIds.add(reuse.id)
+      return {
+        id: reuse ? reuse.id : genId(),
+        po_id: poId,
+        po_no: poNo,
+        item_code: code,
+        description: cleanOpt(l.description),
+        target_qty: Number(l.target_qty),
+        created_at: reuse?.created_at || now,
+        updated_at: now,
+      }
+    })
     return {
       lines,
       item_code: lines[0].item_code,
@@ -223,7 +256,7 @@ export function usePurchaseOrders() {
         purchaseOrders.value = attachLines(purchaseOrders.value)
       }
       if (logData) {
-        receiptLogs.value = logData.map((l) => ({ ...l, qty: Number(l.qty) || 0 }))
+        receiptLogs.value = logData.map(normalizeLogRow)
       }
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
     } finally {
@@ -303,9 +336,23 @@ export function usePurchaseOrders() {
 
     const current = purchaseOrders.value[idx]
     const now = new Date().toISOString()
-    const norm = normalizePoLinesInput(input, id, poNo, now)
-    const received = receiptLogs.value.filter((l) => l.po_id === id).reduce((s, l) => s + (Number(l.qty) || 0), 0)
-    const completed = received >= norm.target_qty
+    const existingLines = poLines.value.filter((l) => l.po_id === id || l.po_no === current.po_no)
+    const norm = normalizePoLinesInput(input, id, poNo, now, existingLines)
+    // T2: trạng thái suy ra theo quy tắc từng mã (buildPoProgress), không dùng tổng gộp thô.
+    const previewPo: PurchaseOrder = {
+      ...current,
+      po_no: poNo,
+      supplier: String(input.supplier).trim(),
+      item_code: norm.item_code,
+      description: norm.description,
+      note: cleanOpt(input.note),
+      target_qty: norm.target_qty,
+      created_date: input.created_date,
+      updated_at: new Date().toISOString(),
+      lines: norm.lines,
+    }
+    const previewProgress = buildPoProgress(previewPo, receiptLogs.value)
+    const completed = previewProgress.status === 'completed'
     const updated: PurchaseOrder = {
       ...current,
       po_no: poNo,
@@ -365,37 +412,79 @@ export function usePurchaseOrders() {
     purchaseOrders.value = purchaseOrders.value.map((p) => (p.id === poId ? updated : p))
   }
 
-  /** Nhập hàng vào PO: cộng dồn theo ngày, đạt 100% target thì tự đóng PO. */
+  /** T2: Nhập hàng theo từng mã — PO chỉ tự đóng khi TẤT CẢ mã đều đủ target. */
   const addReceipt = async (poId: string, input: ReceiptInput): Promise<PoReceiptLog> => {
-    const err = validateReceiptInput(input)
-    if (err) throw new Error(err)
     const po = purchaseOrders.value.find((p) => p.id === poId)
     if (!po) throw new Error('Không tìm thấy PO để nhập hàng!')
-    if (po.status === 'completed') throw new Error(`PO [${po.po_no}] đã giao đủ và đóng, không thể nhập thêm!`)
+    const withLines = attachLines([po])[0]
+    const effectiveLines = getEffectivePoLines(withLines)
+    const lineCount = (withLines.lines || []).filter((l) => l.item_code || Number(l.target_qty) > 0).length
+
+    const err = validateLineReceiptInput(input, lineCount > 1 ? lineCount : effectiveLines.length > 1 ? effectiveLines.length : 1)
+    if (err) throw new Error(err)
+
+    // Chặn nhập khi PO đã đóng (theo quy tắc từng mã hiện tại)
+    const before = buildPoProgress(withLines, receiptLogs.value)
+    if (before.status === 'completed') throw new Error(`PO [${po.po_no}] đã giao đủ và đóng, không thể nhập thêm!`)
+
+    // Xác định mã được nhập
+    let lineId: string | null = String(input.po_line_id || '').trim() || null
+    let line = lineId ? effectiveLines.find((l) => l.id === lineId) : undefined
+    if (lineCount > 1) {
+      if (!line) throw new Error('Mã hàng đã chọn không thuộc PO này!')
+      const lineBefore = buildPoLineProgress(line, receiptLogs.value.filter((l) => l.po_id === poId))
+      if (lineBefore.status === 'completed') {
+        throw new Error(`Mã [${line.item_code}] đã nhập đủ ${Number(line.target_qty).toLocaleString()} PCS, không thể nhập thêm!`)
+      }
+    } else {
+      // PO 1 mã: không gắn line (giữ tương thích log gộp cũ)
+      lineId = (effectiveLines[0] && effectiveLines[0].id) || null
+      if (lineId && !effectiveLines.find((l) => l.id === lineId)) lineId = null
+      if (!lineId) line = effectiveLines[0]
+      else line = effectiveLines.find((l) => l.id === lineId) || effectiveLines[0]
+    }
 
     const log: PoReceiptLog = {
       id: genId(),
       po_id: poId,
+      po_line_id: lineCount > 1 ? (line?.id || null) : null,
+      item_code: line?.item_code || String(input.item_code || po.item_code || '').trim(),
       receipt_date: input.receipt_date,
       qty: Number(input.qty),
       note: String(input.note || '').trim(),
       created_at: new Date().toISOString(),
     }
+    // PO 1 mã cũ: giữ log gộp (po_line_id null) để tương thích báo cáo cũ
+    if (lineCount <= 1 && !((withLines.lines || []).length > 0)) {
+      log.po_line_id = null
+    }
 
     if (!isMemoryId(poId)) {
-      await callSupabase(() => supabase.from('po_receipt_logs').insert(log).select())
+      try {
+        await callSupabase(() => supabase.from('po_receipt_logs').insert(log).select())
+      } catch (e) {
+        // DB chưa migrate cột po_line_id/item_code -> ghi bản legacy (bỏ 2 cột)
+        const msg = e instanceof Error ? e.message : String(e || '')
+        if (msg.includes('schema cache') || (e as { code?: string })?.code === 'PGRST204') {
+          const { po_line_id: _pl, item_code: _ic, ...legacy } = log
+          await callSupabase(() => supabase.from('po_receipt_logs').insert(legacy).select())
+          console.warn('[PO] po_receipt_logs chưa có cột po_line_id/item_code. Hãy chạy database/purchase_orders_line_receipts.sql. Tạm ghi log gộp.')
+        } else {
+          throw e
+        }
+      }
     }
     receiptLogs.value = [...receiptLogs.value, log]
 
-    // Tự động đóng PO khi chạm target
-    const received = receiptLogs.value.filter((l) => l.po_id === poId).reduce((s, l) => s + (Number(l.qty) || 0), 0)
-    if (received >= Number(po.target_qty)) {
+    // Tự động đóng/mở lại theo quy tắc từng mã
+    const after = buildPoProgress(withLines, receiptLogs.value)
+    if (after.status === 'completed' && po.status !== 'completed') {
       await markPoCompleted(poId, true)
     }
     return log
   }
 
-  /** Xóa 1 dòng log nhập hàng (PO tự mở lại nếu rớt xuống dưới target). */
+  /** Xóa 1 dòng log nhập hàng (PO tự mở lại nếu còn mã chưa đủ target). */
   const deleteReceipt = async (logId: string) => {
     const log = receiptLogs.value.find((l) => l.id === logId)
     if (!log) throw new Error('Không tìm thấy dòng log nhập hàng!')
@@ -406,9 +495,12 @@ export function usePurchaseOrders() {
 
     const po = purchaseOrders.value.find((p) => p.id === log.po_id)
     if (po) {
-      const received = receiptLogs.value.filter((l) => l.po_id === po.id).reduce((s, l) => s + (Number(l.qty) || 0), 0)
-      if (po.status === 'completed' && received < Number(po.target_qty)) {
+      const withLines = attachLines([po])[0]
+      const after = buildPoProgress(withLines, receiptLogs.value)
+      if (po.status === 'completed' && after.status !== 'completed') {
         await markPoCompleted(po.id, false)
+      } else if (po.status !== 'completed' && after.status === 'completed') {
+        await markPoCompleted(po.id, true)
       }
     }
   }
@@ -655,6 +747,14 @@ export function usePurchaseOrders() {
       .filter((l) => l.po_id === poId)
       .sort((a, b) => String(a.receipt_date).localeCompare(String(b.receipt_date)))
 
+  /** T2: log của 1 mã cụ thể trong PO (dùng cho lịch sử lọc theo mã). */
+  const getLineLogs = (poId: string, lineId: string): PoReceiptLog[] =>
+    getPoLogs(poId).filter((l) => String(l.po_line_id || '') === String(lineId))
+
+  /** T2: log gộp cũ chưa gán mã (hiển thị giải thích ở dòng cha). */
+  const getLegacyLogs = (poId: string): PoReceiptLog[] =>
+    getPoLogs(poId).filter((l) => !String(l.po_line_id || '').trim())
+
   return {
     purchaseOrders,
     poLines,
@@ -671,6 +771,8 @@ export function usePurchaseOrders() {
     filteredOrders,
     stats,
     getPoLogs,
+    getLineLogs,
+    getLegacyLogs,
     fetchPurchaseOrders,
     createPurchaseOrder,
     updatePurchaseOrder,

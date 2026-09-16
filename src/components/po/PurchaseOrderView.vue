@@ -146,68 +146,156 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-white/[0.06] font-medium">
-            <tr v-for="order in filteredOrders" :key="order.id" class="hover:bg-white/[0.06] transition-colors">
-              <td class="py-3 px-4">
-                <p class="font-mono font-black text-white text-xs">{{ order.po_no }}</p>
-                <p class="text-[10px] text-[#AEB9E1] mt-0.5">{{ order.supplier }}</p>
-              </td>
-              <td class="py-3 px-4">
-                <p class="font-mono font-bold text-[#00C2FF] text-xs">{{ order.item_code }}<span v-if="(order.lines || []).length > 1" class="ml-1 text-[10px] text-[#CB3CFF]">+{{ (order.lines || []).length - 1 }}</span></p>
-                <p class="text-[10px] text-white/70 mt-0.5 max-w-[220px] truncate" :title="((order.lines || []).length > 1 ? (order.lines || []).map(l => `${l.item_code} (${Number(l.target_qty).toLocaleString()})`).join(' | ') : (order.description || ''))">{{ (order.lines || []).length > 1 ? (order.lines || []).map(l => l.item_code).join(' | ') : (order.description || '—') }}</p>
-              </td>
-              <td class="py-3 px-4 text-right font-mono text-white/90">{{ order.target_qty.toLocaleString() }}</td>
-              <td class="py-3 px-4 text-right font-mono font-bold text-[#14CA74]">{{ order.received_qty.toLocaleString() }}</td>
-              <td class="py-3 px-4 min-w-[208px]">
-                <PoWavePipe :fill="order.progressCapped" :label="`${order.progress}%`" />
-              </td>
-              <td class="py-3 px-4 text-center">
-                <span
-                  :class="[
-                    'px-2.5 py-1 rounded-[5px] text-[10px] font-bold border',
-                    order.status === 'completed'
-                      ? 'bg-[#14CA74]/15 text-[#14CA74] border-[#14CA74]/30'
-                      : 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30',
-                  ]"
+            <template v-for="order in filteredOrders" :key="order.id">
+              <!-- Dòng cha: 1 PO -->
+              <tr class="hover:bg-white/[0.06] transition-colors">
+                <td class="py-3 px-4">
+                  <div class="flex items-start gap-1.5">
+                    <button
+                      v-if="hasMultiLines(order)"
+                      @click="toggleExpand(order.id)"
+                      :title="isExpanded(order) ? 'Thu gọn các mã hàng' : `Mở rộng xem ${order.linesProgress.length} mã hàng`"
+                      class="mt-0.5 p-1 bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 text-[#CB3CFF] rounded-[6px] border border-[#CB3CFF]/30 cursor-pointer transition active:scale-90 shrink-0"
+                    >
+                      <ChevronDown v-if="isExpanded(order)" class="w-3.5 h-3.5" />
+                      <ChevronRight v-else class="w-3.5 h-3.5" />
+                    </button>
+                    <div>
+                      <p class="font-mono font-black text-white text-xs">{{ order.po_no }}</p>
+                      <p class="text-[10px] text-[#AEB9E1] mt-0.5">{{ order.supplier }}</p>
+                      <p v-if="hasMultiLines(order)" class="text-[10px] text-[#CB3CFF] font-bold mt-0.5">
+                        {{ order.linesProgress.length }} mã hàng{{ isExpanded(order) ? '' : ' · bấm ▸ để nhập từng mã' }}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-3 px-4">
+                  <template v-if="hasMultiLines(order)">
+                    <p class="font-mono font-bold text-[#00C2FF] text-xs">{{ order.linesProgress.length }} mã trong PO</p>
+                    <p class="text-[10px] text-white/70 mt-0.5 max-w-[260px] truncate" :title="order.linesProgress.map(l => `${l.item_code}${l.description ? ' — ' + l.description : ''}`).join(' | ')">
+                      {{ order.linesProgress.map(l => l.item_code).join(' · ') }}
+                    </p>
+                    <p v-if="order.legacy_received_qty > 0" class="text-[10px] text-[#FDB52A] mt-0.5" title="Log nhập gộp cũ chưa gán mã, vẫn tính vào tổng PO">
+                      + {{ order.legacy_received_qty.toLocaleString() }} PCS nhập gộp cũ
+                    </p>
+                  </template>
+                  <template v-else>
+                    <p class="font-mono font-bold text-[#00C2FF] text-xs">{{ order.item_code }}</p>
+                    <p class="text-[10px] text-white/70 mt-0.5 max-w-[260px] break-words whitespace-normal" :title="order.description || ''">{{ order.description || '—' }}</p>
+                  </template>
+                </td>
+                <td class="py-3 px-4 text-right font-mono text-white/90">{{ order.target_qty.toLocaleString() }}</td>
+                <td class="py-3 px-4 text-right font-mono font-bold text-[#14CA74]">{{ order.received_qty.toLocaleString() }}</td>
+                <td class="py-3 px-4 min-w-[208px]">
+                  <PoWavePipe :fill="order.progressCapped" :label="`${order.progress}%`" />
+                </td>
+                <td class="py-3 px-4 text-center">
+                  <span
+                    :class="[
+                      'px-2.5 py-1 rounded-[5px] text-[10px] font-bold border',
+                      order.status === 'completed'
+                        ? 'bg-[#14CA74]/15 text-[#14CA74] border-[#14CA74]/30'
+                        : 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30',
+                    ]"
+                  >
+                    {{ order.status === 'completed' ? 'Đã giao đủ' : 'Chưa xong' }}
+                  </span>
+                </td>
+                <td class="py-3 px-4 text-white/70 text-xs max-w-[180px] truncate" :title="order.note || ''">{{ order.note || '—' }}</td>
+                <td class="py-3 px-4 text-center font-mono text-[#AEB9E1] text-[11px]">{{ formatIsoDate(order.created_date) }}</td>
+                <td class="py-3 px-4">
+                  <div class="flex items-center justify-center gap-1.5">
+                    <button
+                      v-if="order.status === 'open'"
+                      @click="openReceiptModal(order)"
+                      :title="hasMultiLines(order) ? 'Chọn mã hàng để nhập (mở modal chọn mã)' : 'Nhập hàng vào PO này'"
+                      class="px-2.5 py-1 bg-[#14CA74]/15 hover:bg-[#14CA74]/25 text-[#14CA74] rounded-[6px] border border-[#14CA74]/30 text-[11px] font-bold cursor-pointer transition active:scale-95"
+                    >
+                      Nhập hàng
+                    </button>
+                    <button
+                      @click="openHistoryModal(order)"
+                      :title="`Xem ${order.receipt_count} lần nhập hàng`"
+                      class="p-1.5 bg-[#00C2FF]/15 hover:bg-[#00C2FF]/25 text-[#00C2FF] rounded-[6px] border border-[#00C2FF]/30 cursor-pointer transition active:scale-90"
+                    >
+                      <History class="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      @click="openEditModal(order)"
+                      title="Sửa thông tin PO"
+                      class="p-1.5 bg-[#FDB52A]/15 hover:bg-[#FDB52A]/25 text-[#FDB52A] rounded-[6px] border border-[#FDB52A]/30 cursor-pointer transition active:scale-90"
+                    >
+                      <Pencil class="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      @click="askDeletePo(order)"
+                      title="Xóa PO và toàn bộ log"
+                      class="p-1.5 bg-[#FF5A65]/15 hover:bg-[#FF5A65]/25 text-[#FF5A65] rounded-[6px] border border-[#FF5A65]/30 cursor-pointer transition active:scale-90"
+                    >
+                      <Trash2 class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Dòng con: từng mã hàng trong PO -->
+              <template v-if="hasMultiLines(order) && isExpanded(order)">
+                <tr
+                  v-for="line in order.linesProgress"
+                  :key="`${order.id}-${line.id}`"
+                  class="bg-[#CB3CFF]/[0.04] hover:bg-[#CB3CFF]/[0.08] transition-colors border-l-2 border-l-[#CB3CFF]/50"
                 >
-                  {{ order.status === 'completed' ? 'Đã giao đủ' : 'Chưa xong' }}
-                </span>
-              </td>
-              <td class="py-3 px-4 text-white/70 text-xs max-w-[180px] truncate" :title="order.note || ''">{{ order.note || '—' }}</td>
-              <td class="py-3 px-4 text-center font-mono text-[#AEB9E1] text-[11px]">{{ formatIsoDate(order.created_date) }}</td>
-              <td class="py-3 px-4">
-                <div class="flex items-center justify-center gap-1.5">
-                  <button
-                    v-if="order.status === 'open'"
-                    @click="openReceiptModal(order)"
-                    title="Nhập hàng vào PO này"
-                    class="px-2.5 py-1 bg-[#14CA74]/15 hover:bg-[#14CA74]/25 text-[#14CA74] rounded-[6px] border border-[#14CA74]/30 text-[11px] font-bold cursor-pointer transition active:scale-95"
-                  >
-                    Nhập hàng
-                  </button>
-                  <button
-                    @click="openHistoryModal(order)"
-                    :title="`Xem ${order.receipt_count} lần nhập hàng`"
-                    class="p-1.5 bg-[#00C2FF]/15 hover:bg-[#00C2FF]/25 text-[#00C2FF] rounded-[6px] border border-[#00C2FF]/30 cursor-pointer transition active:scale-90"
-                  >
-                    <History class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    @click="openEditModal(order)"
-                    title="Sửa thông tin PO"
-                    class="p-1.5 bg-[#FDB52A]/15 hover:bg-[#FDB52A]/25 text-[#FDB52A] rounded-[6px] border border-[#FDB52A]/30 cursor-pointer transition active:scale-90"
-                  >
-                    <Pencil class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    @click="askDeletePo(order)"
-                    title="Xóa PO và toàn bộ log"
-                    class="p-1.5 bg-[#FF5A65]/15 hover:bg-[#FF5A65]/25 text-[#FF5A65] rounded-[6px] border border-[#FF5A65]/30 cursor-pointer transition active:scale-90"
-                  >
-                    <Trash2 class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </td>
-            </tr>
+                  <td class="py-2.5 pl-10 pr-4">
+                    <p class="text-[10px] text-[#CB3CFF] font-bold">└ {{ order.po_no }}</p>
+                    <p class="text-[10px] text-[#AEB9E1] mt-0.5">Mã {{ order.linesProgress.indexOf(line) + 1 }}/{{ order.linesProgress.length }}</p>
+                  </td>
+                  <td class="py-2.5 px-4">
+                    <p class="font-mono font-bold text-[#00C2FF] text-xs">{{ line.item_code }}</p>
+                    <p class="text-[11px] text-white/85 mt-0.5 max-w-[320px] break-words whitespace-normal leading-relaxed" :title="line.description || ''">
+                      {{ line.description || '—' }}
+                    </p>
+                  </td>
+                  <td class="py-2.5 px-4 text-right font-mono text-white/90">{{ Number(line.target_qty).toLocaleString() }}</td>
+                  <td class="py-2.5 px-4 text-right font-mono font-bold text-[#14CA74]">{{ Number(line.received_qty).toLocaleString() }}</td>
+                  <td class="py-2.5 px-4 min-w-[208px]">
+                    <PoWavePipe :fill="line.progressCapped" :label="`${line.progress}%`" />
+                  </td>
+                  <td class="py-2.5 px-4 text-center">
+                    <span
+                      :class="[
+                        'px-2.5 py-1 rounded-[5px] text-[10px] font-bold border',
+                        line.status === 'completed'
+                          ? 'bg-[#14CA74]/15 text-[#14CA74] border-[#14CA74]/30'
+                          : 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/30',
+                      ]"
+                    >
+                      {{ line.status === 'completed' ? 'Đủ hàng' : `Thiếu ${Number(line.remaining_qty).toLocaleString()}` }}
+                    </span>
+                  </td>
+                  <td class="py-2.5 px-4 text-white/40 text-[11px]">—</td>
+                  <td class="py-2.5 px-4 text-center text-white/30 text-[11px]">—</td>
+                  <td class="py-2.5 px-4">
+                    <div class="flex items-center justify-center gap-1.5">
+                      <button
+                        v-if="line.status === 'open' && order.status === 'open'"
+                        @click="openReceiptModal(order, line.id)"
+                        :title="`Nhập hàng cho mã [${line.item_code}]`"
+                        class="px-2.5 py-1 bg-[#14CA74]/15 hover:bg-[#14CA74]/25 text-[#14CA74] rounded-[6px] border border-[#14CA74]/30 text-[11px] font-bold cursor-pointer transition active:scale-95"
+                      >
+                        Nhập mã này
+                      </button>
+                      <span v-else-if="line.status === 'completed'" class="text-[10px] text-[#14CA74] font-bold">✓ Đủ</span>
+                      <button
+                        @click="openHistoryModal(order, line.id)"
+                        :title="`Lịch sử nhập của mã [${line.item_code}] (${line.receipt_count} lần)`"
+                        class="p-1.5 bg-[#00C2FF]/15 hover:bg-[#00C2FF]/25 text-[#00C2FF] rounded-[6px] border border-[#00C2FF]/30 cursor-pointer transition active:scale-90"
+                      >
+                        <History class="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </template>
             <tr v-if="filteredOrders.length === 0">
               <td colspan="9" class="text-center py-12 text-[#AEB9E1] italic text-xs">Không tìm thấy đơn đặt hàng phù hợp!</td>
             </tr>
@@ -227,12 +315,15 @@
       v-model:visible="showReceiptModal"
       :loading="loading"
       :po="receiptPo"
+      :initial-line-id="receiptLineId"
       @save="handleSaveReceipt"
     />
     <PoHistoryModal
       v-model:visible="showHistoryModal"
       :po="historyPo"
       :logs="historyLogs"
+      :line-id="historyLineId"
+      @update:line-id="historyLineId = $event"
       @delete-log="handleDeleteLog"
     />
     <PoImportModal
@@ -266,6 +357,8 @@ import { ref, computed, onMounted } from 'vue'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   History,
   Pencil,
@@ -317,8 +410,27 @@ const showClearAllModal = ref(false)
 
 const editingPo = ref<PurchaseOrderWithProgress | null>(null)
 const receiptPo = ref<PurchaseOrderWithProgress | null>(null)
+const receiptLineId = ref<string | null>(null)
 const historyPo = ref<PurchaseOrderWithProgress | null>(null)
+const historyLineId = ref<string | null>(null)
 const deletingPo = ref<PurchaseOrderWithProgress | null>(null)
+
+// T2: PO nhiều mã hiển thị dòng cha + dòng con mở rộng
+const expandedPoIds = ref<Set<string>>(new Set())
+const hasMultiLines = (order: PurchaseOrderWithProgress) => (order.linesProgress || []).length > 1
+const isExpanded = (order: PurchaseOrderWithProgress) => {
+  if (!hasMultiLines(order)) return false
+  if (expandedPoIds.value.has(order.id)) return true
+  // Đang tìm mã hàng -> tự bung để thấy rõ từng mã khớp
+  if (searchText.value.trim()) return true
+  return false
+}
+const toggleExpand = (poId: string) => {
+  const next = new Set(expandedPoIds.value)
+  if (next.has(poId)) next.delete(poId)
+  else next.add(poId)
+  expandedPoIds.value = next
+}
 
 const historyLogs = computed(() => (historyPo.value ? getPoLogs(historyPo.value.id) : []))
 
@@ -367,8 +479,16 @@ const handleSavePo = async (payload: PoInput, id: string | null) => {
   }
 }
 
-const openReceiptModal = (order: PurchaseOrderWithProgress) => {
+const openReceiptModal = (order: PurchaseOrderWithProgress, lineId?: string | null) => {
   receiptPo.value = order
+  if (lineId) {
+    receiptLineId.value = lineId
+  } else if ((order.linesProgress || []).length > 1) {
+    // Mặc định chọn mã còn thiếu đầu tiên để nhập nhanh
+    receiptLineId.value = order.linesProgress.find((l) => l.status === 'open')?.id ?? order.linesProgress[0]?.id ?? null
+  } else {
+    receiptLineId.value = null
+  }
   showReceiptModal.value = true
 }
 
@@ -377,6 +497,7 @@ const handleSaveReceipt = async (poId: string, payload: ReceiptInput) => {
     await addReceipt(poId, payload)
     showReceiptModal.value = false
     const updated = filteredOrders.value.find((o) => o.id === poId)
+    const lineCode = (payload.item_code || '').trim()
     if (needsMigration.value) {
       toast.add({ severity: 'warn', summary: 'Nhập hàng (lưu tạm)', detail: MEMORY_WARN_DETAIL, life: 6000 })
       return
@@ -384,7 +505,9 @@ const handleSaveReceipt = async (poId: string, payload: ReceiptInput) => {
     toast.add({
       severity: 'success',
       summary: updated?.status === 'completed' ? 'Đạt mục tiêu — PO tự đóng!' : 'Nhập hàng thành công',
-      detail: `Đã nhập ${Number(payload.qty).toLocaleString()} PCS vào PO [${receiptPo.value?.po_no}]`,
+      detail: lineCode
+        ? `Đã nhập ${Number(payload.qty).toLocaleString()} PCS cho mã [${lineCode}] · PO [${receiptPo.value?.po_no}]`
+        : `Đã nhập ${Number(payload.qty).toLocaleString()} PCS vào PO [${receiptPo.value?.po_no}]`,
       life: 3500,
     })
   } catch (err: unknown) {
@@ -392,8 +515,9 @@ const handleSaveReceipt = async (poId: string, payload: ReceiptInput) => {
   }
 }
 
-const openHistoryModal = (order: PurchaseOrderWithProgress) => {
+const openHistoryModal = (order: PurchaseOrderWithProgress, lineId?: string | null) => {
   historyPo.value = order
+  historyLineId.value = lineId ?? null
   showHistoryModal.value = true
 }
 

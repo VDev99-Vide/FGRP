@@ -208,4 +208,43 @@ describe('usePurchaseOrders composable', () => {
     track(created.id)
     await expect(po.addReceipt(created.id, { receipt_date: todayIsoDate(), qty: -5 })).rejects.toThrow('Số lượng')
   })
+
+  it('T2: nhập hàng theo từng mã — PO chỉ đóng khi tất cả mã đủ', async () => {
+    const created = await po.createPurchaseOrder({
+      po_no: poNo('PO-T-LINE'),
+      supplier: 'NCC A',
+      item_code: 'A',
+      target_qty: 1000,
+      created_date: todayIsoDate(),
+      lines: [
+        { item_code: 'MA', description: 'Mô tả A', target_qty: 400 },
+        { item_code: 'MB', description: 'Mô tả B', target_qty: 600 },
+      ],
+    })
+    track(created.id)
+    const lineA = po.poLines.value.find((l) => l.po_id === created.id && l.item_code === 'MA')
+    const lineB = po.poLines.value.find((l) => l.po_id === created.id && l.item_code === 'MB')
+    expect(lineA).toBeDefined()
+    expect(lineB).toBeDefined()
+
+    // Thiếu chọn mã -> chặn
+    await expect(po.addReceipt(created.id, { receipt_date: todayIsoDate(), qty: 100 })).rejects.toThrow('chọn mã')
+
+    await po.addReceipt(created.id, { receipt_date: todayIsoDate(), qty: 400, po_line_id: lineA!.id })
+    let progress = po.ordersWithProgress.value.find((o) => o.id === created.id)
+    expect(progress?.linesProgress.find((l) => l.id === lineA!.id)?.received_qty).toBe(400)
+    expect(progress?.linesProgress.find((l) => l.id === lineB!.id)?.received_qty).toBe(0)
+    // Tổng 400/1000 nhưng mã A đủ, mã B thiếu -> PO vẫn mở
+    expect(progress?.status).toBe('open')
+
+    // Mã đã đủ không cho nhập thêm
+    await expect(
+      po.addReceipt(created.id, { receipt_date: todayIsoDate(), qty: 10, po_line_id: lineA!.id }),
+    ).rejects.toThrow('đã nhập đủ')
+
+    await po.addReceipt(created.id, { receipt_date: todayIsoDate(), qty: 600, po_line_id: lineB!.id })
+    progress = po.ordersWithProgress.value.find((o) => o.id === created.id)
+    expect(progress?.status).toBe('completed')
+    expect(progress?.linesProgress.every((l) => l.status === 'completed')).toBe(true)
+  })
 })

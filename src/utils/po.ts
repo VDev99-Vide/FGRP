@@ -1,4 +1,6 @@
 import type {
+  PoLine,
+  PoLineWithProgress,
   PoProgressLevel,
   PoReceiptLog,
   PoStats,
@@ -174,9 +176,74 @@ export function validateReceiptInput(input: { qty: number | string; receipt_date
   return null
 }
 
+/** T2: validate nhập hàng theo từng mã (bắt buộc chọn mã khi PO có nhiều mã). */
+export function validateLineReceiptInput(
+  input: { qty: number | string; receipt_date: string; po_line_id?: string | null },
+  lineCount: number,
+): string | null {
+  const base = validateReceiptInput(input)
+  if (base) return base
+  if (lineCount > 1 && !String(input.po_line_id || '').trim()) {
+    return 'Vui lòng chọn mã hàng cần nhập!'
+  }
+  return null
+}
+
+/** Log gộp cũ ở cấp PO (chưa gán mã) — giữ tương thích ngược T2. */
+export function isLegacyPoLog(log: PoReceiptLog): boolean {
+  return !String((log as PoReceiptLog).po_line_id || '').trim()
+}
+
+/**
+ * Dòng hiệu lực để hiển thị/nhập hàng (T2).
+ * - PO có lines thật -> dùng lines.
+ * - PO cũ 1 dòng (không có lines) -> suy ra 1 dòng ảo từ purchase_orders.
+ */
+export function getEffectivePoLines(po: PurchaseOrder): PoLine[] {
+  const real = (po.lines || []).filter((l) => l.item_code || Number(l.target_qty) > 0)
+  if (real.length > 0) return real
+  return [
+    {
+      id: '',
+      po_id: po.id,
+      po_no: po.po_no,
+      item_code: po.item_code,
+      description: po.description || '',
+      target_qty: Number(po.target_qty) || 0,
+    },
+  ]
+}
+
+/** Tiến độ của 1 mã hàng: chỉ cộng log gán đúng mã đó. */
+export function buildPoLineProgress(line: PoLine, logs: PoReceiptLog[]): PoLineWithProgress {
+  const isVirtual = !String(line.id || '').trim()
+  const lineLogs = logs.filter((l) => {
+    if (l.po_id !== line.po_id) return false
+    if (isVirtual) return true // PO 1 mã cũ: toàn bộ log PO đều tính cho mã duy nhất
+    return String((l as PoReceiptLog).po_line_id || '') === String(line.id)
+  })
+  const received_qty = lineLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+  const target = Number(line.target_qty) || 0
+  const remaining_qty = Math.max(0, target - received_qty)
+  const progress = calcPoProgress(target, received_qty)
+  const progressCapped = Math.min(100, Math.max(0, progress))
+  return {
+    ...line,
+    received_qty,
+    remaining_qty,
+    progress,
+    progressCapped,
+    level: getPoProgressLevel(progress),
+    status: progress >= 100 ? 'completed' : 'open',
+    receipt_count: lineLogs.length,
+  }
+}
+
 /**
  * Gộp PO + toàn bộ log nhập hàng thành bản ghi tiến độ.
- * Quy tắc đóng PO: received >= target -> 'completed' (tự động), ngược lại 'open'.
+ * T2: nhập theo từng mã — PO chỉ 'completed' khi TẤT CẢ mã đều đủ.
+ * Tương thích ngược: PO chưa có log theo mã nào thì vẫn dùng tổng gộp cũ
+ * (tránh bật mở lại PO đã giao đủ trước khi migrate).
  */
 export function buildPoProgress(po: PurchaseOrder, logs: PoReceiptLog[]): PurchaseOrderWithProgress {
   const poLogs = logs.filter((l) => l.po_id === po.id)
@@ -186,7 +253,23 @@ export function buildPoProgress(po: PurchaseOrder, logs: PoReceiptLog[]): Purcha
   const progress = calcPoProgress(target, received_qty)
   const progressCapped = Math.min(100, Math.max(0, progress))
   const level = getPoProgressLevel(progress)
-  const status = progress >= 100 ? 'completed' : 'open'
+
+  const effectiveLines = getEffectivePoLines(po)
+  const linesProgress = effectiveLines.map((line) => buildPoLineProgress(line, poLogs))
+  const legacyLogs = poLogs.filter(isLegacyPoLog)
+  const legacy_received_qty = legacyLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+  const hasLineLogs = poLogs.some((l) => !isLegacyPoLog(l))
+  const hasRealLines = (po.lines || []).filter((l) => l.item_code || Number(l.target_qty) > 0).length > 0
+
+  // PO nhiều mã + đã có log theo mã -> đóng chỉ khi mọi mã đủ; ngược lại giữ logic tổng gộp cũ.
+  const status: PurchaseOrderWithProgress['status'] =
+    hasRealLines && hasLineLogs
+      ? linesProgress.length > 0 && linesProgress.every((l) => l.status === 'completed')
+        ? 'completed'
+        : 'open'
+      : progress >= 100
+        ? 'completed'
+        : 'open'
 
   return {
     ...po,
@@ -197,6 +280,9 @@ export function buildPoProgress(po: PurchaseOrder, logs: PoReceiptLog[]): Purcha
     progressCapped,
     level,
     receipt_count: poLogs.length,
+    linesProgress,
+    legacy_received_qty,
+    legacy_receipt_count: legacyLogs.length,
   }
 }
 

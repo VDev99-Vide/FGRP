@@ -47,6 +47,17 @@ alter table purchase_orders
   add column if not exists description text not null default '',
   add column if not exists note text not null default '';
 
+-- T2: nhập hàng theo từng mã (log mới gắn po_line_id, log cũ NULL giữ nguyên tính tổng PO).
+-- Nếu dùng PO nhiều mã (po_lines) thì chạy thêm:
+--   database/purchase_orders_lines.sql
+--   database/purchase_orders_line_receipts.sql
+alter table po_receipt_logs
+  add column if not exists po_line_id uuid default null,
+  add column if not exists item_code text not null default '';
+
+create index if not exists idx_po_receipt_logs_po_line_id on po_receipt_logs (po_line_id);
+create index if not exists idx_po_receipt_logs_item_code on po_receipt_logs (item_code);
+
 -- ==========================================
 -- PHÂN QUYỀN (đồng bộ với shipping_forecast: tắt RLS cho hệ thống nội bộ)
 -- ==========================================

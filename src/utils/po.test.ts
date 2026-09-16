@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   PO_FLOW_COLORS,
   PO_LINES_MAX,
+  buildPoLineProgress,
   buildPoProgress,
   calcPoProgress,
   computePoStats,
   filterPurchaseOrders,
   formatIsoDate,
+  getEffectivePoLines,
   getPoProgressLevel,
   hexWithAlpha,
   interpolatePoColor,
@@ -16,6 +18,7 @@ import {
   sortPoForDisplay,
   sumPoLinesTarget,
   todayIsoDate,
+  validateLineReceiptInput,
   validatePoInput,
   validatePoLines,
   validateReceiptInput,
@@ -353,5 +356,75 @@ describe('T1: PO N sản phẩm (po_lines)', () => {
     ]
     expect(filterPurchaseOrders(orders, 'b2-hex', 'all')).toHaveLength(1)
     expect(filterPurchaseOrders(orders, 'b2-hex', 'all')[0].id).toBe('n')
+  })
+})
+
+describe('T2: nhập hàng theo từng mã', () => {
+  const multiPo = (over: Partial<PurchaseOrder> = {}) =>
+    makePo({
+      id: 'po-m',
+      po_no: 'PO-MULTI',
+      item_code: 'A',
+      target_qty: 10000,
+      lines: [
+        { id: 'la', po_id: 'po-m', po_no: 'PO-MULTI', item_code: 'A', description: 'Ghế A', target_qty: 4000 },
+        { id: 'lb', po_id: 'po-m', po_no: 'PO-MULTI', item_code: 'B', description: 'Ghế B', target_qty: 6000 },
+      ],
+      ...over,
+    })
+
+  it('getEffectivePoLines: PO cũ không lines -> 1 dòng ảo từ header', () => {
+    const lines = getEffectivePoLines(makePo({ id: 'x', item_code: 'M1', target_qty: 500 }))
+    expect(lines).toHaveLength(1)
+    expect(lines[0].item_code).toBe('M1')
+    expect(getEffectivePoLines(multiPo())).toHaveLength(2)
+  })
+
+  it('linesProgress chỉ cộng log gán đúng mã, log gộp cũ không tính vào mã nào', () => {
+    const logs = [
+      makeLog({ id: 'g', po_id: 'po-m', qty: 6000, po_line_id: null }),
+      makeLog({ id: 'a1', po_id: 'po-m', qty: 4000, po_line_id: 'la', item_code: 'A' }),
+    ]
+    const r = buildPoProgress(multiPo(), logs)
+    expect(r.linesProgress).toHaveLength(2)
+    expect(r.linesProgress.find((l) => l.id === 'la')?.received_qty).toBe(4000)
+    expect(r.linesProgress.find((l) => l.id === 'lb')?.received_qty).toBe(0)
+    expect(r.legacy_received_qty).toBe(6000)
+    expect(r.received_qty).toBe(10000)
+  })
+
+  it('PO nhiều mã chưa có log theo mã nào: giữ logic gộp cũ (đủ tổng -> completed)', () => {
+    const r = buildPoProgress(multiPo(), [makeLog({ po_id: 'po-m', qty: 10000, po_line_id: null })])
+    expect(r.status).toBe('completed')
+  })
+
+  it('đã có log theo mã: PO chỉ đóng khi TẤT CẢ mã đủ (tổng đủ nhưng còn mã thiếu vẫn open)', () => {
+    const logs = [
+      makeLog({ id: 'g', po_id: 'po-m', qty: 6000, po_line_id: null }),
+      makeLog({ id: 'a1', po_id: 'po-m', qty: 4000, po_line_id: 'la', item_code: 'A' }),
+    ]
+    const r = buildPoProgress(multiPo(), logs)
+    // Tổng 10000/10000 nhưng mã B mới 0/6000
+    expect(r.status).toBe('open')
+    const done = buildPoProgress(multiPo(), [
+      ...logs,
+      makeLog({ id: 'b1', po_id: 'po-m', qty: 6000, po_line_id: 'lb', item_code: 'B' }),
+    ])
+    expect(done.status).toBe('completed')
+    expect(done.linesProgress.every((l) => l.status === 'completed')).toBe(true)
+  })
+
+  it('buildPoLineProgress cho PO 1 mã cũ: toàn bộ log PO tính hết vào mã duy nhất', () => {
+    const po = makePo({ id: 's', target_qty: 1000 })
+    const line = getEffectivePoLines(po)[0]
+    const r = buildPoLineProgress(line, [makeLog({ po_id: 's', qty: 400 })])
+    expect(r.received_qty).toBe(400)
+    expect(r.remaining_qty).toBe(600)
+  })
+
+  it('validateLineReceiptInput bắt buộc chọn mã khi PO nhiều mã', () => {
+    expect(validateLineReceiptInput({ qty: 10, receipt_date: '2026-09-15', po_line_id: null }, 2)).toContain('chọn mã')
+    expect(validateLineReceiptInput({ qty: 10, receipt_date: '2026-09-15', po_line_id: 'la' }, 2)).toBeNull()
+    expect(validateLineReceiptInput({ qty: 10, receipt_date: '2026-09-15' }, 1)).toBeNull()
   })
 })
