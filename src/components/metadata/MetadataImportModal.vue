@@ -29,7 +29,7 @@
             <FileSpreadsheet class="w-5 h-5 text-[#14CA74]" />
             <div>
               <p class="text-xs font-bold text-white">Chưa có file mẫu chuẩn?</p>
-              <p class="text-[10px] text-[#AEB9E1]">Khách Hàng, Mã hàng, Số lượng đóng gói, Trọng trượng/Cái, Quy cách thùng, Loại thùng</p>
+              <p class="text-[10px] text-[#AEB9E1]">Khách Hàng, Feature (Mã hàng cũ), Số lượng đóng gói, Trọng trượng/Cái, Quy cách thùng, Loại thùng</p>
             </div>
           </div>
           <button
@@ -154,7 +154,7 @@ const emit = defineEmits<{
 
 const mappingFields: { key: keyof MetadataColumnMapping; label: string }[] = [
   { key: 'customer', label: 'Khách hàng *' },
-  { key: 'item_code', label: 'Mã hàng *' },
+  { key: 'item_code', label: 'Feature (Mã hàng cũ) *' },
   { key: 'pack_qty', label: 'Số lượng đóng gói *' },
   { key: 'weight_per_unit', label: 'Trọng lượng/Cái' },
   { key: 'carton_spec', label: 'Quy cách thùng' },

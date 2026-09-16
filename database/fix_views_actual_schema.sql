@@ -1,11 +1,37 @@
 -- ============================================================
 -- FIX SCRIPT: Cập nhật Views theo cấu trúc DB thực tế
 -- Chạy toàn bộ script này trong Supabase SQL Editor
--- 
--- Cấu trúc DB thực tế:
---   inventory   : tag_id, bin, stock_up_date, id
---   master_data : tag_id(=batch), lp_no(=stock_code), qty, wh_location(=warehouse), create_date
+-- CHỈ CHẠY FILE NÀY trên DB thật. KHÔNG chạy database/supabase.sql
+-- sau đó (supabase.sql chỉ dùng bootstrap project trống).
+--
+-- DB thực có 2 biến thể tên cột (schema drift):
+--   inventory   : stock_up_date (mới) vs stock_in_date (cũ)
+--   master_data : (tag_id, lp_no, wh_location) vs (batch, stock_code, warehouse)
+-- BƯỚC 0 dưới đây thống nhất cả 2 biến thể (thêm cột thiếu + backfill
+-- 2 chiều) nên script chạy an toàn nhiều lần trên mọi biến thể.
 -- ============================================================
+
+-- ============================================================
+-- BƯỚC 0: THỐNG NHẤT SCHEMA (idempotent, chạy lại không sao)
+-- ============================================================
+alter table inventory add column if not exists stock_up_date timestamptz;
+alter table inventory add column if not exists stock_in_date timestamptz;
+update inventory set stock_in_date = stock_up_date where stock_in_date is null and stock_up_date is not null;
+update inventory set stock_up_date = stock_in_date where stock_up_date is null and stock_in_date is not null;
+
+alter table master_data add column if not exists tag_id text;
+alter table master_data add column if not exists lp_no text;
+alter table master_data add column if not exists wh_location text;
+alter table master_data add column if not exists batch text;
+alter table master_data add column if not exists stock_code text;
+alter table master_data add column if not exists warehouse text;
+-- Backfill 2 chiều (chỉ lấp chỗ trống, không ghi đè dữ liệu đã có)
+update master_data set tag_id = batch where (tag_id is null or tag_id = '') and batch is not null and batch <> '';
+update master_data set batch = tag_id where (batch is null or batch = '') and tag_id is not null and tag_id <> '';
+update master_data set lp_no = stock_code where (lp_no is null or lp_no = '') and stock_code is not null and stock_code <> '';
+update master_data set stock_code = lp_no where (stock_code is null or stock_code = '') and lp_no is not null and lp_no <> '';
+update master_data set wh_location = warehouse where (wh_location is null or wh_location = '') and warehouse is not null and warehouse <> '';
+update master_data set warehouse = wh_location where (warehouse is null or warehouse = '') and wh_location is not null and wh_location <> '';
 
 -- ============================================================
 -- BƯỚC 1: XÓA VIEWS CŨ (nếu có) để tạo lại đúng
@@ -44,8 +70,8 @@ select
   -- CreateDate từ master_data
   coalesce(m.create_date, 'No data')                       as create_date,
   
-  -- Stock In Date (cột thực là stock_up_date trong inventory)
-  i.stock_up_date                                           as stock_in_date,
+  -- Stock In Date (DB có thể là stock_up_date hoặc stock_in_date — BƯỚC 0 đã unify)
+  coalesce(i.stock_up_date, i.stock_in_date)                 as stock_in_date,
   
   -- Tag ID từ inventory
   i.tag_id                                                  as tag_id,
@@ -60,12 +86,14 @@ from inventory i
 left join (
   -- Khử fan-out: nếu master_data có nhiều dòng cùng 1 tag_id (BATCH trùng),
   -- chỉ giữ 1 dòng (mới nhất theo create_date) để mỗi tag trong inventory
-  -- sinh ra đúng 1 dòng view thay vì bị nhân bản
-  select distinct on (trim(lower(tag_id)))
-    tag_id, lp_no, qty, wh_location, create_date
+  -- sinh ra đúng 1 dòng view thay vì bị nhân bản.
+  -- NOTE: cột phải qualify bằng master_data.* để Postgres không nhầm sang
+  -- outer table inventory (lỗi "must mark this subquery with LATERAL").
+  select distinct on (trim(lower(master_data.tag_id)))
+    master_data.tag_id, master_data.lp_no, master_data.qty, master_data.wh_location, master_data.create_date
   from master_data
-  where tag_id is not null
-  order by trim(lower(tag_id)), create_date desc nulls last, lp_no
+  where master_data.tag_id is not null
+  order by trim(lower(master_data.tag_id)), master_data.create_date desc nulls last, master_data.lp_no
 ) m
   on trim(lower(i.tag_id)) = trim(lower(m.tag_id));
 
@@ -87,14 +115,21 @@ with actual_by_feature as (
 ),
 iscala_by_feature as (
   select
-    -- Tách feature từ lp_no theo công thức MID(text,2,4)
-    substring(trim(lp_no) from 2 for 4)  as feature,
+    -- T3: hard-code 1220 TRƯỚC MID(text,2,4), đồng bộ với src/utils/feature.ts
+    case
+      when trim(lp_no) like '1220%' then '1220'
+      else substring(trim(lp_no) from 2 for 4)
+    end as feature,
     sum(qty)::numeric                     as iscala
   from master_data
   where wh_location in ('60', '01')
     and lp_no is not null
     and length(trim(lp_no)) >= 5
-  group by substring(trim(lp_no) from 2 for 4)
+  group by
+    case
+      when trim(lp_no) like '1220%' then '1220'
+      else substring(trim(lp_no) from 2 for 4)
+    end
 )
 select
   coalesce(a.feature, i.feature)                                 as feature,
@@ -127,36 +162,40 @@ begin
   -- Xóa dữ liệu cũ an toàn
   delete from master_data;
 
-  -- Chèn dữ liệu mới từ payload
+  -- Chèn dữ liệu mới từ payload, ghi CẢ 2 bộ tên cột (BƯỚC 0 đã unify)
+  -- để DB biến thể nào cũng đọc được ngay, không chờ backfill.
   -- Hỗ trợ cả 2 tên cột cũ/mới để tương thích CSV
-  insert into master_data (tag_id, lp_no, qty, wh_location, create_date)
-  select
-    -- batch / tag_id / BATCH
-    coalesce(
-      nullif(trim(item->>'batch'), ''),
-      nullif(trim(item->>'tag_id'), ''),
-      nullif(trim(item->>'BATCH'), '')
-    ),
-    -- stock_code / lp_no / LP.No
-    coalesce(
-      nullif(trim(item->>'stock_code'), ''),
-      nullif(trim(item->>'lp_no'), ''),
-      nullif(trim(item->>'LP.No'), '')
-    ),
-    -- qty
-    nullif(trim(item->>'qty'), '')::numeric,
-    -- warehouse / wh_location
-    coalesce(
-      nullif(trim(item->>'warehouse'), ''),
-      nullif(trim(item->>'wh_location'), '')
-    ),
-    -- create_date / createdate / CREATEDATE
-    coalesce(
-      nullif(trim(item->>'create_date'), ''),
-      nullif(trim(item->>'createdate'), ''),
-      nullif(trim(item->>'CREATEDATE'), '')
-    )
-  from jsonb_array_elements(payload) as item;
+  insert into master_data (tag_id, batch, lp_no, stock_code, qty, wh_location, warehouse, create_date)
+  with vals as (
+    select
+      -- batch / tag_id / BATCH
+      coalesce(
+        nullif(trim(item->>'batch'), ''),
+        nullif(trim(item->>'tag_id'), ''),
+        nullif(trim(item->>'BATCH'), '')
+      ) as b,
+      -- stock_code / lp_no / LP.No
+      coalesce(
+        nullif(trim(item->>'stock_code'), ''),
+        nullif(trim(item->>'lp_no'), ''),
+        nullif(trim(item->>'LP.No'), '')
+      ) as c,
+      -- qty
+      nullif(trim(item->>'qty'), '')::numeric as q,
+      -- warehouse / wh_location
+      coalesce(
+        nullif(trim(item->>'warehouse'), ''),
+        nullif(trim(item->>'wh_location'), '')
+      ) as w,
+      -- create_date / createdate / CREATEDATE
+      coalesce(
+        nullif(trim(item->>'create_date'), ''),
+        nullif(trim(item->>'createdate'), ''),
+        nullif(trim(item->>'CREATEDATE'), '')
+      ) as d
+    from jsonb_array_elements(payload) as item
+  )
+  select b, b, c, c, q, w, w, d from vals;
 end;
 $$;
 

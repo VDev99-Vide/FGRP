@@ -1,5 +1,9 @@
 -- ==========================================
 -- 1. BẢNG DỮ LIỆU THỰC TẾ (INVENTORY)
+-- LƯU Ý: file này chỉ dùng BOOTSTRAP project trống. Trên DB thật chỉ chạy
+-- database/fix_views_actual_schema.sql (file đó đã unify schema + fix views).
+-- Khối UNIFY bên dưới giúp view trong file này không vỡ nếu ai đó chạy nhầm
+-- trên DB dùng biến thể tên cột còn lại (stock_up_date / tag_id / lp_no).
 -- ==========================================
 create table if not exists inventory (
   id uuid primary key default gen_random_uuid(),
@@ -48,6 +52,26 @@ create table if not exists hang_phu_kien (
 create index if not exists idx_hang_phu_kien_code on hang_phu_kien (code);
 
 -- ==========================================
+-- 3b. UNIFY SCHEMA (an toàn, idempotent): DB thật có thể dùng biến thể
+-- tên cột còn lại (inventory.stock_up_date; master_data.tag_id/lp_no/
+-- wh_location). Thêm cột thiếu + backfill 2 chiều để view/RPC dưới đây
+-- chạy được trên mọi biến thể.
+-- ==========================================
+alter table inventory add column if not exists stock_up_date timestamptz;
+update inventory set stock_in_date = stock_up_date where stock_in_date is null and stock_up_date is not null;
+update inventory set stock_up_date = stock_in_date where stock_up_date is null and stock_in_date is not null;
+
+alter table master_data add column if not exists tag_id text;
+alter table master_data add column if not exists lp_no text;
+alter table master_data add column if not exists wh_location text;
+update master_data set tag_id = batch where (tag_id is null or tag_id = '') and batch is not null and batch <> '';
+update master_data set batch = tag_id where (batch is null or batch = '') and tag_id is not null and tag_id <> '';
+update master_data set lp_no = stock_code where (lp_no is null or lp_no = '') and stock_code is not null and stock_code <> '';
+update master_data set stock_code = lp_no where (stock_code is null or stock_code = '') and lp_no is not null and lp_no <> '';
+update master_data set wh_location = warehouse where (wh_location is null or wh_location = '') and warehouse is not null and warehouse <> '';
+update master_data set warehouse = wh_location where (warehouse is null or warehouse = '') and wh_location is not null and wh_location <> '';
+
+-- ==========================================
 -- 4. RPC THAY THẾ DỮ LIỆU NGUỒN AN TOÀN
 -- ==========================================
 create or replace function replace_master_data(payload jsonb)
@@ -59,15 +83,19 @@ begin
   -- Xóa dữ liệu cũ
   delete from master_data;
 
-  -- Chèn dữ liệu mới từ payload
-  insert into master_data (batch, stock_code, qty, warehouse, create_date)
-  select
-    item->>'batch',
-    item->>'stock_code',
-    nullif(item->>'qty', '')::numeric,
-    item->>'warehouse',
-    item->>'create_date'
-  from jsonb_array_elements(payload) as item;
+  -- Chèn dữ liệu mới từ payload, ghi CẢ 2 bộ tên cột để tương thích
+-- với DB biến thể (tag_id/lp_no/wh_location). Cột thiếu được tạo ở khối UNIFY.
+insert into master_data (batch, tag_id, stock_code, lp_no, qty, warehouse, wh_location, create_date)
+  with vals as (
+    select
+      item->>'batch' as b,
+      item->>'stock_code' as c,
+      nullif(item->>'qty', '')::numeric as q,
+      item->>'warehouse' as w,
+      item->>'create_date' as d
+    from jsonb_array_elements(payload) as item
+  )
+  select b, b, c, c, q, w, w, d from vals;
 end;
 $$;
 
@@ -87,7 +115,7 @@ select
   coalesce(m.qty, 0) as qty,
   coalesce(m.warehouse, 'No data') as warehouse,
   coalesce(m.create_date, 'No data') as create_date,
-  i.stock_in_date as stock_in_date,
+  coalesce(i.stock_up_date, i.stock_in_date) as stock_in_date,
   i.tag_id as tag_id,
   i.bin as bin,
   i.id as inventory_id
@@ -109,12 +137,13 @@ with actual_by_feature as (
 ),
 iscala_by_feature as (
   select
-    substring(stock_code from 2 for 4) as feature,
+    -- T3: hard-code 1220 TRƯỚC MID, đồng bộ feature.ts
+    case when trim(stock_code) like '1220%' then '1220' else substring(stock_code from 2 for 4) end as feature,
     sum(qty)::numeric as iscala
   from master_data
   where warehouse in ('60', '01')
     and stock_code is not null
-  group by substring(stock_code from 2 for 4)
+  group by case when trim(stock_code) like '1220%' then '1220' else substring(stock_code from 2 for 4) end
 )
 select
   coalesce(a.feature, i.feature) as feature,

@@ -112,6 +112,19 @@ export interface PurchaseOrder {
   closed_at?: string | null;
   created_at?: string;
   updated_at?: string;
+  /** T1: chi tiết N sản phẩm/PO. PO cũ không có lines vẫn chạy (coi như 1 dòng). */
+  lines?: PoLine[];
+}
+
+export interface PoLine {
+  id: string;
+  po_id: string;
+  po_no: string;
+  item_code: string;
+  description?: string;
+  target_qty: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface PoReceiptLog {

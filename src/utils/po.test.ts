@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   PO_FLOW_COLORS,
+  PO_LINES_MAX,
   buildPoProgress,
   calcPoProgress,
   computePoStats,
@@ -13,8 +14,10 @@ import {
   normalizePoNo,
   shadeHex,
   sortPoForDisplay,
+  sumPoLinesTarget,
   todayIsoDate,
   validatePoInput,
+  validatePoLines,
   validateReceiptInput,
 } from './po'
 import type { PurchaseOrder, PoReceiptLog } from '@/types'
@@ -286,5 +289,69 @@ describe('helpers ngày tháng & chuẩn hóa', () => {
     expect(isValidIsoDate('2026-09-15')).toBe(true)
     expect(isValidIsoDate('15/09/2026')).toBe(false)
     expect(isValidIsoDate('')).toBe(false)
+  })
+})
+
+describe('T1: PO N sản phẩm (po_lines)', () => {
+  it('sumPoLinesTarget cộng dồn đúng', () => {
+    expect(sumPoLinesTarget([{ item_code: 'A', target_qty: 4000 }, { item_code: 'B', target_qty: 6000 }])).toBe(10000)
+    expect(sumPoLinesTarget([])).toBe(0)
+    expect(sumPoLinesTarget(null)).toBe(0)
+  })
+
+  it('validatePoLines chặn rỗng / quá max / thiếu mã / target sai', () => {
+    expect(validatePoLines([])).toContain('ít nhất 1 sản phẩm')
+    expect(validatePoLines([{ item_code: '', target_qty: 10 }])).toContain('Dòng 1')
+    expect(validatePoLines([{ item_code: 'A', target_qty: 0 }])).toContain('Dòng 1')
+    expect(validatePoLines([{ item_code: 'A', target_qty: 10 }])).toBeNull()
+    const many = Array.from({ length: PO_LINES_MAX + 1 }, (_, i) => ({ item_code: `M${i}`, target_qty: 1 }))
+    expect(validatePoLines(many)).toContain('Tối đa')
+  })
+
+  it('validatePoInput ưu tiên lines: target = sum, vẫn bắt ngày sai', () => {
+    expect(
+      validatePoInput({
+        po_no: 'PO-1',
+        supplier: 'NCC',
+        item_code: '',
+        target_qty: 0,
+        created_date: '2026-09-15',
+        lines: [
+          { item_code: 'A', target_qty: 4000 },
+          { item_code: 'B', target_qty: 6000 },
+        ],
+      }),
+    ).toBeNull()
+    expect(
+      validatePoInput({
+        po_no: 'PO-1',
+        supplier: 'NCC',
+        item_code: '',
+        target_qty: 0,
+        created_date: '15/09/2026',
+        lines: [{ item_code: 'A', target_qty: 10 }],
+      }),
+    ).toContain('Ngày tạo')
+  })
+
+  it('filter tìm được mã trong lines', () => {
+    const orders = [
+      buildPoProgress(makePo({ id: 'm', po_no: 'PO-M', item_code: 'A', target_qty: 100, lines: [] }), []),
+      buildPoProgress(
+        makePo({
+          id: 'n',
+          po_no: 'PO-N',
+          item_code: 'B1',
+          target_qty: 100,
+          lines: [
+            { id: 'l1', po_id: 'n', po_no: 'PO-N', item_code: 'B1', target_qty: 60 },
+            { id: 'l2', po_id: 'n', po_no: 'PO-N', item_code: 'B2-HEX', target_qty: 40 },
+          ],
+        }),
+        [],
+      ),
+    ]
+    expect(filterPurchaseOrders(orders, 'b2-hex', 'all')).toHaveLength(1)
+    expect(filterPurchaseOrders(orders, 'b2-hex', 'all')[0].id).toBe('n')
   })
 })

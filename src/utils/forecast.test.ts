@@ -97,22 +97,29 @@ describe('calculateFeaturePkg (Công thức tính Kiện & Thùng)', () => {
   })
 })
 
-describe('isContainerExpired & filterOutExpiredItems (Tự xóa sau 1 ngày)', () => {
-  it('đơn đã chuẩn bị xong quá 24h thì hết hạn', () => {
-    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
-    expect(isContainerExpired('ready', twentyFiveHoursAgo)).toBe(true)
+describe('isContainerExpired & filterOutExpiredItems (Tự xóa sau 3 ngày / 72h — T2)', () => {
+  it('đơn đã chuẩn bị xong quá 72h thì hết hạn', () => {
+    const seventyThreeHoursAgo = new Date(Date.now() - 73 * 60 * 60 * 1000).toISOString()
+    expect(isContainerExpired('ready', seventyThreeHoursAgo)).toBe(true)
   })
 
-  it('đơn đã chuẩn bị xong chưa tới 24h thì không hết hạn', () => {
+  it('đơn 71h59m chưa hết hạn, 72h01m hết hạn (boundary 72h)', () => {
+    const almost72 = new Date(Date.now() - (72 * 60 - 1) * 60 * 1000).toISOString()
+    const justOver72 = new Date(Date.now() - (72 * 60 + 1) * 60 * 1000).toISOString()
+    expect(isContainerExpired('ready', almost72)).toBe(false)
+    expect(isContainerExpired('ready', justOver72)).toBe(true)
+  })
+
+  it('đơn đã chuẩn bị xong chưa tới 72h thì không hết hạn', () => {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
     expect(isContainerExpired('ready', twoHoursAgo)).toBe(false)
-    expect(getRemainingHoursBeforeDelete(twoHoursAgo)).toBe(22)
+    expect(getRemainingHoursBeforeDelete(twoHoursAgo)).toBe(70)
   })
 
-  it('filterOutExpiredItems loại bỏ các item đã ready quá 24h', () => {
-    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+  it('filterOutExpiredItems loại bỏ các item đã ready quá 72h', () => {
+    const seventyThreeHoursAgo = new Date(Date.now() - 73 * 60 * 60 * 1000).toISOString()
     const items: ForecastRawItem[] = [
-      { po: 'PO1', so: 'SO1', item_code: '8163210604', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 50, status: 'ready', status_changed_at: twentyFiveHoursAgo },
+      { po: 'PO1', so: 'SO1', item_code: '8163210604', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 50, status: 'ready', status_changed_at: seventyThreeHoursAgo },
       { po: 'PO2', so: 'SO2', item_code: '8163220604', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 50, status: 'pending', status_changed_at: null }
     ]
     const filtered = filterOutExpiredItems(items)

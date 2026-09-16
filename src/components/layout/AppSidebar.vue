@@ -127,8 +127,12 @@
           <span>Đồng bộ cuối:</span>
           <span class="text-white font-mono font-bold">{{ lastSync }}</span>
         </div>
-        <div class="text-center mt-3 pt-3 border-t border-white/10 text-[#AEB9E1]/50 text-[9px] tracking-widest uppercase">
-          Dashdark V &copy; 2026
+        <div class="text-center mt-3 pt-3 border-t border-white/10 text-[#AEB9E1]/50 text-[9px] tracking-widest uppercase flex flex-col items-center gap-1.5">
+          <span>Dashdark V &copy; 2026</span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00FF29]/10 border border-[#00FF29]/30 text-[#00FF29] font-mono text-[9px] font-bold tracking-normal normal-case shadow-[0_0_10px_rgba(0,255,41,0.15)]">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#00FF29] animate-pulse"></span>
+            v2.2.0 (2026.09.16)
+          </span>
         </div>
       </div>
     </div>

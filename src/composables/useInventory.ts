@@ -6,24 +6,13 @@ import {
   generateMockSummary 
 } from '@/services/mockData'
 import { InventoryRow, SummaryAnalysisRow, KpiState, AnalysisState } from '@/types'
+// T3: dùng module feature trung tâm (hard-code 1220), giữ re-export để không vỡ import cũ
+import { extractFeatureFromStockCode as extractFeatureCentral } from '@/utils/feature'
 
-// Hàm trích xuất Feature:
-// - Mã đặc biệt bắt đầu bằng '1220' (ví dụ 1220190004, 1220200004): lấy 4 số đầu '1220'
-// - Các mã khác: theo chuẩn Excel =MID(text, 2, 4) (bỏ số đầu, lấy 4 số tiếp theo)
-export const extractFeatureFromStockCode = (stockCode: string): string => {
-  if (!stockCode || stockCode.trim() === '' || stockCode === 'No data') return 'No data'
-  const clean = stockCode.trim()
-  // Mã đặc biệt 1220 (1220190004, 1220200004): lấy trọn 4 số đầu 1220
-  if (clean.startsWith('1220')) {
-    return '1220'
-  }
-  // Excel: =MID("810090203", 2, 4) -> bắt đầu từ ký tự 2 lấy 4 ký tự -> "1009"
-  // JavaScript substring(1, 5)
-  if (clean.length >= 5) {
-    return clean.substring(1, 5)
-  }
-  return clean
-}
+// Hàm trích xuất Feature (re-export centralize — giữ tên cũ cho tương thích):
+// - Mã 1220: lấy 4 số đầu '1220' (hard-code toàn hệ thống)
+// - Còn lại: MID(text,2,4) = substring(1,5)
+export const extractFeatureFromStockCode = extractFeatureCentral
 
 // Khử trùng dòng view theo inventory_id: mỗi tag vật lý chỉ có 1 dòng trong inventory,
 // nhưng LEFT JOIN với master_data có thể nhân bản dòng khi nhiều dòng master_data trùng tag_id
@@ -46,6 +35,11 @@ export function useInventory() {
   const inventoryData = ref<InventoryRow[]>([])
   const summaryData = ref<SummaryAnalysisRow[]>([])
   const lastSync = ref('--:--')
+  /** T4: override metadata feature -> pack (do App/view set sau khi load metadata). */
+  const inventoryPackSpecs = ref<Record<string, { pack_qty: number; carton_type: string }>>({})
+  const setInventoryPackSpecs = (m: Record<string, { pack_qty: number; carton_type: string }>) => {
+    inventoryPackSpecs.value = m || {}
+  }
   
   const kpi = reactive<KpiState>({
     totalActual: 0,
@@ -189,12 +183,12 @@ export function useInventory() {
 
     analysis.duplicates = duplicateTags
 
-    // Nhóm tồn kho theo Feature để tính số kiện
+    // Nhóm tồn kho theo Feature để tính số kiện — T4 chuẩn metadata (có fallback cũ khi chưa wiring)
     const featureGroups: Record<string, { sum: number; max: number }> = {}
     inventoryData.value.forEach(row => {
       const feat = row.feature
       if (!feat || feat === 'No data') return
-      
+
       if (!featureGroups[feat]) {
         featureGroups[feat] = { sum: 0, max: 0 }
       }
@@ -209,7 +203,16 @@ export function useInventory() {
     const mid: any[] = []
 
     Object.entries(featureGroups).forEach(([feat, g]) => {
-      const kien = g.max > 0 ? (g.sum / 2) / g.max : 0
+      // T4: ưu tiên metadata khi có override, fallback (sum/2)/max khi chưa có
+      const spec = inventoryPackSpecs.value[feat]
+      let kien: number
+      if (spec && Number(spec.pack_qty) > 0) {
+        const single = /thùng đơn/i.test(String(spec.carton_type || ''))
+        const raw = single ? g.sum / Number(spec.pack_qty) : (g.sum / 2) / Number(spec.pack_qty)
+        kien = Math.round(raw * 100) / 100
+      } else {
+        kien = g.max > 0 ? Math.round(((g.sum / 2) / g.max) * 100) / 100 : 0
+      }
       if (kien < 2) {
         low.push({ feat, kien: kien.toFixed(2) })
       } else if (kien >= 3 && kien <= 5) {
@@ -451,6 +454,8 @@ export function useInventory() {
     kpi,
     analysis,
     lastSync,
+    inventoryPackSpecs,
+    setInventoryPackSpecs,
     fetchInventory,
     inbound,
     importCsvData,

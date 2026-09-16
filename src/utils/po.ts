@@ -116,18 +116,52 @@ export function isValidIsoDate(iso: string): boolean {
 }
 
 /** Validate dữ liệu tạo / sửa PO. Trả về message lỗi hoặc null khi hợp lệ. */
+export interface PoLineInput {
+  item_code: string
+  description?: string
+  target_qty: number | string
+}
+
+export const PO_LINES_MAX = 20
+
+/** Tổng target = cộng dồn lines (dùng cho PO N sản phẩm). */
+export function sumPoLinesTarget(lines: PoLineInput[] | undefined | null): number {
+  if (!lines || lines.length === 0) return 0
+  return lines.reduce((s, l) => s + (Number(l.target_qty) || 0), 0)
+}
+
+/** Validate danh sách dòng sản phẩm (mỗi dòng cần Mã hàng + Mục tiêu > 0). */
+export function validatePoLines(lines: PoLineInput[] | undefined | null): string | null {
+  if (!lines || lines.length === 0) return 'Vui lòng thêm ít nhất 1 sản phẩm!'
+  if (lines.length > PO_LINES_MAX) return `Tối đa ${PO_LINES_MAX} sản phẩm trong 1 PO!`
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]
+    if (!String(l.item_code || '').trim()) return `Dòng ${i + 1}: Vui lòng nhập Mã hàng!`
+    const t = Number(l.target_qty)
+    if (!Number.isFinite(t) || t <= 0) return `Dòng ${i + 1}: Mục tiêu phải là số lớn hơn 0!`
+  }
+  return null
+}
+
 export function validatePoInput(input: {
   po_no: string
   supplier: string
   item_code: string
   target_qty: number | string
   created_date: string
+  lines?: PoLineInput[] | null
 }): string | null {
   if (!String(input.po_no || '').trim()) return 'Vui lòng nhập Số PO!'
   if (!String(input.supplier || '').trim()) return 'Vui lòng nhập Nhà cung cấp!'
-  if (!String(input.item_code || '').trim()) return 'Vui lòng nhập Mã hàng!'
-  const target = Number(input.target_qty)
-  if (!Number.isFinite(target) || target <= 0) return 'Mục tiêu phải là số lớn hơn 0!'
+  // T1: nếu có lines thì validate lines, target = sum(lines); nếu không thì validate kiểu cũ 1 dòng
+  if (input.lines && input.lines.length > 0) {
+    const lineErr = validatePoLines(input.lines)
+    if (lineErr) return lineErr
+  } else {
+    if (!String(input.item_code || '').trim()) return 'Vui lòng nhập Mã hàng!'
+    const target = Number(input.target_qty)
+    if (!Number.isFinite(target) || target <= 0) return 'Mục tiêu phải là số lớn hơn 0!'
+  }
   if (!isValidIsoDate(input.created_date)) return 'Ngày tạo PO không hợp lệ (yyyy-mm-dd)!'
   return null
 }
@@ -197,6 +231,8 @@ export function filterPurchaseOrders(
   return orders.filter((o) => {
     if (status !== 'all' && o.status !== status) return false
     if (!q) return true
-    return [o.po_no, o.supplier, o.item_code].join(' ').toLowerCase().includes(q)
+    // T1: tìm cả trong lines (PO N sản phẩm)
+    const lineCodes = (o.lines || []).map((l) => `${l.item_code} ${l.description || ''}`).join(' ')
+    return [o.po_no, o.supplier, o.item_code, o.description || '', lineCodes].join(' ').toLowerCase().includes(q)
   })
 }

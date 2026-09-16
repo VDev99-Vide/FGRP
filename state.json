@@ -1,8 +1,26 @@
 {
   "project": "FGRP",
-  "lastUpdated": "2026-08-16T06:11:00Z",
-  "phase": "local-testing",
-  "status": "ready-for-review",
+  "lastUpdated": "2026-09-16T03:08:00Z",
+  "phase": "loop-complete",
+  "status": "all-6-tasks-done-122/122-build-pass-hotfix-sql-views-done",
+  "clarifiedDecisions": {
+    "poMultiProduct": "Bảng po_lines riêng (giữ purchase_orders, thêm po_lines(po_no/item_code/description/target_qty))",
+    "poDraft": "sessionStorage key po-draft + restore + nút Xóa nháp, chỉ modal tạo PO",
+    "autoDelete": "Đổi 24h sang 3 ngày (72h), KHÔNG bỏ hẳn. Sửa SQL interval 1 day->3 days + TS expireHours 24->72 + UI text",
+    "pkgFormula": "Thùng đôi = tổng SL/2/pack_qty metadata; Thùng đơn = tổng SL/pack_qty (không /2); đơn vị đều là Kiện; thiếu metadata thì cảnh báo ở header mỗi feature",
+    "feature1220": "Centralize 1 hàm extractFeature + fix mọi view SQL CASE 1220 trước MID(2,4)",
+    "metadataRename": "Chỉ đổi label UI Mã hàng -> Feature, giữ cột DB item_code",
+    "accessorySuggest": "Metadata item_code có 3 loại: (1) 4 số đã tách vd 1009, (2) đầu 8 vd 8101010104, (3) mã phụ kiện còn lại. Gợi ý phụ kiện = loại (3), loại trừ (1)+(2)",
+    "removeJumpButton": "Bỏ nút Lọc tồn kho header container ShippingForecastView.vue:250-258 (dùng features[0] sai), giữ nút Lọc tồn trong hàng :423-428 theo từng Feature"
+  },
+  "upgradePlan": {
+    "task1_poMulti": "DB purchase_orders_lines.sql mới + composable usePurchaseOrders hỗ trợ lines + PurchaseOrderModal rows thêm/xóa + validate từng dòng + draft sessionStorage + PoWavePipe height 19px->16px (-15%)",
+    "task2_retention_header": "shipping_forecast.sql interval 3 days + forecast.ts expireHours 72 + useShippingForecast cleanup 72h + UI 'Tự xóa sau 72h' + xóa header jump button, giữ per-row",
+    "task3_feature1220": "Tạo src/utils/feature.ts centralize extractFeature/isSpecial + refactor forecast.ts + useInventory.ts + forecastExcel + fix_views_actual_schema.sql + supabase.sql thêm CASE 1220",
+    "task4_pkgMetadata": "Tạo src/utils/packingSpec.ts getPackSpecByFeature từ metadata_quy_cach (ưu tiên thùng đôi/đơn, warn thiếu) + sửa calculateFeaturePkg + InventoryGrid/useInventory kien + cảnh báo header feature",
+    "task5_metadata_accessory": "MetadataView/PackingSpecModal/MetadataImportModal đổi label Mã hàng->Feature + AccessoryInboundModal suggestions từ metadata loại (3)",
+    "task6_qa": "vitest run từng file + vue-tsc -b + vite build, không bịa kết quả, ghi evidence"
+  },
   "tasks": {
     "cleanupAider": "done",
     "createStateJson": "done",
@@ -12,7 +30,15 @@
     "verifyBuildAndRun": "done",
     "writeReport": "done",
     "redesignComparisonChartLine": "done",
-    "redesignRiskNestedPieChart": "done"
+    "redesignRiskNestedPieChart": "done",
+    "T6_qa": "done-v1-PASS-full-122/122-vue-tsc-clean-vite-build-pass",
+    "HOTFIX_sqlViews_schemaDrift": "done-v1-verify-122/122-tsc-clean (chua-chay-tren-Supabase-that-cho-user-xac-nhan)",
+    "T1_poMulti_draft_progress": "done-v1-PASS-40/40-vue-tsc-clean",
+    "T2_retention_72h_header": "done-v1-PASS-55/55-vue-tsc-clean",
+    "T3_feature1220": "done-v1-PASS-20/20-vue-tsc-clean",
+    "T4_pkgMetadata": "done-v1-PASS-27/27-vue-tsc-clean",
+    "T5_label_accessory": "done-v1-PASS-16/16-vue-tsc-clean",
+    "T6_qa": "pending"
   },
   "repoStructure": {
     "framework": "Vue 3 + Vite + TypeScript + Tailwind CSS v4 + PrimeVue v4 + AG Grid + ECharts",
@@ -56,7 +82,17 @@
     "excelExport": "Hỗ trợ xuất Excel 3 sheets trực tiếp từ dữ liệu hiện tại"
   },
   "nextSteps": [
-    "Dev server đang chạy tại localhost:5173",
-    "Người dùng kiểm tra trọn bộ 2 biểu đồ Line Chart và Concentric Rings Chart mới trên trình duyệt"
-  ]
+    "HOTFIX SQL views xong ở code (122/122 + tsc sạch), CHƯA verify trên Supabase thật — user chạy file fix_views_actual_schema.sql rồi báo kết quả",
+    "Trên DB thật CHỈ chạy database/fix_views_actual_schema.sql, KHÔNG chạy supabase.sql (bootstrap-only)",
+    "Migrations còn lại: shipping_forecast.sql (3 days), purchase_orders_lines.sql, metadata.sql",
+    "User nghiệm thu UI 6 task như checklist trước"
+  ],
+  "loopSystem": {
+    "location": "docs/loop-system/",
+    "files": ["agent.md", "subagent.md", "qc-gate.md", "loop.md", "plan.md", "skills.md", "learning.md"],
+    "mode": "docs + main-agent điều phối bằng Task tool",
+    "qcStandard": "nghiêm 100% test + type, 5 cửa G1-G5",
+    "maxRoundsPerTask": 3,
+    "status": "ready"
+  }
 }

@@ -36,7 +36,7 @@
             />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Mã hàng <span class="text-[#FF5A65]">*</span></label>
+            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5" title="Tên cũ: Mã hàng (cột DB item_code giữ nguyên)">Feature <span class="text-[#FF5A65]">*</span></label>
             <input
               v-model="form.item_code"
               type="text"

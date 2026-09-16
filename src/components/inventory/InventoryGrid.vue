@@ -297,9 +297,11 @@ import type { InventoryRow } from '@/types'
 import { formatNumber, formatDateTime } from '@/utils/format'
 import { sortInventoryRows } from '@/utils/sort'
 
-const props = defineProps<{ 
+const props = defineProps<{
   data: InventoryRow[]
   filterText?: string
+  /** T4: map metadata feature -> {pack_qty, carton_type} (optional; thiếu thì fallback cũ + warn). */
+  packSpecs?: Record<string, { pack_qty: number; carton_type: string }>
 }>()
 defineEmits<{
   (e: 'quick-out', row: InventoryRow): void
@@ -360,16 +362,34 @@ const filteredData = computed(() => {
   })
 })
 
-// Tính số kiện theo feature: kien = sum(qty) / 2 / max(qty)
+// Tính số kiện theo feature — T4 chuẩn metadata (thùng đơn không /2, thùng đôi /2, đều Kiện).
+// Có packSpecs thì dùng pack chuẩn + warn thiếu; chưa có thì fallback cũ (sum/2)/max để không vỡ.
 const featureMetrics = computed(() => {
-  const metrics: Record<string, { sum: number; max: number }> = {}
+  const metrics: Record<string, { sum: number; max: number; kien: number; missing: boolean }> = {}
+  const grouped: Record<string, number[]> = {}
   filteredData.value.forEach(row => {
     const feat = row.feature
     if (!feat || feat === 'No data') return
-    if (!metrics[feat]) metrics[feat] = { sum: 0, max: 0 }
+    if (!metrics[feat]) metrics[feat] = { sum: 0, max: 0, kien: 0, missing: false }
     const qty = Number(row.qty) || 0
     metrics[feat].sum += qty
     if (qty > metrics[feat].max) metrics[feat].max = qty
+    if (!grouped[feat]) grouped[feat] = []
+    grouped[feat].push(qty)
+  })
+  const hasSpecs = !!props.packSpecs && Object.keys(props.packSpecs).length > 0
+  Object.keys(metrics).forEach(feat => {
+    const m = metrics[feat]
+    const spec = props.packSpecs?.[feat]
+    if (spec && Number(spec.pack_qty) > 0) {
+      const single = /thùng đơn/i.test(String(spec.carton_type || ''))
+      const raw = single ? m.sum / Number(spec.pack_qty) : (m.sum / 2) / Number(spec.pack_qty)
+      m.kien = Math.round(raw * 100) / 100
+      m.missing = false
+    } else {
+      m.kien = m.max > 0 ? Math.round(((m.sum / 2) / m.max) * 100) / 100 : 0
+      m.missing = hasSpecs
+    }
   })
   return metrics
 })
@@ -409,15 +429,15 @@ const allDisplayItems = computed((): DisplayItem[] => {
 
   sortedFeatures.forEach(feat => {
     const rows = groups[feat]
-    const m = featureMetrics.value[feat] || { sum: 0, max: 0 }
-    const kienNum = m.max > 0 ? (m.sum / 2) / m.max : 0
+    const m = featureMetrics.value[feat] || { sum: 0, max: 0, kien: 0, missing: false }
+    const kienNum = m.kien
 
-    // Group Header
+    // Group Header (T4: warn thiếu metadata)
     result.push({
       _id: `group-${feat}`,
       _isGroup: true,
       feature: feat,
-      kienLabel: `${kienNum.toFixed(2)} Kiện`,
+      kienLabel: m.missing ? `${kienNum.toFixed(2)} Kiện ⚠ thiếu metadata [${feat}]` : `${kienNum.toFixed(2)} Kiện`,
       totalQty: m.sum
     })
 

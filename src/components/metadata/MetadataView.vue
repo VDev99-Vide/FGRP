@@ -31,7 +31,7 @@
           <input
             v-model="searchText"
             type="text"
-            placeholder="Tìm khách hàng, mã hàng, quy cách..."
+            placeholder="Tìm khách hàng, feature (mã hàng cũ), quy cách..."
             class="w-full h-[36px] px-3 pl-8 bg-[#18202D]/80 backdrop-blur-md border border-white/15 rounded-[8px] text-xs outline-none text-white placeholder-[#AEB9E1]/50 focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
           />
           <Search class="w-3.5 h-3.5 text-[#AEB9E1] absolute left-2.5 top-2.5" />
@@ -74,7 +74,7 @@
           <thead class="glass-table-sticky-head">
             <tr>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Khách hàng</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Mã hàng</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase" title="Tên cũ: Mã hàng (cột DB item_code giữ nguyên)">Feature</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Số lượng đóng gói</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Trọng lượng/Cái</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Quy cách thùng</th>

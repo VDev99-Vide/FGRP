@@ -152,8 +152,8 @@
                 <p class="text-[10px] text-[#AEB9E1] mt-0.5">{{ order.supplier }}</p>
               </td>
               <td class="py-3 px-4">
-                <p class="font-mono font-bold text-[#00C2FF] text-xs">{{ order.item_code }}</p>
-                <p class="text-[10px] text-white/70 mt-0.5 max-w-[220px] truncate" :title="order.description || ''">{{ order.description || '—' }}</p>
+                <p class="font-mono font-bold text-[#00C2FF] text-xs">{{ order.item_code }}<span v-if="(order.lines || []).length > 1" class="ml-1 text-[10px] text-[#CB3CFF]">+{{ (order.lines || []).length - 1 }}</span></p>
+                <p class="text-[10px] text-white/70 mt-0.5 max-w-[220px] truncate" :title="((order.lines || []).length > 1 ? (order.lines || []).map(l => `${l.item_code} (${Number(l.target_qty).toLocaleString()})`).join(' | ') : (order.description || ''))">{{ (order.lines || []).length > 1 ? (order.lines || []).map(l => l.item_code).join(' | ') : (order.description || '—') }}</p>
               </td>
               <td class="py-3 px-4 text-right font-mono text-white/90">{{ order.target_qty.toLocaleString() }}</td>
               <td class="py-3 px-4 text-right font-mono font-bold text-[#14CA74]">{{ order.received_qty.toLocaleString() }}</td>

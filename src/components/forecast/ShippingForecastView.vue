@@ -89,7 +89,7 @@
             <span class="text-lg font-bold text-[#FDB52A] font-mono">{{ stats.pendingCount }}</span>
             <span class="text-[10px] text-[#AEB9E1]">Chờ</span>
           </div>
-          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Tự xóa sau 24h khi xong</p>
+          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Tự xóa sau 72h (3 ngày) khi xong</p>
         </div>
       </div>
 
@@ -247,15 +247,8 @@
                         <span>Loading: {{ row.container.loading_date }}</span>
                       </span>
 
-                      <!-- Nút LỌC NHANH SANG TỒN KHO THÀNH PHẨM -->
-                      <button 
-                        @click="handleJumpToInventory(row.container)"
-                        title="Tự động chuyển sang Bảng Chi Tiết Tồn Kho Thành Phẩm để lọc mã hàng từ filter"
-                        class="h-[26px] px-2.5 rounded-[6px] bg-[#00C2FF]/15 hover:bg-[#00C2FF]/25 border border-[#00C2FF]/40 text-[#00C2FF] hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
-                      >
-                        <ExternalLink class="w-3 h-3" />
-                        <span>Lọc tồn kho</span>
-                      </button>
+                      <!-- Nút LỌC NHANH SANG TỒN KHO THÀNH PHẨM ĐÃ BỎ Ở HEADER (T2) — giữ nút Lọc tồn trong hàng theo Feature -->
+
                     </div>
 
                     <!-- Right: Total Kiện/Thùng, Total PCS, Thao tác "Chuẩn bị xong" -->
@@ -274,7 +267,7 @@
                       <div v-if="row.container.status === 'pending'">
                         <button 
                           @click="handleMarkReady(row.container)"
-                          title="Đánh dấu đơn hàng container đã chuẩn bị xong chờ xuất (Tự động xóa sau 1 ngày)"
+                          title="Đánh dấu đơn hàng container đã chuẩn bị xong chờ xuất (Tự động xóa sau 3 ngày)"
                           class="h-[28px] px-3 rounded-[6px] bg-[#14CA74]/20 hover:bg-[#14CA74]/35 border border-[#14CA74]/40 text-[#14CA74] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
                         >
                           <CheckCircle2 class="w-3.5 h-3.5" />
@@ -285,10 +278,10 @@
                       <div v-else class="flex items-center gap-2">
                         <span 
                           class="text-[11px] font-bold text-[#14CA74] bg-[#14CA74]/20 border border-[#14CA74]/40 px-2.5 py-1 rounded-[6px] flex items-center gap-1.5"
-                          :title="`Tự động xóa khỏi hệ thống sau ${row.container.remainingHours || 24} giờ`"
+                          :title="`Tự động xóa khỏi hệ thống sau ${row.container.remainingHours || 72} giờ (3 ngày)`"
                         >
                           <CheckCircle2 class="w-3.5 h-3.5" />
-                          <span>Đã xong (Tự xóa sau {{ row.container.remainingHours || 24 }}h)</span>
+                          <span>Đã xong (Tự xóa sau {{ row.container.remainingHours || 72 }}h)</span>
                         </span>
 
                         <button 
@@ -384,17 +377,19 @@
 
                 <!-- Số kiện / thùng (#pkg) - Chuẩn xác theo Group Feature, không bị double! -->
                 <td class="py-3 px-4 text-center">
-                  <span 
+                  <span
                     :class="[
                       'font-mono font-black text-xs px-3 py-1.5 rounded-[6px] border shadow-sm inline-flex items-center gap-1.5',
                       row.featureGroup.is_accessory
                         ? 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/40 shadow-[0_0_8px_rgba(253,181,42,0.2)]'
                         : 'bg-[#CB3CFF]/20 text-[#CB3CFF] border-[#CB3CFF]/40 shadow-[0_0_8px_rgba(203,60,255,0.25)]'
                     ]"
+                    :title="row.featureGroup.missingSpec ? `Thiếu metadata cho feature [${row.featureGroup.feature}] — kiểm tra lại Meta-data Quy cách` : (row.featureGroup.cartonTypeUsed ? `Chuẩn metadata: ${row.featureGroup.packQtyUsed} pcs/kiện (${row.featureGroup.cartonTypeUsed})` : '')"
                   >
                     <Box class="w-3.5 h-3.5" />
                     <span>{{ row.featureGroup.pkgCount }} {{ row.featureGroup.unit_type === 'thung' ? 'Thùng' : 'Kiện' }}</span>
                   </span>
+                  <p v-if="row.featureGroup.missingSpec" class="text-[10px] text-[#FF5A65] font-bold mt-1">⚠ thiếu metadata [{{ row.featureGroup.feature }}]</p>
                 </td>
 
                 <!-- Loading Date -->
@@ -729,7 +724,7 @@ const handleMarkReady = async (container: ForecastContainerGroup) => {
     toast.add({
       severity: 'success',
       summary: 'Đã chuẩn bị xong',
-      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] đã sẵn sàng xuất cont. Hệ thống sẽ tự động dọn dẹp sau 24h.`,
+      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] đã sẵn sàng xuất cont. Hệ thống sẽ tự động dọn dẹp sau 72h (3 ngày).`,
       life: 4000
     })
   } catch (err: any) {
@@ -762,17 +757,7 @@ const handleRevertPending = async (container: ForecastContainerGroup) => {
   }
 }
 
-// Nút Lọc nhanh sang Bảng Chi Tiết Tồn Kho Thành Phẩm
-const handleJumpToInventory = (container: ForecastContainerGroup) => {
-  // Lấy danh sách các Feature hoặc Item Code của container này
-  const features = container.featureGroups.map(fg => fg.feature).filter(Boolean)
-  const filterKey = features[0] || container.allItems[0]?.item_code || ''
-
-  emit('jump-to-inventory', {
-    filterText: filterKey,
-    feature: features.join(', ')
-  })
-}
+// Nút Lọc nhanh header container đã BỎ (T2) — chỉ giữ lọc theo Feature trong hàng.
 
 // Chỉnh sửa toàn bộ Group Feature (áp dụng cả cặp mã nếu có)
 const triggerEditGroup = (container: ForecastContainerGroup, fg: ForecastFeatureGroup) => {

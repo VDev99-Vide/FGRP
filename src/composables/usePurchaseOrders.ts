@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { supabase, isSupabaseConfigured } from '@/services/supabase'
-import type { PoReceiptLog, PurchaseOrder, PurchaseOrderWithProgress } from '@/types'
+import type { PoLine, PoReceiptLog, PurchaseOrder, PurchaseOrderWithProgress } from '@/types'
 import {
   buildPoProgress,
   computePoStats,
@@ -10,6 +10,7 @@ import {
   todayIsoDate,
   validatePoInput,
   validateReceiptInput,
+  type PoLineInput,
 } from '@/utils/po'
 import type { PoExcelRow } from '@/services/poExcel'
 
@@ -21,6 +22,8 @@ export interface PoInput {
   note?: string
   target_qty: number | string
   created_date: string
+  /** T1: N sản phẩm/PO. Khi có lines, target_qty = sum(lines). */
+  lines?: PoLineInput[] | null
 }
 
 export interface ReceiptInput {
@@ -36,6 +39,7 @@ const genId = () =>
 
 // State dùng chung trong session (Supabase là nguồn chính, memory là fallback khi chưa cấu hình)
 const purchaseOrders = ref<PurchaseOrder[]>([])
+const poLines = ref<PoLine[]>([])
 const receiptLogs = ref<PoReceiptLog[]>([])
 const loading = ref(false)
 const searchText = ref('')
@@ -46,6 +50,38 @@ const lastSync = ref('--:--')
 const backendAvailable = ref(true)
 
 const cleanOpt = (v: unknown) => String(v ?? '').trim()
+
+/** Chuẩn hóa input T1: lines (nếu có) quyết định item_code/description/target_qty hiển thị. */
+const normalizePoLinesInput = (input: PoInput, poId: string, poNo: string, now: string): { lines: PoLine[]; item_code: string; description: string; target_qty: number } => {
+  const rawLines = (input.lines || []).filter((l) => String(l.item_code || '').trim() || Number(l.target_qty) > 0)
+  if (rawLines.length > 0) {
+    const lines: PoLine[] = rawLines.map((l) => ({
+      id: genId(),
+      po_id: poId,
+      po_no: poNo,
+      item_code: String(l.item_code).trim(),
+      description: cleanOpt(l.description),
+      target_qty: Number(l.target_qty),
+      created_at: now,
+      updated_at: now,
+    }))
+    return {
+      lines,
+      item_code: lines[0].item_code,
+      description: lines[0].description || '',
+      target_qty: lines.reduce((s, l) => s + (Number(l.target_qty) || 0), 0),
+    }
+  }
+  return {
+    lines: [],
+    item_code: String(input.item_code).trim(),
+    description: cleanOpt(input.description),
+    target_qty: Number(input.target_qty),
+  }
+}
+
+const attachLines = (list: PurchaseOrder[]): PurchaseOrder[] =>
+  list.map((p) => ({ ...p, lines: poLines.value.filter((l) => l.po_id === p.id || l.po_no === p.po_no) }))
 
 const isMemoryId = (id: string) => id.startsWith('po-seed-') || id.startsWith('log-seed-')
 
@@ -73,6 +109,12 @@ const isMissingColumnError = (e: unknown): boolean => {
 /** Bỏ 2 cột mới để ghi tương thích với bảng Supabase cũ (pattern giống forecast). */
 const toLegacyPoPayload = <T extends object>(payload: T): Omit<T, 'description' | 'note'> => {
   const { description: _d, note: _n, ...rest } = payload as T & { description?: unknown; note?: unknown }
+  return rest
+}
+
+/** Bỏ trường lines (chỉ tồn tại ở memory) trước khi ghi Supabase — tránh lỗi PGRST204 schema cache. */
+const stripPoLines = <T extends object>(payload: T): Omit<T, 'lines'> => {
+  const { lines: _l, ...rest } = payload as T & { lines?: unknown }
   return rest
 }
 
@@ -143,25 +185,42 @@ export function usePurchaseOrders() {
     () => isSupabaseConfigured && (!backendAvailable.value || needsColumnMigration.value),
   )
 
-  /** Nạp toàn bộ PO + log nhập hàng từ Supabase (rỗng 100% nếu DB chưa có gì). */
+  /** Nạp toàn bộ PO + lines + log nhập hàng từ Supabase (rỗng 100% nếu DB chưa có gì). */
   const fetchPurchaseOrders = async () => {
     loading.value = true
     try {
-      const [poData, logData] = await Promise.all([
+      const [poData, logData, lineData] = await Promise.all([
         callSupabase<PurchaseOrder[]>(() =>
           supabase.from('purchase_orders').select('*').order('created_date', { ascending: false }),
         ),
         callSupabase<PoReceiptLog[]>(() =>
           supabase.from('po_receipt_logs').select('*').order('receipt_date', { ascending: true }),
         ),
+        // T1: bảng po_lines có thể chưa migrate -> thiếu bảng thì coi như rỗng, không fail
+        (async () => {
+          try {
+            if (!isSupabaseConfigured || !backendAvailable.value) return null
+            const { data, error } = await supabase.from('po_lines').select('*')
+            if (error) return null
+            return (data || []) as PoLine[]
+          } catch {
+            return null
+          }
+        })(),
       ])
+      if (lineData) {
+        poLines.value = lineData.map((l) => ({ ...l, target_qty: Number(l.target_qty) || 0 }))
+      }
       if (poData) {
-        purchaseOrders.value = poData.map((p) => ({
+        const base = poData.map((p) => ({
           ...p,
           description: cleanOpt(p.description),
           note: cleanOpt(p.note),
           target_qty: Number(p.target_qty) || 0,
         }))
+        purchaseOrders.value = attachLines(base)
+      } else {
+        purchaseOrders.value = attachLines(purchaseOrders.value)
       }
       if (logData) {
         receiptLogs.value = logData.map((l) => ({ ...l, qty: Number(l.qty) || 0 }))
@@ -169,6 +228,27 @@ export function usePurchaseOrders() {
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
     } finally {
       loading.value = false
+    }
+  }
+
+  /** Ghi lines xuống Supabase (best-effort: thiếu bảng thì bỏ qua, memory vẫn đủ). */
+  const persistPoLines = async (lines: PoLine[]) => {
+    if (!isSupabaseConfigured || !backendAvailable.value || lines.length === 0) return
+    try {
+      await supabase.from('po_lines').insert(lines)
+    } catch {
+      // Thiếu bảng po_lines (chưa chạy purchase_orders_lines.sql) -> bỏ qua
+    }
+  }
+
+  const removePoLines = async (poId: string, poNo: string) => {
+    poLines.value = poLines.value.filter((l) => l.po_id !== poId && l.po_no !== poNo)
+    if (!isSupabaseConfigured || !backendAvailable.value || isMemoryId(poId)) return
+    try {
+      await supabase.from('po_lines').delete().eq('po_id', poId)
+      await supabase.from('po_lines').delete().eq('po_no', poNo)
+    } catch {
+      // ignore khi chưa migrate
     }
   }
 
@@ -181,25 +261,30 @@ export function usePurchaseOrders() {
     if (duplicated) throw new Error(`Số PO [${poNo}] đã tồn tại trong hệ thống!`)
 
     const now = new Date().toISOString()
+    const poId = genId()
+    const norm = normalizePoLinesInput(input, poId, poNo, now)
     const po: PurchaseOrder = {
-      id: genId(),
+      id: poId,
       po_no: poNo,
       supplier: String(input.supplier).trim(),
-      item_code: String(input.item_code).trim(),
-      description: cleanOpt(input.description),
+      item_code: norm.item_code,
+      description: norm.description,
       note: cleanOpt(input.note),
-      target_qty: Number(input.target_qty),
+      target_qty: norm.target_qty,
       created_date: input.created_date,
       status: 'open',
       closed_at: null,
       created_at: now,
       updated_at: now,
+      lines: norm.lines,
     }
 
     await callSupabase(
-      () => supabase.from('purchase_orders').insert(po).select(),
-      () => supabase.from('purchase_orders').insert(toLegacyPoPayload(po)).select(),
+      () => supabase.from('purchase_orders').insert(stripPoLines(po)).select(),
+      () => supabase.from('purchase_orders').insert(toLegacyPoPayload(stripPoLines(po))).select(),
     )
+    await persistPoLines(norm.lines)
+    poLines.value = [...norm.lines, ...poLines.value]
     purchaseOrders.value = [po, ...purchaseOrders.value]
     return po
   }
@@ -217,37 +302,46 @@ export function usePurchaseOrders() {
     if (duplicated) throw new Error(`Số PO [${poNo}] đã tồn tại trong hệ thống!`)
 
     const current = purchaseOrders.value[idx]
+    const now = new Date().toISOString()
+    const norm = normalizePoLinesInput(input, id, poNo, now)
     const received = receiptLogs.value.filter((l) => l.po_id === id).reduce((s, l) => s + (Number(l.qty) || 0), 0)
-    const completed = received >= Number(input.target_qty)
+    const completed = received >= norm.target_qty
     const updated: PurchaseOrder = {
       ...current,
       po_no: poNo,
       supplier: String(input.supplier).trim(),
-      item_code: String(input.item_code).trim(),
-      description: cleanOpt(input.description),
+      item_code: norm.item_code,
+      description: norm.description,
       note: cleanOpt(input.note),
-      target_qty: Number(input.target_qty),
+      target_qty: norm.target_qty,
       created_date: input.created_date,
       status: completed ? 'completed' : 'open',
       closed_at: completed ? current.closed_at || new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
+      lines: norm.lines,
     }
 
     if (!isMemoryId(id)) {
       await callSupabase(
-        () => supabase.from('purchase_orders').update(updated).eq('id', id).select(),
-        () => supabase.from('purchase_orders').update(toLegacyPoPayload(updated)).eq('id', id).select(),
+        () => supabase.from('purchase_orders').update(stripPoLines(updated)).eq('id', id).select(),
+        () => supabase.from('purchase_orders').update(toLegacyPoPayload(stripPoLines(updated))).eq('id', id).select(),
       )
+      await removePoLines(id, current.po_no)
+      await persistPoLines(norm.lines)
     }
+    poLines.value = [...poLines.value.filter((l) => l.po_id !== id && l.po_no !== current.po_no), ...norm.lines]
     purchaseOrders.value = purchaseOrders.value.map((p) => (p.id === id ? updated : p))
     return updated
   }
 
-  /** Xóa PO + toàn bộ log nhập hàng đi kèm. */
+  /** Xóa PO + toàn bộ lines + log nhập hàng đi kèm. */
   const deletePurchaseOrder = async (id: string) => {
+    const target = purchaseOrders.value.find((p) => p.id === id)
     if (!isMemoryId(id)) {
       await callSupabase(() => supabase.from('purchase_orders').delete().eq('id', id).select())
     }
+    if (target) await removePoLines(id, target.po_no)
+    else poLines.value = poLines.value.filter((l) => l.po_id !== id)
     purchaseOrders.value = purchaseOrders.value.filter((p) => p.id !== id)
     receiptLogs.value = receiptLogs.value.filter((l) => l.po_id !== id)
   }
@@ -264,8 +358,8 @@ export function usePurchaseOrders() {
     }
     if (!isMemoryId(poId)) {
       await callSupabase(
-        () => supabase.from('purchase_orders').update(updated).eq('id', poId).select(),
-        () => supabase.from('purchase_orders').update(toLegacyPoPayload(updated)).eq('id', poId).select(),
+        () => supabase.from('purchase_orders').update(stripPoLines(updated)).eq('id', poId).select(),
+        () => supabase.from('purchase_orders').update(toLegacyPoPayload(stripPoLines(updated))).eq('id', poId).select(),
       )
     }
     purchaseOrders.value = purchaseOrders.value.map((p) => (p.id === poId ? updated : p))
@@ -319,38 +413,102 @@ export function usePurchaseOrders() {
     }
   }
 
-  /** Import hàng loạt PO từ Excel: trùng số PO thì cập nhật, mới thì thêm. */
+  /** Import hàng loạt PO từ Excel: trùng số PO thì cập nhật, mới thì thêm. T1: nhiều dòng cùng po_no -> group thành lines. */
   const importPurchaseOrders = async (rows: PoExcelRow[]) => {
     const now = new Date().toISOString()
+    // Group theo po_no để hỗ trợ file Excel có nhiều dòng sản phẩm cho 1 PO
+    const grouped = new Map<string, PoExcelRow[]>()
+    rows.forEach((r) => {
+      const key = normalizePoNo(String(r.po_no || ''))
+      if (!key) return
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key)!.push(r)
+    })
     const prepared: PurchaseOrder[] = []
     const skipped: string[] = []
-
+    // T1: hàng trống Số PO vẫn tính skipped (giữ tương thích test cũ)
     rows.forEach((r) => {
-      const err = validatePoInput({
-        po_no: r.po_no,
-        supplier: r.supplier || 'N/A',
-        item_code: r.item_code || 'N/A',
-        target_qty: r.target_qty,
-        created_date: r.created_date || todayIsoDate(),
-      })
-      if (err) {
-        skipped.push(`${r.po_no}: ${err}`)
-        return
+      if (!normalizePoNo(String(r.po_no || ''))) {
+        skipped.push(`${String(r.po_no || '(trống)')} : Vui lòng nhập Số PO!`)
       }
-      prepared.push({
-        id: genId(),
-        po_no: String(r.po_no).trim(),
-        supplier: String(r.supplier || 'N/A').trim(),
-        item_code: String(r.item_code || 'N/A').trim(),
-        description: cleanOpt(r.description),
-        note: cleanOpt(r.note),
-        target_qty: Number(r.target_qty),
-        created_date: r.created_date || todayIsoDate(),
-        status: 'open',
-        closed_at: null,
-        created_at: now,
-        updated_at: now,
-      })
+    })
+
+    grouped.forEach((groupRows, normKey) => {
+      const first = groupRows[0]
+      const poNo = String(first.po_no).trim()
+      if (groupRows.length > 1) {
+        const lines: PoLineInput[] = groupRows.map((r) => ({
+          item_code: String(r.item_code || 'N/A'),
+          description: String(r.description || ''),
+          target_qty: Number(r.target_qty) || 0,
+        }))
+        const err = validatePoInput({
+          po_no: poNo,
+          supplier: String(first.supplier || 'N/A'),
+          item_code: lines[0]?.item_code || 'N/A',
+          target_qty: lines.reduce((s, l) => s + (Number(l.target_qty) || 0), 0),
+          created_date: first.created_date || todayIsoDate(),
+          lines,
+        })
+        if (err) {
+          skipped.push(`${poNo}: ${err}`)
+          return
+        }
+        const poId = genId()
+        prepared.push({
+          id: poId,
+          po_no: poNo,
+          supplier: String(first.supplier || 'N/A').trim(),
+          item_code: String(lines[0].item_code).trim(),
+          description: cleanOpt(lines[0].description),
+          note: cleanOpt(first.note),
+          target_qty: lines.reduce((s, l) => s + (Number(l.target_qty) || 0), 0),
+          created_date: first.created_date || todayIsoDate(),
+          status: 'open',
+          closed_at: null,
+          created_at: now,
+          updated_at: now,
+          lines: lines.map((l) => ({
+            id: genId(),
+            po_id: poId,
+            po_no: poNo,
+            item_code: String(l.item_code).trim(),
+            description: cleanOpt(l.description),
+            target_qty: Number(l.target_qty),
+            created_at: now,
+            updated_at: now,
+          })),
+        })
+      } else {
+        const r = first
+        void normKey
+        const err = validatePoInput({
+          po_no: r.po_no,
+          supplier: r.supplier || 'N/A',
+          item_code: r.item_code || 'N/A',
+          target_qty: r.target_qty,
+          created_date: r.created_date || todayIsoDate(),
+        })
+        if (err) {
+          skipped.push(`${r.po_no}: ${err}`)
+          return
+        }
+        prepared.push({
+          id: genId(),
+          po_no: String(r.po_no).trim(),
+          supplier: String(r.supplier || 'N/A').trim(),
+          item_code: String(r.item_code || 'N/A').trim(),
+          description: cleanOpt(r.description),
+          note: cleanOpt(r.note),
+          target_qty: Number(r.target_qty),
+          created_date: r.created_date || todayIsoDate(),
+          status: 'open',
+          closed_at: null,
+          created_at: now,
+          updated_at: now,
+          lines: [],
+        })
+      }
     })
 
     if (isSupabaseConfigured && backendAvailable.value) {
@@ -374,8 +532,8 @@ export function usePurchaseOrders() {
             )
           } else if (!exists) {
             await callSupabase(
-      () => supabase.from('purchase_orders').insert(po).select(),
-      () => supabase.from('purchase_orders').insert(toLegacyPoPayload(po)).select(),
+      () => supabase.from('purchase_orders').insert(stripPoLines(po)).select(),
+      () => supabase.from('purchase_orders').insert(toLegacyPoPayload(stripPoLines(po))).select(),
     )
           }
         } catch (e) {
@@ -393,11 +551,18 @@ export function usePurchaseOrders() {
           const idx = purchaseOrders.value.findIndex((p) => normalizePoNo(p.po_no) === normalizePoNo(po.po_no))
           if (idx === -1) purchaseOrders.value = [po, ...purchaseOrders.value]
         })
+        // T1: đồng bộ lines import vào memory + Supabase (best-effort)
+        const allImportLines = prepared.flatMap((p) => p.lines || [])
+        if (allImportLines.length > 0) {
+          poLines.value = [...allImportLines, ...poLines.value]
+          await persistPoLines(allImportLines)
+        }
         return { imported: prepared.length, skipped }
       }
     }
 
     const merged = [...purchaseOrders.value]
+    const mergedLines = [...poLines.value]
     prepared.forEach((po) => {
       const idx = merged.findIndex((p) => normalizePoNo(p.po_no) === normalizePoNo(po.po_no))
       if (idx !== -1) {
@@ -408,19 +573,34 @@ export function usePurchaseOrders() {
           target_qty: po.target_qty,
           created_date: po.created_date,
           updated_at: now,
+          lines: po.lines && po.lines.length > 0 ? po.lines : merged[idx].lines,
         }
       } else {
         merged.unshift(po)
       }
     })
+    prepared.forEach((po) => {
+      ;(po.lines || []).forEach((l) => {
+        if (!mergedLines.some((x) => x.id === l.id)) mergedLines.push(l)
+      })
+    })
+    poLines.value = mergedLines
     purchaseOrders.value = merged
     return { imported: prepared.length, skipped }
   }
 
-  /** Xóa sạch toàn bộ PO + log (dùng khi reset hệ thống). */
+  /** Xóa sạch toàn bộ PO + lines + log (dùng khi reset hệ thống). */
   const clearAllPurchaseOrders = async () => {
     await callSupabase(() => supabase.from('purchase_orders').delete().neq('po_no', '__never_match_key__').select())
+    try {
+      if (isSupabaseConfigured && backendAvailable.value) {
+        await supabase.from('po_lines').delete().neq('po_no', '__never_match_key__')
+      }
+    } catch {
+      // ignore
+    }
     purchaseOrders.value = []
+    poLines.value = []
     receiptLogs.value = []
   }
 
@@ -452,6 +632,7 @@ export function usePurchaseOrders() {
 
   const clearMemory = () => {
     purchaseOrders.value = []
+    poLines.value = []
     receiptLogs.value = []
   }
 
@@ -476,6 +657,7 @@ export function usePurchaseOrders() {
 
   return {
     purchaseOrders,
+    poLines,
     receiptLogs,
     loading,
     searchText,

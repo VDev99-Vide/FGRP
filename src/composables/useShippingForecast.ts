@@ -11,8 +11,7 @@ import {
 
 // Dữ liệu mẫu ban đầu trong bộ nhớ (In-memory Demo Data) dựa theo file thực tế của nhà máy
 // TUYỆT ĐỐI KHÔNG DÙNG LOCALSTORAGE theo đúng yêu cầu người dùng: "đồng bộ trực tiếp supabase không lưu localstorage tránh cache"
-const DEFAULT_IN_MEMORY_FORECAST: ForecastRawItem[] = [
-  // Container 1: PO: 0N64-0003004870, SO: 2610000099 (Ngày 17/09/2026)
+const DEFAULT_IN_MEMORY_FORECAST: ForecastRawItem[] = [  // Container 1: PO: 0N64-0003004870, SO: 2610000099 (Ngày 17/09/2026)
   // Mã đặc biệt 1220 (1220190004 & 1220200004): 4 số đầu "1220", (8800 / 2) / 200 = 22 Kiện
   {
     id: 'demo-fc-01',
@@ -193,12 +192,18 @@ const loading = ref(false)
 const quickFilterText = ref('')
 const statusFilter = ref<'all' | 'pending' | 'ready'>('all')
 const lastSync = ref('--:--')
+/** T4: override metadata feature -> pack (do view set sau khi load metadata). */
+type PackSpecOverride = Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }>
+const forecastPackSpecs = ref<PackSpecOverride>({})
+const setForecastPackSpecs = (m: PackSpecOverride) => {
+  forecastPackSpecs.value = m || {}
+}
 
 export function useShippingForecast() {
   const isDemoMode = ref(false)
 
   /**
-   * Tự động xóa các đơn hàng 'ready' quá 1 ngày (24 giờ)
+   * Tự động xóa các đơn hàng 'ready' quá 3 ngày (72 giờ) — T2
    */
   const cleanupExpiredItems = async () => {
     // 1. Dọn dẹp trong bộ nhớ frontend
@@ -207,13 +212,13 @@ export function useShippingForecast() {
     // 2. Dọn dẹp trên Supabase nếu đã kết nối
     if (isSupabaseConfigured) {
       try {
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
         await supabase
           .from('shipping_forecast')
           .delete()
           .eq('status', 'ready')
           .not('status_changed_at', 'is', null)
-          .lt('status_changed_at', oneDayAgo)
+          .lt('status_changed_at', threeDaysAgo)
       } catch (e) {
         console.warn('Không thể tự động xóa đơn quá hạn trên Supabase:', e)
       }
@@ -550,9 +555,9 @@ export function useShippingForecast() {
     forecastItems.value = [...forecastItems.value]
   }
 
-  // Phân nhóm và sắp xếp toàn bộ dữ liệu
+  // Phân nhóm và sắp xếp toàn bộ dữ liệu — T4 truyền pack metadata (nếu có)
   const allGroupedContainers = computed<ForecastContainerGroup[]>(() => {
-    return groupAndSortForecastData(forecastItems.value)
+    return groupAndSortForecastData(forecastItems.value, forecastPackSpecs.value)
   })
 
   // Dữ liệu lọc thông minh
@@ -619,6 +624,8 @@ export function useShippingForecast() {
 
   return {
     forecastItems,
+    forecastPackSpecs,
+    setForecastPackSpecs,
     loading,
     isDemoMode,
     lastSync,

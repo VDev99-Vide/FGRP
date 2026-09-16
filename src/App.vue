@@ -169,9 +169,10 @@
               </div>
 
               <!-- Inventory Grid AG Grid component -->
-              <InventoryGrid 
-                :data="inventoryData" 
+              <InventoryGrid
+                :data="inventoryData"
                 :filter-text="inventoryGridFilter"
+                :pack-specs="packSpecsMap"
                 @quick-out="triggerQuickOutbound"
                 @edit="triggerEditInventory"
                 @export="exportExcel"
@@ -325,10 +326,11 @@
       @upload="handleUploadMasterSubmit"
     />
 
-    <!-- 6. Accessory Inbound Modal -->
-    <AccessoryInboundModal 
+    <!-- 6. Accessory Inbound Modal (T5: gợi ý từ metadata loại 3 + codes hiện có) -->
+    <AccessoryInboundModal
       v-model:visible="showAccInboundModal"
       :unique-codes="uniqueCodes"
+      :metadata-codes="metaRows.map(r => String((r as { item_code: string }).item_code || ''))"
       :loading="loading"
       @cancel="showAccInboundModal = false"
       @save="handleAccInboundSubmit"
@@ -381,7 +383,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
@@ -425,6 +427,8 @@ import AccessoryOutboundModal from '@/components/accessories/AccessoryOutboundMo
 // Composables & Services
 import { useInventory } from '@/composables/useInventory'
 import { useAccessories } from '@/composables/useAccessories'
+import { useMetadataPacking } from '@/composables/useMetadataPacking'
+import { useShippingForecast } from '@/composables/useShippingForecast'
 import { usePwaInstall } from '@/composables/usePwaInstall'
 import { useAuth } from '@/composables/useAuth'
 import { resetMockData } from '@/services/mockData'
@@ -446,6 +450,7 @@ const {
   kpi,
   analysis,
   lastSync,
+  setInventoryPackSpecs,
   fetchInventory,
   inbound,
   importCsvData,
@@ -453,6 +458,27 @@ const {
   editInventoryItem,
   replaceMasterData
 } = useInventory()
+
+// T4: metadata là class module phân phối pack chuẩn cho forecast + tồn kho
+const { rows: metaRows, fetchPackingSpecs } = useMetadataPacking()
+const { setForecastPackSpecs } = useShippingForecast()
+const packSpecsMap = computed<Record<string, { pack_qty: number; carton_type: string; isSingle: boolean }>>(() => {
+  const m: Record<string, { pack_qty: number; carton_type: string; isSingle: boolean }> = {}
+  ;(metaRows.value || []).forEach((r) => {
+    const k = String((r as { item_code: string }).item_code || '').trim()
+    if (!k || m[k]) return
+    m[k] = {
+      pack_qty: Number((r as { pack_qty: number }).pack_qty) || 0,
+      carton_type: String((r as { carton_type: string }).carton_type || ''),
+      isSingle: /thùng đơn/i.test(String((r as { carton_type: string }).carton_type || '')),
+    }
+  })
+  return m
+})
+watch(packSpecsMap, (m) => {
+  setForecastPackSpecs(m)
+  setInventoryPackSpecs(m)
+}, { immediate: true })
 
 const {
   accessoriesData,
@@ -557,7 +583,8 @@ const loadAllData = async () => {
   try {
     await Promise.all([
       fetchInventory(),
-      fetchAccessories()
+      fetchAccessories(),
+      fetchPackingSpecs(),
     ])
   } catch (e: any) {
     toast.add({

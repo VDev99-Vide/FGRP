@@ -1,6 +1,10 @@
 /**
  * Utility functions for Planned Shipment List (Danh sách xuất hàng dự kiến)
+ * T3: tách Feature centralize tại @/utils/feature (không định nghĩa lại ở đây).
  */
+
+export { extractFeatureFromItemCode, isSpecialStockCode } from './feature'
+import { extractFeatureFromItemCode, isSpecialStockCode } from './feature'
 
 export interface ForecastRawItem {
   id?: string
@@ -33,6 +37,10 @@ export interface ForecastFeatureGroup {
   is_special: boolean
   is_box?: boolean
   unit_type: 'kien' | 'thung'
+  /** T4: cờ thiếu metadata + pack chuẩn đang dùng (để cảnh báo header). */
+  missingSpec?: boolean
+  packQtyUsed?: number
+  cartonTypeUsed?: string
 }
 
 export interface ForecastContainerGroup {
@@ -55,42 +63,7 @@ export interface ForecastContainerGroup {
   allItems: ForecastRawItem[]
 }
 
-/**
- * Kiểm tra xem mã hàng có phải mã đặc biệt bắt đầu bằng "1220" không
- * (Ví dụ: 1220190004, 1220200004)
- */
-export function isSpecialStockCode(code: string): boolean {
-  if (!code || typeof code !== 'string') return false
-  const clean = code.trim()
-  return clean.startsWith('1220') || (clean.length >= 5 && clean.substring(1, 5) === '1220')
-}
-
-/**
- * Trích xuất Feature từ LPVN Item Code:
- * - Hàng phụ kiện (Accessories): không tách MID(2, 4), giữ nguyên mã hàng.
- * - Mã đặc biệt bắt đầu bằng "1220" (1220190004, 1220200004): lấy trọn 4 số đầu "1220".
- * - Các mã tiêu chuẩn khác: MID(2, 4) - bỏ số đầu, lấy 4 số tiếp theo (ví dụ: "8163210604" -> "1632", "8515210204" -> "5152").
- */
-export function extractFeatureFromItemCode(itemCode: string, isAccessory: boolean = false): string {
-  if (!itemCode || typeof itemCode !== 'string') return 'No data'
-  const clean = itemCode.trim()
-
-  // 1. Phụ kiện: giữ nguyên mã hàng
-  if (isAccessory) {
-    return clean || 'Accessories'
-  }
-
-  // 2. Mã đặc biệt 1220: lấy 4 số đầu
-  if (clean.startsWith('1220')) {
-    return '1220'
-  }
-
-  // 3. Chuẩn MID(2, 4): bắt đầu ký tự thứ 2, lấy 4 ký tự
-  if (clean.length >= 5) {
-    return clean.substring(1, 5)
-  }
-  return clean || 'No data'
-}
+/* T3: isSpecialStockCode + extractFeatureFromItemCode đã re-export từ ./feature ở đầu file. */
 
 /**
  * Parse chuỗi ngày tháng đa định dạng (dd/mm/yyyy, yyyy-mm-dd, Excel date serial number)
@@ -152,18 +125,18 @@ export function formatLoadingDate(dateInput: any): string {
 }
 
 /**
- * Tính số kiện (#pkg) hoặc số thùng cho một nhóm Feature theo quy tắc:
- * - Hàng Accessories: không chia 2, số thùng = Tổng Qty / Pcs/pkg
- * - Hàng đánh dấu 'Box' (áp dụng cho mã đặc biệt 1220 hoặc mã đánh dấu Box): không gộp chia đôi,
- *   tính giống mã phụ kiện: số lượng 1 LPVN ITEM CODE / quy cách đóng gói = số kiện
- * - Hàng thành phẩm thông thường:
- *   + Nếu nhóm có từ 2 mã hàng trở lên: (Tổng Qty / 2) / (Pcs/pkg)
- *   + Nếu nhóm chỉ có 1 mã đơn lẻ: Tổng Qty / (Pcs/pkg) (không chia 2)
+ * Tính số kiện (#pkg) — T4 chuẩn metadata (class module chính):
+ * - Phụ kiện: total / pack (không /2).
+ * - Thùng đơn (metadata carton_type chứa 'thùng đơn'): total / pack (không /2), đơn vị Kiện.
+ * - Thùng đôi (mặc định): total / 2 / pack, đơn vị Kiện.
+ * - packSpec là nguồn duy nhất khi được truyền; không có -> fallback logic cũ (max pcs_per_pkg)
+ *   để tương thích test/caller chưa wiring metadata.
  */
 export function calculateFeaturePkg(
   items: { qty: number; pcs_per_pkg: number; is_accessory?: boolean; is_box?: boolean }[],
   isAccessoryGroup: boolean = false,
-  isBoxGroup: boolean = false
+  isBoxGroup: boolean = false,
+  packSpec?: { pack_qty: number; carton_type: string; isSingle?: boolean } | null,
 ): number {
   if (!items || items.length === 0) return 0
 
@@ -173,16 +146,28 @@ export function calculateFeaturePkg(
     return val > max ? val : max
   }, 0)
 
+  // T4: có pack chuẩn metadata -> dùng đúng công thức đơn/đôi
+  if (packSpec && Number(packSpec.pack_qty) > 0) {
+    const pack = Number(packSpec.pack_qty)
+    if (isAccessoryGroup) {
+      return Math.round((totalQty / pack) * 100) / 100
+    }
+    const single = packSpec.isSingle ?? /thùng đơn/i.test(String(packSpec.carton_type || ''))
+    if (single) {
+      return Math.round((totalQty / pack) * 100) / 100
+    }
+    return Math.round((totalQty / 2 / pack) * 100) / 100
+  }
+
   if (pcsPerPkg <= 0) return 0
 
+  // Fallback cũ (khi chưa có metadata): giữ để không vỡ caller/test cũ
   // 1. Phụ kiện: số thùng = Qty / (Pcs/pkg)
   if (isAccessoryGroup) {
     return Math.round((totalQty / pcsPerPkg) * 100) / 100
   }
 
   // 2. Nhóm đánh dấu Box (áp dụng cho mã đặc biệt 1220 hoặc mã có feature ghi 'Box'):
-  // Không gộp chia đôi như các item code khác mà tính giống với mã phụ kiện:
-  // số lượng 1 LPVN ITEM CODE / quy cách đóng gói = số kiện
   if (isBoxGroup || items.some(it => it.is_box)) {
     const totalBoxPkg = items.reduce((sum, it) => {
       const itPcs = Number(it.pcs_per_pkg) || pcsPerPkg
@@ -200,9 +185,9 @@ export function calculateFeaturePkg(
 }
 
 /**
- * Kiểm tra xem đơn hàng container đã chuẩn bị xong quá 1 ngày (24 giờ) chưa để tự động xóa
+ * Kiểm tra xem đơn hàng container đã chuẩn bị xong quá 3 ngày (72 giờ) chưa để tự động xóa — T2
  */
-export function isContainerExpired(status?: string, statusChangedAt?: string | null, expireHours: number = 24): boolean {
+export function isContainerExpired(status?: string, statusChangedAt?: string | null, expireHours: number = 72): boolean {
   if (status !== 'ready' || !statusChangedAt) return false
   const changedDate = new Date(statusChangedAt)
   if (isNaN(changedDate.getTime())) return false
@@ -212,9 +197,9 @@ export function isContainerExpired(status?: string, statusChangedAt?: string | n
 }
 
 /**
- * Tính số giờ còn lại trước khi đơn hàng trạng thái 'ready' bị tự động xóa sau 24h
+ * Tính số giờ còn lại trước khi đơn hàng trạng thái 'ready' bị tự động xóa sau 3 ngày (72h) — T2
  */
-export function getRemainingHoursBeforeDelete(statusChangedAt?: string | null, expireHours: number = 24): number {
+export function getRemainingHoursBeforeDelete(statusChangedAt?: string | null, expireHours: number = 72): number {
   if (!statusChangedAt) return expireHours
   const changedDate = new Date(statusChangedAt)
   if (isNaN(changedDate.getTime())) return expireHours
@@ -226,7 +211,7 @@ export function getRemainingHoursBeforeDelete(statusChangedAt?: string | null, e
 }
 
 /**
- * Lọc bỏ các dòng đã hết hạn (> 24 giờ sau khi chuyển trạng thái Chuẩn bị xong)
+ * Lọc bỏ các dòng đã hết hạn (> 72 giờ / 3 ngày sau khi chuyển trạng thái Chuẩn bị xong) — T2
  */
 export function filterOutExpiredItems(items: ForecastRawItem[]): ForecastRawItem[] {
   return items.filter(item => !isContainerExpired(item.status, item.status_changed_at))
@@ -242,7 +227,10 @@ export function filterOutExpiredItems(items: ForecastRawItem[]): ForecastRawItem
  *   + Hàng thông thường: tách MID(2, 4), tính số KIỆN theo quy tắc cặp
  * - Tính tổng số kiện FG và tổng số thùng phụ kiện cho từng Container
  */
-export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastContainerGroup[] {
+export function groupAndSortForecastData(
+  items: ForecastRawItem[],
+  packSpecsByFeature?: Map<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }> | Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }>,
+): ForecastContainerGroup[] {
   // Loại bỏ các dòng đã hết hạn
   const validItems = filterOutExpiredItems(items)
 
@@ -334,8 +322,23 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
       }
 
       const featQty = fItems.reduce((s, it) => s + (Number(it.qty) || 0), 0)
-      const featPkg = calculateFeaturePkg(fItems, isAccGroup, isBoxGroup)
-      const pcsPerPkg = fItems[0]?.pcs_per_pkg || 0
+      // T4: tra pack chuẩn metadata theo feature (nếu caller truyền specs)
+      let packSpec: { pack_qty: number; carton_type: string; isSingle?: boolean } | undefined
+      let missingSpec = false
+      if (packSpecsByFeature) {
+        const hit = packSpecsByFeature instanceof Map
+          ? packSpecsByFeature.get(feat)
+          : (packSpecsByFeature as Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }>)[feat]
+        if (hit && Number(hit.pack_qty) > 0) {
+          packSpec = hit
+          missingSpec = Boolean((hit as { missing?: boolean }).missing)
+        } else if (packSpecsByFeature instanceof Map ? (packSpecsByFeature as Map<string, unknown>).size > 0 : Object.keys(packSpecsByFeature).length > 0) {
+          // Đã có metadata nhưng thiếu feature này -> cảnh báo header
+          missingSpec = true
+        }
+      }
+      const featPkg = calculateFeaturePkg(fItems, isAccGroup, isBoxGroup, packSpec)
+      const pcsPerPkg = packSpec && Number(packSpec.pack_qty) > 0 ? Number(packSpec.pack_qty) : (fItems[0]?.pcs_per_pkg || 0)
 
       totalContainerQty += featQty
       if (isAccGroup) {
@@ -362,7 +365,10 @@ export function groupAndSortForecastData(items: ForecastRawItem[]): ForecastCont
         is_accessory: isAccGroup,
         is_special: isSpecGroup,
         is_box: isBoxGroup,
-        unit_type: unitType
+        unit_type: unitType,
+        missingSpec,
+        packQtyUsed: packSpec ? Number(packSpec.pack_qty) : pcsPerPkg,
+        cartonTypeUsed: packSpec?.carton_type || ''
       })
     })
 

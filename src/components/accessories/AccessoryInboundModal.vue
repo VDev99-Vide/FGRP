@@ -62,15 +62,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import AutoComplete from 'primevue/autocomplete'
 import InputText from 'primevue/inputtext'
+import { mergeAccessorySuggestCodes } from '@/utils/accessorySuggest'
 
 const props = defineProps<{
   visible: boolean
   uniqueCodes: string[]
   loading: boolean
+  /** T5: codes metadata đã lọc loại (3) — gộp với uniqueCodes. */
+  metadataCodes?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -78,6 +81,8 @@ const emit = defineEmits<{
   (e: 'save', payload: { code: string; qty: number; bin: string }): void
   (e: 'cancel'): void
 }>()
+
+const allSuggestCodes = computed(() => mergeAccessorySuggestCodes(props.metadataCodes, props.uniqueCodes))
 
 const code = ref('')
 const qtyStr = ref('')
@@ -88,9 +93,9 @@ const filteredCodes = ref<string[]>([])
 const searchCodes = (event: any) => {
   const query = event.query.trim().toLowerCase()
   if (!query) {
-    filteredCodes.value = [...props.uniqueCodes]
+    filteredCodes.value = [...allSuggestCodes.value]
   } else {
-    filteredCodes.value = props.uniqueCodes.filter(c => c.toLowerCase().includes(query))
+    filteredCodes.value = allSuggestCodes.value.filter(c => c.toLowerCase().includes(query))
   }
 }
 

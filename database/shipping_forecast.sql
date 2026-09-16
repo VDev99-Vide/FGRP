@@ -45,7 +45,7 @@ create index if not exists idx_shipping_forecast_accessory on shipping_forecast 
 create index if not exists idx_shipping_forecast_special on shipping_forecast (is_special);
 
 -- ==========================================
--- HÀM DỌN DẸP TỰ ĐỘNG CÁC ĐƠN ĐÃ CHUẨN BỊ XONG QUÁ 1 NGÀY (24H)
+-- HÀM DỌN DẸP TỰ ĐỘNG CÁC ĐƠN ĐÃ CHUẨN BỊ XONG QUÁ 3 NGÀY (72H) — T2
 -- ==========================================
 create or replace function cleanup_expired_shipping_forecast()
 returns int
@@ -58,7 +58,7 @@ begin
   delete from shipping_forecast
   where status = 'ready'
     and status_changed_at is not null
-    and status_changed_at < now() - interval '1 day';
+    and status_changed_at < now() - interval '3 days';
   
   get diagnostics deleted_count = row_count;
   return deleted_count;
