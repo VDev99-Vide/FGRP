@@ -32,7 +32,7 @@ describe('usePurchaseOrders composable', () => {
     po = usePurchaseOrders()
     po.clearMemory()
     po.searchText.value = ''
-    po.statusFilter.value = 'all'
+    po.statusFilter.value = 'open'
     uid = Math.random().toString(36).slice(2, 8).toUpperCase()
     createdIds = []
   })
@@ -191,6 +191,7 @@ describe('usePurchaseOrders composable', () => {
     track(b.id)
     await po.addReceipt(a.id, { receipt_date: todayIsoDate(), qty: 100 })
 
+    po.statusFilter.value = 'completed'
     po.searchText.value = 'alpha'
     expect(po.filteredOrders.value).toHaveLength(1)
 

@@ -27,5 +27,8 @@ dev-dist
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
 .aider*
+
+# Local artifacts & samples
+Sample.xlsx
+todo.png

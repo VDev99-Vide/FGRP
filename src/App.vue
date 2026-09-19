@@ -46,13 +46,6 @@
           <div v-if="isDemoMode" class="flex items-center gap-2 px-3 py-1.5 bg-[#FDB52A]/15 border border-[#FDB52A]/30 backdrop-blur-md rounded-[8px] text-[#FDB52A] text-xs font-semibold shadow-sm">
             <span class="w-2 h-2 rounded-full bg-[#FDB52A] animate-pulse"></span>
             <span>Dữ liệu mẫu (Demo Mode)</span>
-            <button 
-              @click="handleResetMockData" 
-              title="Đặt lại dữ liệu mẫu về mặc định ban đầu" 
-              class="ml-1 text-[11px] underline text-[#FDB52A] hover:text-white font-bold cursor-pointer"
-            >
-              Đặt lại
-            </button>
           </div>
           <div v-else class="flex items-center gap-2 px-3 py-1.5 bg-[#05C168]/15 border border-[#05C168]/30 backdrop-blur-md rounded-[8px] text-[#14CA74] text-xs font-semibold shadow-sm">
             <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74] animate-pulse"></span>
@@ -79,6 +72,115 @@
             <Download class="w-3.5 h-3.5 text-[#00C2FF]" />
             <span>{{ isInstalled ? 'Đã Cài App' : 'Tải App' }}</span>
           </button>
+
+          <!-- Online Presence Realtime: Avatar trượt header từ trái sang phải + Dropdown danh sách online -->
+          <div 
+            v-if="isAuthenticated" 
+            ref="onlineWidgetRef" 
+            class="relative"
+          >
+            <!-- Badge nút bấm với hiệu ứng avatar trượt từ trái sang phải -->
+            <button
+              @click="toggleOnlineDropdown"
+              :title="`Đang online: ${onlineUsers.length || 1} người dùng (Supabase Realtime 0đ)`"
+              class="flex items-center gap-2 px-3 py-1.5 glass-user-card rounded-[10px] hover:border-[#CB3CFF]/50 transition-all cursor-pointer select-none group"
+              :class="{ 'border-[#CB3CFF]/60 shadow-[0_0_12px_rgba(203,60,255,0.3)]': showOnlineDropdown }"
+            >
+              <!-- Avatar người dùng trượt từ trái sang phải khi login / join -->
+              <div 
+                class="flex items-center -space-x-2 transition-transform duration-300"
+                :class="justJoined ? 'animate-slide-avatar' : ''"
+              >
+                <!-- Hiển thị tối đa 3 avatar xếp chồng -->
+                <div 
+                  v-for="(u, idx) in onlineUsers.slice(0, 3)" 
+                  :key="u.email"
+                  class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold ring-2 ring-[#081028] shadow-[0_0_8px_rgba(0,194,255,0.4)]"
+                  :style="{ zIndex: 10 - idx }"
+                  :title="u.name || u.email"
+                >
+                  {{ (u.name || u.email).charAt(0).toUpperCase() }}
+                </div>
+                <!-- Nếu chưa có danh sách realtime thì hiện avatar của currentUser -->
+                <div 
+                  v-if="onlineUsers.length === 0 && currentUser"
+                  class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold ring-2 ring-[#081028]"
+                >
+                  {{ currentUser.name.charAt(0).toUpperCase() }}
+                </div>
+              </div>
+
+              <!-- Số lượng online + Chấm xanh nhấp nháy -->
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-[#AEB9E1] group-hover:text-white transition">
+                <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74] animate-pulse"></span>
+                <span class="font-mono text-white text-xs">{{ onlineUsers.length > 0 ? onlineUsers.length : 1 }}</span>
+                <span class="hidden sm:inline text-[11px] text-[#AEB9E1]">Online</span>
+                <ChevronDown 
+                  class="w-3.5 h-3.5 text-[#AEB9E1] group-hover:text-white transition-transform duration-200" 
+                  :class="{ 'rotate-180 text-[#CB3CFF]': showOnlineDropdown }" 
+                />
+              </div>
+            </button>
+
+            <!-- Dropdown danh sách người dùng đang online -->
+            <transition name="dropdown-fade">
+              <div 
+                v-if="showOnlineDropdown" 
+                class="absolute right-0 top-full mt-2 w-72 sm:w-80 glass-dropdown rounded-[12px] p-3.5 shadow-[0_12px_32px_rgba(0,0,0,0.6)] border border-[#CB3CFF]/40 backdrop-blur-xl z-50 animate-fade-in"
+              >
+                <!-- Tiêu đề dropdown -->
+                <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#14CA74] shadow-[0_0_8px_#14CA74] animate-pulse"></span>
+                    <span class="text-xs font-bold text-white uppercase tracking-wider">Đang Online ({{ onlineUsers.length || 1 }})</span>
+                  </div>
+                  <span class="px-2 py-0.5 rounded-full bg-[#00C2FF]/15 border border-[#00C2FF]/30 text-[9px] text-[#00C2FF] font-mono font-bold tracking-tight">
+                    {{ presenceConnected ? 'Realtime 100%' : 'Đang kết nối...' }}
+                  </span>
+                </div>
+
+                <!-- Danh sách user online -->
+                <div class="max-h-60 overflow-y-auto flex flex-col gap-1.5 custom-scrollbar pr-0.5">
+                  <div 
+                    v-for="u in (onlineUsers.length > 0 ? onlineUsers : [{ id: currentUser?.id || '', email: currentUser?.email || '', name: currentUser?.name || '', joinedAt: Date.now() }])" 
+                    :key="u.email"
+                    class="flex items-center justify-between p-2 rounded-lg bg-white/5 hover:bg-white/10 transition border border-transparent hover:border-[#CB3CFF]/20"
+                  >
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <div class="relative flex-shrink-0">
+                        <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold shadow-[0_0_6px_rgba(0,194,255,0.4)]">
+                          {{ (u.name || u.email).charAt(0).toUpperCase() }}
+                        </div>
+                        <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#14CA74] ring-2 ring-[#081028]"></span>
+                      </div>
+                      <div class="min-w-0 text-left">
+                        <p class="text-xs font-semibold text-white truncate flex items-center gap-1.5">
+                          <span>{{ u.name || u.email }}</span>
+                          <span 
+                            v-if="u.email.toLowerCase() === currentUser?.email?.toLowerCase()" 
+                            class="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#CB3CFF]/30 text-[#CB3CFF] border border-[#CB3CFF]/40"
+                          >
+                            Bạn
+                          </span>
+                        </p>
+                        <p class="text-[10px] text-[#AEB9E1] truncate">{{ u.email }}</p>
+                      </div>
+                    </div>
+                    <div class="text-[10px] text-[#14CA74] font-medium flex items-center gap-1 flex-shrink-0">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[#14CA74] animate-pulse"></span>
+                      <span>Hoạt động</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Footer lưu ý chi phí 0đ -->
+                <div class="pt-2.5 mt-2.5 border-t border-white/10 flex items-center justify-between text-[10px] text-[#AEB9E1]">
+                  <span>Supabase Presence</span>
+                  <span class="text-[#14CA74] font-semibold">0đ Prototype</span>
+                </div>
+              </div>
+            </transition>
+          </div>
 
           <!-- User Profile Badge & Logout (Đồng bộ kính mờ với toàn hệ thống) -->
           <div v-if="currentUser" class="flex items-center gap-2.5 px-3 py-1.5 glass-user-card rounded-[10px]">
@@ -255,7 +357,6 @@
                   </tbody>
                 </table>
               </div>
-              <p class="text-[11px] text-[#AEB9E1]">SL đóng gói &amp; Trọng lượng tham chiếu trực tiếp metadata (loại "phụ kiện"). Mã thiếu meta sẽ báo "Thiếu meta" — bổ sung trong Meta-data.</p>
             </div>
 
             <!-- 4. TAB DANH SÁCH XUẤT HÀNG DỰ KIẾN -->
@@ -388,7 +489,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
@@ -401,7 +502,8 @@ import {
   Search,
   Download,
   LogOut,
-  RefreshCw
+  RefreshCw,
+  ChevronDown
 } from 'lucide-vue-next'
 
 // Layout & Dashboard Components
@@ -436,7 +538,7 @@ import { useMetadataPacking } from '@/composables/useMetadataPacking'
 import { useShippingForecast } from '@/composables/useShippingForecast'
 import { usePwaInstall } from '@/composables/usePwaInstall'
 import { useAuth } from '@/composables/useAuth'
-import { resetMockData } from '@/services/mockData'
+import { useOnlinePresence } from '@/composables/useOnlinePresence'
 import { exportToExcel } from '@/services/excelExport'
 import { formatNumber } from '@/utils/format'
 import { InventoryRow, HangPhuKienRow } from '@/types'
@@ -651,33 +753,65 @@ const loadAllData = async () => {
   }
 }
 
-// Reset Mock Data
-const handleResetMockData = () => {
-  resetMockData()
-  loadAllData()
-  toast.add({
-    severity: 'info',
-    summary: 'Đã đặt lại dữ liệu',
-    detail: 'Dữ liệu mẫu đã được khôi phục về trạng thái ban đầu',
-    life: 3000
-  })
-}
-
 // Auth State & Methods
 const { currentUser, isAuthenticated, initAuth, logout } = useAuth()
 const showLogoutConfirm = ref(false)
 
-const handleLoginSuccess = () => {
+// Realtime Online Presence
+const {
+  onlineUsers,
+  presenceConnected,
+  justJoined,
+  startPresence,
+  stopPresence,
+} = useOnlinePresence()
+
+const showOnlineDropdown = ref(false)
+const onlineWidgetRef = ref<HTMLElement | null>(null)
+
+const toggleOnlineDropdown = () => {
+  showOnlineDropdown.value = !showOnlineDropdown.value
+}
+
+const handleClickOutside = (e: MouseEvent) => {
+  if (onlineWidgetRef.value && !onlineWidgetRef.value.contains(e.target as Node)) {
+    showOnlineDropdown.value = false
+  }
+}
+
+const syncPresenceForUser = async () => {
+  if (currentUser.value) {
+    await startPresence({
+      id: currentUser.value.id,
+      email: currentUser.value.email,
+      name: currentUser.value.name,
+    })
+  }
+}
+
+watch(isAuthenticated, async (authed) => {
+  if (authed && currentUser.value) {
+    await syncPresenceForUser()
+  } else {
+    await stopPresence()
+  }
+})
+
+const handleLoginSuccess = async () => {
   toast.add({
     severity: 'success',
     summary: 'Đăng nhập thành công',
     detail: `Xin chào ${currentUser.value?.name}! Phiên làm việc đã được ghi nhớ trên thiết bị này.`,
     life: 3000
   })
+  if (currentUser.value) {
+    await syncPresenceForUser()
+  }
   loadAllData()
 }
 
 const handleLogout = async () => {
+  await stopPresence()
   await logout()
   toast.add({
     severity: 'info',
@@ -688,6 +822,9 @@ const handleLogout = async () => {
 }
 
 onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
+  window.addEventListener('beforeunload', () => stopPresence())
+
   // Tự động xóa sạch dữ liệu mẫu cũ trong LocalStorage để đồng bộ 100% với Supabase
   try {
     localStorage.removeItem('wms_mock_inventory_v1')
@@ -695,7 +832,15 @@ onMounted(async () => {
   } catch {}
 
   await initAuth()
+  if (currentUser.value) {
+    await syncPresenceForUser()
+  }
   await loadAllData()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  stopPresence()
 })
 
 // Inbound Submission (Manual)

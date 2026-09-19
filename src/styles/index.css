@@ -680,3 +680,46 @@ html, body {
   border-radius: 20px !important;
 }
 
+/* =========================================================
+   REALTIME ONLINE PRESENCE: AVATAR SLIDE & DROPDOWN
+   ========================================================= */
+
+@keyframes slideAvatarFromLeft {
+  0% {
+    transform: translateX(-48px) scale(0.6);
+    opacity: 0;
+  }
+  65% {
+    transform: translateX(4px) scale(1.06);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-slide-avatar {
+  animation: slideAvatarFromLeft 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.glass-dropdown {
+  background: 
+    linear-gradient(0deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)),
+    linear-gradient(0deg, rgba(8, 16, 40, 0.92), rgba(8, 16, 40, 0.92)),
+    rgba(24, 32, 45, 0.96);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+}
+

@@ -307,15 +307,15 @@ export function sortPoForDisplay(orders: PurchaseOrderWithProgress[]): PurchaseO
   })
 }
 
-/** Lọc PO theo từ khóa (số PO / NCC / mã hàng) + trạng thái. */
+/** Lọc PO theo từ khóa (số PO / NCC / mã hàng) + trạng thái (Chưa xong / Đã giao đủ). */
 export function filterPurchaseOrders(
   orders: PurchaseOrderWithProgress[],
   searchText: string,
-  status: 'all' | 'open' | 'completed',
+  status: 'open' | 'completed',
 ): PurchaseOrderWithProgress[] {
   const q = String(searchText || '').toLowerCase().trim()
   return orders.filter((o) => {
-    if (status !== 'all' && o.status !== status) return false
+    if (o.status !== status) return false
     if (!q) return true
     // T1: tìm cả trong lines (PO N sản phẩm)
     const lineCodes = (o.lines || []).map((l) => `${l.item_code} ${l.description || ''}`).join(' ')

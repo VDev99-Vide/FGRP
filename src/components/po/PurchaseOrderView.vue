@@ -66,12 +66,6 @@
         <div class="flex flex-wrap gap-2.5 w-full lg:w-auto items-center">
           <div class="flex items-center gap-1 bg-[#18202D]/90 border border-white/15 p-1 rounded-[8px] text-xs">
             <button
-              @click="statusFilter = 'all'"
-              :class="['px-2.5 py-1 rounded-[6px] text-xs font-bold transition cursor-pointer', statusFilter === 'all' ? 'bg-[#CB3CFF] text-white shadow-[0_0_8px_#CB3CFF]' : 'text-[#AEB9E1] hover:text-white']"
-            >
-              Tất cả ({{ stats.totalOrders }})
-            </button>
-            <button
               @click="statusFilter = 'open'"
               :class="['px-2.5 py-1 rounded-[6px] text-xs font-bold transition cursor-pointer', statusFilter === 'open' ? 'bg-[#FDB52A] text-[#081028] shadow-[0_0_8px_#FDB52A]' : 'text-[#AEB9E1] hover:text-white']"
             >

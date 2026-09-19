@@ -1,19 +1,102 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { supabase } from '@/services/supabase'
 import { useShippingForecast } from './useShippingForecast'
+import type { ForecastRawItem } from '@/utils/forecast'
+
+/**
+ * Fixture riêng của test (không dùng dữ liệu mẫu frontend — đã xóa).
+ * Supabase rỗng => hiển thị rỗng; test tự nạp fixture vào memory và tự dọn dòng đã thêm.
+ */
+const fixtureRows = (): ForecastRawItem[] => [
+  {
+    id: '00000000-0000-0000-0000-000000000001',
+    po: 'PO-T-FC-A',
+    so: 'SO-T-01',
+    container_no: 'CONT-A',
+    item_code: '1220190004',
+    feature: '1220',
+    loading_date: '17/09/2026',
+    qty: 4400,
+    pcs_per_pkg: 200,
+    pkg: 22,
+    is_accessory: false,
+    is_special: true,
+    unit_type: 'kien',
+    status: 'pending',
+    status_changed_at: null,
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000002',
+    po: 'PO-T-FC-A',
+    so: 'SO-T-01',
+    container_no: 'CONT-A',
+    item_code: '1220200004',
+    feature: '1220',
+    loading_date: '17/09/2026',
+    qty: 4400,
+    pcs_per_pkg: 200,
+    pkg: 22,
+    is_accessory: false,
+    is_special: true,
+    unit_type: 'kien',
+    status: 'pending',
+    status_changed_at: null,
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000003',
+    po: 'PO-T-FC-B',
+    so: 'SO-T-02',
+    container_no: 'CONT-B',
+    item_code: '8515210204',
+    feature: '5152',
+    loading_date: '14/09/2026',
+    qty: 1750,
+    pcs_per_pkg: 70,
+    pkg: 25,
+    is_accessory: false,
+    is_special: false,
+    unit_type: 'kien',
+    status: 'pending',
+    status_changed_at: null,
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000004',
+    po: 'PO-T-FC-B',
+    so: 'SO-T-02',
+    container_no: 'CONT-B',
+    item_code: '1325730001',
+    feature: '1325730001',
+    loading_date: '14/09/2026',
+    qty: 1750,
+    pcs_per_pkg: 25,
+    pkg: 70,
+    is_accessory: true,
+    is_special: false,
+    unit_type: 'thung',
+    status: 'pending',
+    status_changed_at: null,
+  },
+]
 
 describe('useShippingForecast composable (chuẩn mới: 2 tab, cộng dồn, xóa thủ công)', () => {
   let composable: ReturnType<typeof useShippingForecast>
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Dọn dòng tồn đọng từ bản test cũ (PO-NEW/SO-NEW) để không nhiễm DB dùng chung
+    try {
+      await supabase.from('shipping_forecast').delete().eq('po', 'PO-NEW').eq('so', 'SO-NEW')
+    } catch {
+      // bỏ qua lỗi dọn dẹp
+    }
     composable = useShippingForecast()
     composable.clearAllData()
-    composable.seedDemoData()
+    composable.forecastItems.value = fixtureRows()
     composable.quickFilterText.value = ''
     composable.statusFilter.value = 'pending'
   })
 
   it('khởi tạo dữ liệu và tính toán phân nhóm container chính xác', () => {
-    expect(composable.allGroupedContainers.value.length).toBeGreaterThan(0)
+    expect(composable.allGroupedContainers.value.length).toBe(2)
     const stats = composable.stats.value
     expect(stats.totalContainers).toBe(composable.allGroupedContainers.value.length)
     expect(stats.totalPkg).toBeGreaterThan(0)
@@ -22,16 +105,16 @@ describe('useShippingForecast composable (chuẩn mới: 2 tab, cộng dồn, x�
 
   it('chỉ còn 2 tab pending/ready (bỏ Tất cả), mặc định pending', () => {
     expect(composable.statusFilter.value).toBe('pending')
-    // Demo data đều pending -> filtered = all
+    // Fixture đều pending -> filtered = all
     expect(composable.filteredContainers.value.length).toBe(composable.allGroupedContainers.value.length)
     composable.statusFilter.value = 'ready'
     expect(composable.filteredContainers.value.length).toBe(0)
   })
 
   it('lọc dữ liệu bằng quickFilterText và statusFilter', () => {
-    composable.quickFilterText.value = '0N64-0003004870'
+    composable.quickFilterText.value = 'PO-T-FC-A'
     expect(composable.filteredContainers.value.length).toBe(1)
-    expect(composable.filteredContainers.value[0].po).toBe('0N64-0003004870')
+    expect(composable.filteredContainers.value[0].po).toBe('PO-T-FC-A')
 
     composable.quickFilterText.value = 'khong-ton-tai-123'
     expect(composable.filteredContainers.value.length).toBe(0)
@@ -69,12 +152,15 @@ describe('useShippingForecast composable (chuẩn mới: 2 tab, cộng dồn, x�
     expect(edited?.qty).toBe(originalQty + 100)
   })
 
-  it('cộng dồn khi thêm mới (không ghi đè cũ)', async () => {
+  it('cộng dồn khi thêm mới (không ghi đè cũ) và tự dọn dòng đã thêm', async () => {
+    const uid = Math.random().toString(36).slice(2, 8).toUpperCase()
     const before = composable.forecastItems.value.length
     await composable.addForecastItems([
-      { po: 'PO-NEW', so: 'SO-NEW', item_code: '8100920004', loading_date: '20/09/2026', qty: 100, pcs_per_pkg: 10 } as never,
+      { po: `PO-T-ADD-${uid}`, so: `SO-T-ADD-${uid}`, item_code: '8100920004', loading_date: '20/09/2026', qty: 100, pcs_per_pkg: 10 } as never,
     ])
     expect(composable.forecastItems.value.length).toBe(before + 1)
+    await composable.deleteContainer(`PO-T-ADD-${uid}`, `SO-T-ADD-${uid}`)
+    expect(composable.forecastItems.value.length).toBe(before)
   })
 
   it('xóa hàng loạt theo ids', async () => {

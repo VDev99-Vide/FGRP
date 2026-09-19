@@ -48,7 +48,7 @@ const poLines = ref<PoLine[]>([])
 const receiptLogs = ref<PoReceiptLog[]>([])
 const loading = ref(false)
 const searchText = ref('')
-const statusFilter = ref<'all' | 'open' | 'completed'>('all')
+const statusFilter = ref<'open' | 'completed'>('open')
 const lastSync = ref('--:--')
 // false khi Supabase chưa có bảng purchase_orders (admin chưa chạy migration):
 // tự rơi về memory để app vẫn chạy, đồng thời báo banner hướng dẫn migration
@@ -696,32 +696,6 @@ export function usePurchaseOrders() {
     receiptLogs.value = []
   }
 
-  /** Nạp dữ liệu demo phục vụ unit test / trải nghiệm thử. */
-  const seedDemoData = () => {
-    const demoPo: PurchaseOrder = {
-      id: 'po-seed-01',
-      po_no: 'PO-DEMO-10000',
-      supplier: 'NCC DEMO',
-      item_code: '8101010104',
-      target_qty: 10000,
-      created_date: todayIsoDate(),
-      status: 'open',
-      closed_at: null,
-      created_at: new Date().toISOString(),
-    }
-    purchaseOrders.value = [demoPo]
-    receiptLogs.value = [
-      {
-        id: 'log-seed-01',
-        po_id: 'po-seed-01',
-        receipt_date: todayIsoDate(),
-        qty: 2500,
-        note: 'Đợt 1',
-        created_at: new Date().toISOString(),
-      },
-    ]
-  }
-
   const clearMemory = () => {
     purchaseOrders.value = []
     poLines.value = []
@@ -781,7 +755,6 @@ export function usePurchaseOrders() {
     deleteReceipt,
     importPurchaseOrders,
     clearAllPurchaseOrders,
-    seedDemoData,
     clearMemory,
   }
 }

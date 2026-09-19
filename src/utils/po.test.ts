@@ -223,10 +223,11 @@ describe('sortPoForDisplay & filterPurchaseOrders', () => {
         makeLog({ po_id: 'b', qty: 10000 }),
       ]),
     ]
-    expect(filterPurchaseOrders(orders, 'ncc a', 'all')).toHaveLength(1)
+    expect(filterPurchaseOrders(orders, 'ncc a', 'open')).toHaveLength(1)
     expect(filterPurchaseOrders(orders, '', 'completed')).toHaveLength(1)
     expect(filterPurchaseOrders(orders, '', 'open')).toHaveLength(1)
-    expect(filterPurchaseOrders(orders, 'khong-co', 'all')).toHaveLength(0)
+    expect(filterPurchaseOrders(orders, 'khong-co', 'open')).toHaveLength(0)
+    expect(filterPurchaseOrders(orders, 'khong-co', 'completed')).toHaveLength(0)
   })
 })
 
@@ -354,8 +355,8 @@ describe('T1: PO N sản phẩm (po_lines)', () => {
         [],
       ),
     ]
-    expect(filterPurchaseOrders(orders, 'b2-hex', 'all')).toHaveLength(1)
-    expect(filterPurchaseOrders(orders, 'b2-hex', 'all')[0].id).toBe('n')
+    expect(filterPurchaseOrders(orders, 'b2-hex', 'open')).toHaveLength(1)
+    expect(filterPurchaseOrders(orders, 'b2-hex', 'open')[0].id).toBe('n')
   })
 })
 
