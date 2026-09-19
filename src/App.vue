@@ -175,8 +175,8 @@
 
                 <!-- Footer lưu ý chi phí 0đ -->
                 <div class="pt-2.5 mt-2.5 border-t border-white/10 flex items-center justify-between text-[10px] text-[#AEB9E1]">
-                  <span>Supabase Presence</span>
-                  <span class="text-[#14CA74] font-semibold">0đ Prototype</span>
+                  <span>Multi-User</span>
+                  <span class="text-[#14CA74] font-semibold">Streaming...</span>
                 </div>
               </div>
             </transition>
