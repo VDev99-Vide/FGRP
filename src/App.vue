@@ -82,7 +82,7 @@
             <!-- Badge nút bấm với hiệu ứng avatar trượt từ trái sang phải -->
             <button
               @click="toggleOnlineDropdown"
-              :title="`Đang online: ${onlineUsers.length || 1} người dùng (Supabase Realtime 0đ)`"
+              :title="`Đang online: ${displayUsers.length} người dùng (Supabase Realtime 0đ)`"
               class="flex items-center gap-2 px-3 py-1.5 glass-user-card rounded-[10px] hover:border-[#CB3CFF]/50 transition-all cursor-pointer select-none group"
               :class="{ 'border-[#CB3CFF]/60 shadow-[0_0_12px_rgba(203,60,255,0.3)]': showOnlineDropdown }"
             >
@@ -93,7 +93,7 @@
               >
                 <!-- Hiển thị tối đa 3 avatar xếp chồng -->
                 <div 
-                  v-for="(u, idx) in onlineUsers.slice(0, 3)" 
+                  v-for="(u, idx) in displayUsers.slice(0, 3)" 
                   :key="u.email"
                   class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold ring-2 ring-[#081028] shadow-[0_0_8px_rgba(0,194,255,0.4)]"
                   :style="{ zIndex: 10 - idx }"
@@ -101,19 +101,12 @@
                 >
                   {{ (u.name || u.email).charAt(0).toUpperCase() }}
                 </div>
-                <!-- Nếu chưa có danh sách realtime thì hiện avatar của currentUser -->
-                <div 
-                  v-if="onlineUsers.length === 0 && currentUser"
-                  class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00C2FF] to-[#CB3CFF] flex items-center justify-center text-white text-xs font-bold ring-2 ring-[#081028]"
-                >
-                  {{ currentUser.name.charAt(0).toUpperCase() }}
-                </div>
               </div>
 
               <!-- Số lượng online + Chấm xanh nhấp nháy -->
               <div class="flex items-center gap-1.5 text-xs font-semibold text-[#AEB9E1] group-hover:text-white transition">
                 <span class="w-2 h-2 rounded-full bg-[#14CA74] shadow-[0_0_6px_#14CA74] animate-pulse"></span>
-                <span class="font-mono text-white text-xs">{{ onlineUsers.length > 0 ? onlineUsers.length : 1 }}</span>
+                <span class="font-mono text-white text-xs">{{ displayUsers.length }}</span>
                 <span class="hidden sm:inline text-[11px] text-[#AEB9E1]">Online</span>
                 <ChevronDown 
                   class="w-3.5 h-3.5 text-[#AEB9E1] group-hover:text-white transition-transform duration-200" 
@@ -132,17 +125,20 @@
                 <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
                   <div class="flex items-center gap-2">
                     <span class="w-2.5 h-2.5 rounded-full bg-[#14CA74] shadow-[0_0_8px_#14CA74] animate-pulse"></span>
-                    <span class="text-xs font-bold text-white uppercase tracking-wider">Đang Online ({{ onlineUsers.length || 1 }})</span>
+                    <span class="text-xs font-bold text-white uppercase tracking-wider">Đang Online ({{ displayUsers.length }})</span>
                   </div>
-                  <span class="px-2 py-0.5 rounded-full bg-[#00C2FF]/15 border border-[#00C2FF]/30 text-[9px] text-[#00C2FF] font-mono font-bold tracking-tight">
-                    {{ presenceConnected ? 'Realtime 100%' : 'Đang kết nối...' }}
+                  <span 
+                    class="px-2 py-0.5 rounded-full border text-[9px] font-mono font-bold tracking-tight"
+                    :class="presenceConnected ? 'bg-[#00C2FF]/15 border-[#00C2FF]/30 text-[#00C2FF]' : (presenceError ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-white/10 border-white/20 text-[#AEB9E1]')"
+                  >
+                    {{ presenceConnected ? 'Realtime 100%' : (presenceError ? 'Mất kết nối' : 'Đang kết nối...') }}
                   </span>
                 </div>
 
                 <!-- Danh sách user online -->
                 <div class="max-h-60 overflow-y-auto flex flex-col gap-1.5 custom-scrollbar pr-0.5">
                   <div 
-                    v-for="u in (onlineUsers.length > 0 ? onlineUsers : [{ id: currentUser?.id || '', email: currentUser?.email || '', name: currentUser?.name || '', joinedAt: Date.now() }])" 
+                    v-for="u in displayUsers" 
                     :key="u.email"
                     class="flex items-center justify-between p-2 rounded-lg bg-white/5 hover:bg-white/10 transition border border-transparent hover:border-[#CB3CFF]/20"
                   >
@@ -538,7 +534,7 @@ import { useMetadataPacking } from '@/composables/useMetadataPacking'
 import { useShippingForecast } from '@/composables/useShippingForecast'
 import { usePwaInstall } from '@/composables/usePwaInstall'
 import { useAuth } from '@/composables/useAuth'
-import { useOnlinePresence } from '@/composables/useOnlinePresence'
+import { useOnlinePresence, type OnlineUser } from '@/composables/useOnlinePresence'
 import { exportToExcel } from '@/services/excelExport'
 import { formatNumber } from '@/utils/format'
 import { InventoryRow, HangPhuKienRow } from '@/types'
@@ -761,10 +757,44 @@ const showLogoutConfirm = ref(false)
 const {
   onlineUsers,
   presenceConnected,
+  presenceError,
   justJoined,
   startPresence,
   stopPresence,
 } = useOnlinePresence()
+
+// Danh sách user online hiển thị (kết hợp realtime + currentUser fallback khi đang kết nối)
+const displayUsers = computed<OnlineUser[]>(() => {
+  if (onlineUsers.value.length > 0) {
+    if (currentUser.value) {
+      const myEmail = currentUser.value.email.toLowerCase()
+      const hasMe = onlineUsers.value.some((u) => u.email.toLowerCase() === myEmail)
+      if (!hasMe) {
+        return [
+          {
+            id: currentUser.value.id || '',
+            email: currentUser.value.email,
+            name: currentUser.value.name,
+            joinedAt: Date.now(),
+          },
+          ...onlineUsers.value,
+        ]
+      }
+    }
+    return onlineUsers.value
+  }
+  if (currentUser.value) {
+    return [
+      {
+        id: currentUser.value.id || '',
+        email: currentUser.value.email,
+        name: currentUser.value.name,
+        joinedAt: Date.now(),
+      },
+    ]
+  }
+  return []
+})
 
 const showOnlineDropdown = ref(false)
 const onlineWidgetRef = ref<HTMLElement | null>(null)
@@ -789,13 +819,14 @@ const syncPresenceForUser = async () => {
   }
 }
 
-watch(isAuthenticated, async (authed) => {
-  if (authed && currentUser.value) {
+// Watcher duy nhất cho currentUser: tự động kích hoạt presence khi đăng nhập, hủy khi đăng xuất
+watch(currentUser, async (user) => {
+  if (user) {
     await syncPresenceForUser()
   } else {
     await stopPresence()
   }
-})
+}, { immediate: true })
 
 const handleLoginSuccess = async () => {
   toast.add({
@@ -804,9 +835,6 @@ const handleLoginSuccess = async () => {
     detail: `Xin chào ${currentUser.value?.name}! Phiên làm việc đã được ghi nhớ trên thiết bị này.`,
     life: 3000
   })
-  if (currentUser.value) {
-    await syncPresenceForUser()
-  }
   loadAllData()
 }
 
@@ -832,9 +860,6 @@ onMounted(async () => {
   } catch {}
 
   await initAuth()
-  if (currentUser.value) {
-    await syncPresenceForUser()
-  }
   await loadAllData()
 })
 

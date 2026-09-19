@@ -55,7 +55,7 @@ export function presenceStateToUsers(state: PresenceState | null | undefined): O
  *   (vài chục/tháng với 4 user, quota Free 2 triệu/tháng).
  */
 export function useOnlinePresence(
-  channelFactory?: () => RealtimeChannel,
+  channelFactory?: (key?: string) => RealtimeChannel,
 ) {
   const onlineUsers = ref<OnlineUser[]>([])
   const presenceConnected = ref(false)
@@ -63,6 +63,8 @@ export function useOnlinePresence(
   const justJoined = ref(false)
 
   let channel: RealtimeChannel | null = null
+  let currentEmail: string | null = null
+  let isTransitioning = false
   let joinTimer: ReturnType<typeof setTimeout> | null = null
 
   const triggerJoinAnimation = () => {
@@ -73,12 +75,22 @@ export function useOnlinePresence(
     }, 1500)
   }
 
-  const makeChannel = channelFactory || (() => supabase.channel(ONLINE_PRESENCE_CHANNEL))
+  const makeChannel = (key: string) => {
+    if (channelFactory) {
+      return channelFactory(key)
+    }
+    return supabase.channel(ONLINE_PRESENCE_CHANNEL, {
+      config: {
+        presence: { key },
+      },
+    })
+  }
 
   const syncFromChannel = () => {
     if (!channel) return
     try {
-      onlineUsers.value = presenceStateToUsers(channel.presenceState() as PresenceState)
+      const state = channel.presenceState() as PresenceState
+      onlineUsers.value = presenceStateToUsers(state)
     } catch (e) {
       console.warn('[Presence] Không đọc được presence state:', e)
     }
@@ -88,22 +100,44 @@ export function useOnlinePresence(
   const startPresence = async (self: PresenceSelf): Promise<boolean> => {
     const email = String(self?.email || '').trim()
     if (!email) return false
+
+    const cleanEmail = email.toLowerCase()
+
+    // Idempotent: Nếu đã kết nối với chính email này và channel đang hoạt động thì giữ nguyên
+    if (channel && currentEmail === cleanEmail && presenceConnected.value) {
+      return true
+    }
+
+    // Nếu đang trong quá trình chuyển đổi (đang kết nối/ngắt), chờ lượt
+    if (isTransitioning) {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      if (channel && currentEmail === cleanEmail && presenceConnected.value) {
+        return true
+      }
+    }
+
     if (!channelFactory && !isSupabaseConfigured) {
       presenceError.value = 'Chưa cấu hình Supabase nên không bật presence.'
       return false
     }
-    await stopPresence()
-    presenceError.value = null
+
+    isTransitioning = true
     try {
-      channel = makeChannel()
+      await stopPresence()
+      presenceError.value = null
+      currentEmail = cleanEmail
+
+      const ch = makeChannel(cleanEmail)
+      channel = ch
+
       const payload = {
         id: String(self.id || ''),
-        email,
-        name: String(self.name || email),
+        email: self.email,
+        name: String(self.name || self.email),
         joined_at: Date.now(),
       }
-      channel
-        .on('presence', { event: 'sync' }, syncFromChannel)
+
+      ch.on('presence', { event: 'sync' }, syncFromChannel)
         .on('presence', { event: 'join' }, () => {
           syncFromChannel()
           triggerJoinAnimation()
@@ -111,27 +145,37 @@ export function useOnlinePresence(
         .on('presence', { event: 'leave' }, syncFromChannel)
 
       // Supabase subscribe với callback SUBSCRIBED
-      channel.subscribe(async (status) => {
+      ch.subscribe(async (status, err) => {
         if (status === 'SUBSCRIBED') {
           try {
-            await channel?.track(payload)
+            await ch.track(payload)
             presenceConnected.value = true
             syncFromChannel()
             triggerJoinAnimation()
-          } catch (err) {
-            console.warn('[Presence] track error on SUBSCRIBED:', err)
+          } catch (trackErr) {
+            console.warn('[Presence] track error on SUBSCRIBED:', trackErr)
           }
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('[Presence] Channel error:', err)
+          presenceConnected.value = false
+          presenceError.value = err?.message || 'Lỗi kết nối Realtime'
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[Presence] Channel timeout:', err)
+          presenceConnected.value = false
+          presenceError.value = 'Hết thời gian kết nối Realtime'
+        } else if (status === 'CLOSED') {
+          presenceConnected.value = false
         }
       })
 
-      // Đồng thời track ngay (phục vụ FakeChannel đồng bộ trong test)
+      // Hỗ trợ đồng bộ ngay nếu là FakeChannel trong test hoặc socket đã sẵn sàng
       try {
-        await channel.track(payload)
+        await ch.track(payload)
         presenceConnected.value = true
         syncFromChannel()
         triggerJoinAnimation()
       } catch {
-        // bỏ qua nếu socket thực tế đang đợi kết nối
+        // bỏ qua nếu socket thực tế đang đợi kết nối SUBSCRIBED
       }
 
       return true
@@ -139,8 +183,11 @@ export function useOnlinePresence(
       presenceError.value = e instanceof Error ? e.message : 'Không bật được presence.'
       console.warn('[Presence] startPresence thất bại:', e)
       channel = null
+      currentEmail = null
       presenceConnected.value = false
       return false
+    } finally {
+      isTransitioning = false
     }
   }
 
@@ -148,18 +195,29 @@ export function useOnlinePresence(
   const stopPresence = async (): Promise<void> => {
     const ch = channel
     channel = null
+    currentEmail = null
     presenceConnected.value = false
     onlineUsers.value = []
     if (!ch) return
+
     try {
       await ch.untrack()
     } catch {
       // bỏ qua: socket có thể đã đóng (đóng tab)
     }
+
     try {
       await ch.unsubscribe()
     } catch {
       // bỏ qua
+    }
+
+    if (!channelFactory) {
+      try {
+        await supabase.removeChannel(ch)
+      } catch {
+        // bỏ qua
+      }
     }
   }
 

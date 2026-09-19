@@ -138,4 +138,28 @@ describe('useOnlinePresence (join/track/leave với fake channel)', () => {
     await presence.startPresence(self)
     expect(presence.justJoined.value).toBe(true)
   })
+
+  it('gọi startPresence nhiều lần với cùng user -> giữ nguyên channel, không recreate', async () => {
+    let createCount = 0
+    const fake = new FakeChannel()
+    const presence = useOnlinePresence(() => {
+      createCount++
+      return fake as never
+    })
+    await presence.startPresence(self)
+    await presence.startPresence(self)
+    expect(createCount).toBe(1)
+  })
+
+  it('channelFactory nhận key là lowercase email của user', async () => {
+    let passedKey = ''
+    const fake = new FakeChannel()
+    const presence = useOnlinePresence((key) => {
+      passedKey = key || ''
+      return fake as never
+    })
+    await presence.startPresence({ email: 'Vinh@Gmail.Com', name: 'Vinh' })
+    expect(passedKey).toBe('vinh@gmail.com')
+  })
 })
+
