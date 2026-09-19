@@ -31,7 +31,7 @@
           <input
             v-model="searchText"
             type="text"
-            placeholder="Tìm khách hàng, feature (mã hàng cũ), quy cách..."
+            placeholder="Tìm khách hàng, mã hàng, feature, quy cách..."
             class="w-full h-[36px] px-3 pl-8 bg-[#18202D]/80 backdrop-blur-md border border-white/15 rounded-[8px] text-xs outline-none text-white placeholder-[#AEB9E1]/50 focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
           />
           <Search class="w-3.5 h-3.5 text-[#AEB9E1] absolute left-2.5 top-2.5" />
@@ -45,13 +45,6 @@
         >
           <PlusCircle class="w-4 h-4" />
           <span>THÊM MỚI</span>
-        </button>
-        <button
-          @click="handleSeedSample"
-          class="h-[38px] px-4 bg-[#14CA74]/15 hover:bg-[#14CA74]/25 border border-[#14CA74]/40 text-[#14CA74] hover:text-white rounded-[8px] text-xs font-bold flex items-center gap-2 transition cursor-pointer active:scale-95"
-        >
-          <FileSpreadsheet class="w-4 h-4" />
-          <span>NẠP DỮ LIỆU MẪU (136)</span>
         </button>
         <button
           @click="showImportModal = true"
@@ -74,7 +67,8 @@
           <thead class="glass-table-sticky-head">
             <tr>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Khách hàng</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase" title="Tên cũ: Mã hàng (cột DB item_code giữ nguyên)">Feature</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Mã hàng</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">Feature</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Số lượng đóng gói</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">Trọng lượng/Cái</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">Quy cách thùng</th>
@@ -85,7 +79,8 @@
           <tbody class="divide-y divide-white/[0.06] font-medium">
             <tr v-for="row in filteredRows" :key="row.id" class="hover:bg-white/[0.06] transition-colors">
               <td class="py-3 px-4 font-bold text-white text-xs">{{ row.customer }}</td>
-              <td class="py-3 px-4 font-mono font-bold text-[#00C2FF] text-xs">{{ row.item_code }}</td>
+              <td class="py-3 px-4 font-mono font-bold text-[#00C2FF] text-xs">{{ row.ma_hang || row.item_code }}</td>
+              <td class="py-3 px-4 text-center font-mono font-bold text-[#CB3CFF] text-xs">{{ row.feature || row.item_code }}</td>
               <td class="py-3 px-4 text-right font-mono font-bold text-[#14CA74]">{{ Number(row.pack_qty).toLocaleString() }}</td>
               <td class="py-3 px-4 text-right font-mono text-white/90">{{ row.weight_per_unit }}</td>
               <td class="py-3 px-4 font-mono text-[#AEB9E1] text-xs">{{ row.carton_spec || '—' }}</td>
@@ -110,8 +105,8 @@
               </td>
             </tr>
             <tr v-if="filteredRows.length === 0">
-              <td colspan="7" class="text-center py-12 text-[#AEB9E1] italic text-xs">
-                Chưa có dữ liệu. Bấm "Nạp dữ liệu mẫu (136)" để nạp chuẩn Sample.xlsx!
+              <td colspan="8" class="text-center py-12 text-[#AEB9E1] italic text-xs">
+                Chưa có dữ liệu. Bấm "IMPORT EXCEL" để nạp chuẩn Sample.xlsx (7 cột)!
               </td>
             </tr>
           </tbody>
@@ -123,6 +118,9 @@
       v-model:visible="showModal"
       :loading="loading"
       :editing="editingRow"
+      :customers="allCustomers"
+      :carton-specs="allCartonSpecs"
+      :carton-types="allCartonTypes"
       @save="handleSave"
     />
     <MetadataImportModal
@@ -133,7 +131,7 @@
     <ConfirmModal
       v-model:visible="showDeleteModal"
       title="Xác nhận xóa dòng quy cách"
-      :message="`Xóa dòng [${deletingRow?.customer} - ${deletingRow?.item_code}]? Không thể hoàn tác.`"
+      :message="`Xóa dòng [${deletingRow?.customer} - ${deletingRow?.ma_hang || deletingRow?.item_code} (${deletingRow?.feature || ''})]? Không thể hoàn tác.`"
       confirmText="Xác nhận xóa"
       cancelText="Hủy bỏ"
       severity="danger"
@@ -143,10 +141,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   AlertTriangle,
-  FileSpreadsheet,
   Pencil,
   PlusCircle,
   RefreshCw,
@@ -156,6 +153,7 @@ import {
 } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { useMetadataPacking } from '@/composables/useMetadataPacking'
+import { distinctCustomers, distinctCartonSpecs, distinctCartonTypes } from '@/utils/metadata'
 import type { MetadataPacking } from '@/types'
 import type { PackingSpecInput } from '@/utils/metadata'
 import type { MetadataExcelRow } from '@/services/metadataExcel'
@@ -167,6 +165,7 @@ const toast = useToast()
 
 const {
   loading,
+  rows,
   searchText,
   filteredRows,
   needsMigration,
@@ -175,8 +174,12 @@ const {
   updatePackingSpec,
   deletePackingSpec,
   importPackingSpecs,
-  seedSampleData,
 } = useMetadataPacking()
+
+// Gợi ý dropdown cho THÊM MỚI (không khóa cứng — vẫn cho nhập mới)
+const allCustomers = computed(() => distinctCustomers(rows.value))
+const allCartonSpecs = computed(() => distinctCartonSpecs(rows.value))
+const allCartonTypes = computed(() => distinctCartonTypes(rows.value))
 
 const showModal = ref(false)
 const showImportModal = ref(false)
@@ -227,18 +230,6 @@ const handleSave = async (payload: PackingSpecInput, id: string | null) => {
     showModal.value = false
   } catch (err: unknown) {
     toast.add({ severity: 'error', summary: 'Lỗi lưu dữ liệu', detail: err instanceof Error ? err.message : 'Không lưu được!', life: 4000 })
-  }
-}
-
-const handleSeedSample = async () => {
-  try {
-    const res = await seedSampleData()
-    warnIfMemory(
-      'Nạp dữ liệu mẫu thành công',
-      `Đã nạp ${res.imported} dòng${res.skipped ? `, bỏ qua ${res.skipped} dòng trùng` : ''} lên Supabase!`,
-    )
-  } catch (err: unknown) {
-    toast.add({ severity: 'error', summary: 'Lỗi nạp mẫu', detail: err instanceof Error ? err.message : 'Không nạp được!', life: 4000 })
   }
 }
 

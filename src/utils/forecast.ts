@@ -1,10 +1,12 @@
 /**
  * Utility functions for Planned Shipment List (Danh sách xuất hàng dự kiến)
- * T3: tách Feature centralize tại @/utils/feature (không định nghĩa lại ở đây).
+ * Chuẩn mới: Feature + PCS/pkg tham chiếu trực tiếp metadata (ma_hang -> feature/pack),
+ * không còn tự tách MID(2,4) cứng. Fallback MID chỉ khi thiếu metadata (kèm tag 'Thiếu Meta-data').
  */
 
-export { extractFeatureFromItemCode, isSpecialStockCode } from './feature'
-import { extractFeatureFromItemCode, isSpecialStockCode } from './feature'
+export { extractFeatureFromItemCode, isSpecialStockCode, resolveFeatureFromMetadata } from './feature'
+import { extractFeatureFromItemCode, isSpecialStockCode, resolveFeatureFromMetadata } from './feature'
+import { getPackSpecByMaHang, isCode1010 } from './packingSpec'
 
 export interface ForecastRawItem {
   id?: string
@@ -25,6 +27,8 @@ export interface ForecastRawItem {
   status_changed_at?: string | null
   created_at?: string
   updated_at?: string
+  /** Gắn khi thiếu metadata (hiển thị tag). */
+  missingSpec?: boolean
 }
 
 export interface ForecastFeatureGroup {
@@ -41,6 +45,9 @@ export interface ForecastFeatureGroup {
   missingSpec?: boolean
   packQtyUsed?: number
   cartonTypeUsed?: string
+  cartonSpecUsed?: string
+  /** true khi 1010 tính theo thùng đôi -> hiển thị 'ước tính' trước số kiện. */
+  isEstimated?: boolean
 }
 
 export interface ForecastContainerGroup {
@@ -61,6 +68,26 @@ export interface ForecastContainerGroup {
   hasAccessories: boolean
   featureGroups: ForecastFeatureGroup[]
   allItems: ForecastRawItem[]
+}
+
+export type PackSpecMapLike =
+  | Map<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean; carton_spec?: string }>
+  | Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean; carton_spec?: string }>
+
+export interface MetadataSpecSource {
+  ma_hang?: string
+  feature?: string
+  item_code?: string
+  pack_qty: number
+  carton_type: string
+  carton_spec?: string
+}
+
+export interface GroupSortOptions {
+  /** Danh sách metadata full (chuẩn mới) để resolve ma_hang -> feature/pack. */
+  metadataSpecs?: MetadataSpecSource[] | null
+  /** Lựa chọn của user cho mã 1010 trong preview: 'thùng đơn' | 'thùng đôi'. Mặc định 'thùng đôi' + ước tính. */
+  preferred1010Type?: string | null
 }
 
 /* T3: isSpecialStockCode + extractFeatureFromItemCode đã re-export từ ./feature ở đầu file. */
@@ -125,7 +152,7 @@ export function formatLoadingDate(dateInput: any): string {
 }
 
 /**
- * Tính số kiện (#pkg) — T4 chuẩn metadata (class module chính):
+ * Tính số kiện (#pkg) — chuẩn metadata (class module chính):
  * - Phụ kiện: total / pack (không /2).
  * - Thùng đơn (metadata carton_type chứa 'thùng đơn'): total / pack (không /2), đơn vị Kiện.
  * - Thùng đôi (mặc định): total / 2 / pack, đơn vị Kiện.
@@ -146,7 +173,7 @@ export function calculateFeaturePkg(
     return val > max ? val : max
   }, 0)
 
-  // T4: có pack chuẩn metadata -> dùng đúng công thức đơn/đôi
+  // Có pack chuẩn metadata -> dùng đúng công thức đơn/đôi
   if (packSpec && Number(packSpec.pack_qty) > 0) {
     const pack = Number(packSpec.pack_qty)
     if (isAccessoryGroup) {
@@ -185,7 +212,11 @@ export function calculateFeaturePkg(
 }
 
 /**
- * Kiểm tra xem đơn hàng container đã chuẩn bị xong quá 3 ngày (72 giờ) chưa để tự động xóa — T2
+ * [DEPRECATED — giữ để tương thích test cũ, KHÔNG còn tự động xóa]
+ * Kiểm tra xem đơn hàng container đã chuẩn bị xong quá 3 ngày (72 giờ) chưa.
+ * Hiện tại hệ thống đã bỏ cơ chế tự động xóa sau 3 ngày -> xóa thủ công.
+ * Hàm giữ lại để test cũ không vỡ, luôn trả về false khi không truyền expireHours? 
+ * Giữ logic cũ để test boundary vẫn pass, nhưng caller mới KHÔNG dùng để filter.
  */
 export function isContainerExpired(status?: string, statusChangedAt?: string | null, expireHours: number = 72): boolean {
   if (status !== 'ready' || !statusChangedAt) return false
@@ -197,7 +228,7 @@ export function isContainerExpired(status?: string, statusChangedAt?: string | n
 }
 
 /**
- * Tính số giờ còn lại trước khi đơn hàng trạng thái 'ready' bị tự động xóa sau 3 ngày (72h) — T2
+ * [DEPRECATED — giữ tương thích] Tính số giờ còn lại trước khi xóa (không còn dùng).
  */
 export function getRemainingHoursBeforeDelete(statusChangedAt?: string | null, expireHours: number = 72): number {
   if (!statusChangedAt) return expireHours
@@ -211,28 +242,109 @@ export function getRemainingHoursBeforeDelete(statusChangedAt?: string | null, e
 }
 
 /**
- * Lọc bỏ các dòng đã hết hạn (> 72 giờ / 3 ngày sau khi chuyển trạng thái Chuẩn bị xong) — T2
+ * [DEPRECATED — đã bỏ auto-xóa] Hiện trả về nguyên danh sách (không lọc).
+ * Giữ tên hàm để caller/test cũ không vỡ.
  */
 export function filterOutExpiredItems(items: ForecastRawItem[]): ForecastRawItem[] {
-  return items.filter(item => !isContainerExpired(item.status, item.status_changed_at))
+  return items || []
+}
+
+/** Chuẩn hóa key PO+SO để cảnh báo trùng khi import cộng dồn (PO+SO là duy nhất). */
+export function containerKeyOf(po: string, so: string): string {
+  return `${String(po || '').trim().toLowerCase()}___${String(so || '').trim().toLowerCase()}`
+}
+
+/** Tìm các PO+SO trong rows mới đã tồn tại trong kế hoạch hiện tại (để preview cảnh báo, case-insensitive). */
+export function findDuplicateContainerKeys(
+  newRows: Pick<ForecastRawItem, 'po' | 'so'>[],
+  existingItems: Pick<ForecastRawItem, 'po' | 'so'>[],
+): string[] {
+  const existing = new Set(existingItems.map((it) => containerKeyOf(it.po, it.so)))
+  const dups = new Set<string>()
+  newRows.forEach((r) => {
+    const k = containerKeyOf(r.po, r.so)
+    if (existing.has(k)) dups.add(`${String(r.po).trim()} - ${String(r.so).trim()}`)
+  })
+  return Array.from(dups)
 }
 
 /**
- * Phân nhóm và sắp xếp dữ liệu xuất hàng dự kiến:
+ * Phân nhóm và sắp xếp dữ liệu xuất hàng dự kiến (chuẩn mới metadata-first):
  * - Nhóm cấp 1: Container / Đơn hàng theo PO và SO
  * - Sắp xếp theo Loading Date từ nhỏ tới lớn (earliest date first)
  * - Nhóm cấp 2: Trong mỗi Container, gom nhóm theo Feature:
+ *   + Resolve feature ưu tiên metadata (ma_hang -> feature), fallback MID + missingSpec=true.
+ *   + Pack (pcs/pkg) ưu tiên metadata (ma_hang -> pack/type, 1010 theo preferred1010Type, mặc định đôi + ước tính).
  *   + Hàng Accessories: giữ nguyên mã hàng, tính ra số THÙNG (không / 2)
- *   + Hàng đặc biệt (1220): lấy 4 số đầu "1220", tính số KIỆN theo quy tắc cặp
- *   + Hàng thông thường: tách MID(2, 4), tính số KIỆN theo quy tắc cặp
- * - Tính tổng số kiện FG và tổng số thùng phụ kiện cho từng Container
+ *   + Thùng đơn: MÃ HÀNG / pack (không /2). Thùng đôi: tổng feature /2/pack.
+ * - KHÔNG lọc hết hạn (đã bỏ auto-xóa 3 ngày, xóa thủ công).
  */
 export function groupAndSortForecastData(
   items: ForecastRawItem[],
-  packSpecsByFeature?: Map<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }> | Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }>,
+  packSpecsByFeature?: PackSpecMapLike | null,
+  options?: GroupSortOptions,
 ): ForecastContainerGroup[] {
-  // Loại bỏ các dòng đã hết hạn
-  const validItems = filterOutExpiredItems(items)
+  // Đã bỏ auto-xóa: giữ toàn bộ items
+  const validItems = items || []
+  const metadataSpecs = (options?.metadataSpecs || null) as MetadataSpecSource[] | null
+  const preferred1010Type = options?.preferred1010Type || 'thùng đôi'
+
+  // Helper tra pack: ưu tiên metadataSpecs (ma_hang), fallback map cũ (feature)
+  const resolvePack = (
+    itemCode: string,
+    feature: string,
+    _isAccessory: boolean,
+  ): { pack_qty: number; carton_type: string; carton_spec: string; isSingle: boolean; missing: boolean; isEstimated: boolean } => {
+    // 1. Ưu tiên metadata full (ma_hang exact)
+    if (metadataSpecs && metadataSpecs.length > 0) {
+      const r = getPackSpecByMaHang(itemCode, metadataSpecs as unknown as Parameters<typeof getPackSpecByMaHang>[1], isCode1010(itemCode) ? preferred1010Type : undefined, feature)
+      if (r && !r.missing) {
+        return {
+          pack_qty: r.pack_qty,
+          carton_type: r.carton_type,
+          carton_spec: r.carton_spec || '',
+          isSingle: r.isSingle,
+          missing: false,
+          isEstimated: Boolean(r.isEstimated),
+        }
+      }
+      // Có metadata nhưng thiếu mã này -> missing (để tag)
+      if (!r || r.missing) {
+        // Thử fallback map cũ theo feature (nếu có)
+        if (packSpecsByFeature) {
+          const hit = packSpecsByFeature instanceof Map
+            ? packSpecsByFeature.get(feature)
+            : (packSpecsByFeature as Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean; carton_spec?: string }>)[feature]
+          if (hit && Number(hit.pack_qty) > 0) {
+            const single = hit.isSingle ?? /thùng đơn/i.test(String(hit.carton_type || ''))
+            const estimated = feature === '1010' && !single
+            return { pack_qty: Number(hit.pack_qty), carton_type: String(hit.carton_type || ''), carton_spec: String(hit.carton_spec || ''), isSingle: single, missing: Boolean((hit as { missing?: boolean }).missing), isEstimated: estimated }
+          }
+        }
+        return { pack_qty: 0, carton_type: '', carton_spec: '', isSingle: false, missing: true, isEstimated: false }
+      }
+    }
+    // 2. Map cũ theo feature (tương thích)
+    if (packSpecsByFeature) {
+      const hit = packSpecsByFeature instanceof Map
+        ? packSpecsByFeature.get(feature)
+        : (packSpecsByFeature as Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean; carton_spec?: string }>)[feature]
+      if (hit && Number(hit.pack_qty) > 0) {
+        const single = hit.isSingle ?? /thùng đơn/i.test(String(hit.carton_type || ''))
+        const estimated = feature === '1010' && !single
+        return { pack_qty: Number(hit.pack_qty), carton_type: String(hit.carton_type || ''), carton_spec: String(hit.carton_spec || ''), isSingle: single, missing: Boolean((hit as { missing?: boolean }).missing), isEstimated: estimated }
+      } else if (packSpecsByFeature instanceof Map ? (packSpecsByFeature as Map<string, unknown>).size > 0 : Object.keys(packSpecsByFeature).length > 0) {
+        // Đã có metadata nhưng thiếu feature này -> cảnh báo
+        // Nếu item đã có pcs_per_pkg từ Excel cũ, vẫn dùng fallback ở tầng dưới nhưng missing=true
+        const hasMap = true
+        if (hasMap) {
+          // Sẽ fallback pcs_per_pkg ở dưới, nhưng đánh dấu missing
+          return { pack_qty: 0, carton_type: '', carton_spec: '', isSingle: false, missing: true, isEstimated: false }
+        }
+      }
+    }
+    return { pack_qty: 0, carton_type: '', carton_spec: '', isSingle: false, missing: false, isEstimated: false }
+  }
 
   // Nhóm cấp 1 theo PO và SO
   const containerMap = new Map<string, ForecastRawItem[]>()
@@ -242,15 +354,61 @@ export function groupAndSortForecastData(
     const so = (item.so || 'UNKNOWN_SO').trim()
     const containerKey = `${po}___${so}`
 
-    const isAcc = Boolean(item.is_accessory)
+    // Resolve accessory: nếu metadata nói phụ kiện (theo ma_hang) thì ưu tiên
+    let isAcc = Boolean(item.is_accessory)
+    if (metadataSpecs && metadataSpecs.length > 0) {
+      const code = String(item.item_code || '').trim()
+      const metaHit = metadataSpecs.find((s) => String(s.ma_hang || '').trim() === code)
+      if (metaHit) {
+        const ct = String(metaHit.carton_type || '').toLowerCase()
+        const norm = ct.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        if (norm.includes('phu kien') || norm.includes('phukien') || norm.includes('carton') || norm.includes('plywood') || norm.includes('box')) {
+          isAcc = true
+        } else {
+          // Metadata FG (đơn/đôi) -> không phải phụ kiện (ghi đè flag cũ sai)
+          // Nhưng nếu item đã đánh dấu phụ kiện thủ công mà metadata là FG, giữ phụ kiện? Ưu tiên metadata.
+          if (!isAcc) isAcc = false
+          else {
+            // Nếu Excel cũ đánh dấu phụ kiện nhưng metadata là FG -> coi là FG (metadata chuẩn hơn)
+            isAcc = false
+          }
+        }
+      }
+    }
     const isSpec = isSpecialStockCode(item.item_code) || Boolean(item.is_special) || (typeof item.feature === 'string' && item.feature.includes('1220'))
     const isBox = Boolean(item.is_box) || (typeof item.feature === 'string' && item.feature.toLowerCase().includes('box'))
 
-    // Nếu item.feature là 'Box' hoặc 'box' hoặc trống: trích xuất feature từ item_code
+    // Resolve feature ưu tiên metadata (ma_hang -> feature)
     let feat = item.feature
+    let featFromMeta = false
+    let featMissing = false
     if (!feat || feat.toLowerCase() === 'box' || feat === 'No data') {
-      feat = extractFeatureFromItemCode(item.item_code, isAcc)
+      if (metadataSpecs && metadataSpecs.length > 0) {
+        const resolved = resolveFeatureFromMetadata(item.item_code, metadataSpecs as unknown as Parameters<typeof resolveFeatureFromMetadata>[1], isAcc)
+        feat = resolved.feature
+        featFromMeta = resolved.fromMetadata
+        featMissing = !resolved.fromMetadata
+      } else {
+        feat = extractFeatureFromItemCode(item.item_code, isAcc)
+      }
+    } else {
+      // Đã có feature từ Excel/import: kiểm tra có khớp metadata không để gắn missing
+      if (metadataSpecs && metadataSpecs.length > 0) {
+        const code = String(item.item_code || '').trim()
+        const hit = metadataSpecs.find((s) => String(s.ma_hang || '').trim() === code)
+        if (hit) {
+          const mf = String(hit.feature || (hit as { item_code?: string }).item_code || '').trim()
+          if (mf && mf !== feat) {
+            // Metadata chuẩn hơn -> dùng metadata
+            feat = mf
+          }
+          featFromMeta = true
+        } else {
+          featMissing = true
+        }
+      }
     }
+    void featFromMeta
     const unitType = isAcc ? 'thung' : 'kien'
 
     if (!containerMap.has(containerKey)) {
@@ -262,7 +420,8 @@ export function groupAndSortForecastData(
       is_accessory: isAcc,
       is_special: isSpec,
       is_box: isBox,
-      unit_type: unitType
+      unit_type: unitType,
+      missingSpec: featMissing || undefined,
     })
   })
 
@@ -284,9 +443,13 @@ export function groupAndSortForecastData(
     // Nhóm cấp 2: Theo Feature trong Container
     const featureMap = new Map<string, ForecastRawItem[]>()
     cItems.forEach(it => {
-      let feat = it.feature || extractFeatureFromItemCode(it.item_code, Boolean(it.is_accessory))
+      let feat = it.feature
       if (!feat || feat.toLowerCase() === 'box' || feat === 'No data') {
-        feat = extractFeatureFromItemCode(it.item_code, Boolean(it.is_accessory))
+        if (metadataSpecs && metadataSpecs.length > 0) {
+          feat = resolveFeatureFromMetadata(it.item_code, metadataSpecs as unknown as Parameters<typeof resolveFeatureFromMetadata>[1], Boolean(it.is_accessory)).feature
+        } else {
+          feat = extractFeatureFromItemCode(it.item_code, Boolean(it.is_accessory))
+        }
       }
       if (!featureMap.has(feat)) {
         featureMap.set(feat, [])
@@ -322,23 +485,30 @@ export function groupAndSortForecastData(
       }
 
       const featQty = fItems.reduce((s, it) => s + (Number(it.qty) || 0), 0)
-      // T4: tra pack chuẩn metadata theo feature (nếu caller truyền specs)
-      let packSpec: { pack_qty: number; carton_type: string; isSingle?: boolean } | undefined
-      let missingSpec = false
-      if (packSpecsByFeature) {
-        const hit = packSpecsByFeature instanceof Map
-          ? packSpecsByFeature.get(feat)
-          : (packSpecsByFeature as Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }>)[feat]
-        if (hit && Number(hit.pack_qty) > 0) {
-          packSpec = hit
-          missingSpec = Boolean((hit as { missing?: boolean }).missing)
-        } else if (packSpecsByFeature instanceof Map ? (packSpecsByFeature as Map<string, unknown>).size > 0 : Object.keys(packSpecsByFeature).length > 0) {
-          // Đã có metadata nhưng thiếu feature này -> cảnh báo header
-          missingSpec = true
-        }
+      // Tra pack chuẩn: ưu tiên ma_hang của item đầu (chuẩn mới), fallback feature
+      const firstCode = String(fItems[0]?.item_code || '').trim()
+      const packInfo = resolvePack(firstCode, feat, isAccGroup)
+      // Nếu group 1010 có nhiều mã, preferredType đã xử lý trong resolvePack
+      let packSpecForCalc: { pack_qty: number; carton_type: string; isSingle?: boolean } | undefined
+      let missingSpec = packInfo.missing
+      let isEstimated = packInfo.isEstimated
+      // Nếu thiếu metadata nhưng item có pcs_per_pkg (file cũ) -> fallback tính cũ, vẫn missing=true để tag
+      if (packInfo.pack_qty > 0) {
+        packSpecForCalc = { pack_qty: packInfo.pack_qty, carton_type: packInfo.carton_type, isSingle: packInfo.isSingle }
+      } else {
+        packSpecForCalc = undefined
+        // Nếu có metadataSpecs mà thiếu -> missing=true (đã set). Nếu chưa wiring specs -> missing=false (không warn sai)
+        if (metadataSpecs && metadataSpecs.length > 0) missingSpec = true
+        else if (packSpecsByFeature && (packSpecsByFeature instanceof Map ? packSpecsByFeature.size > 0 : Object.keys(packSpecsByFeature).length > 0)) missingSpec = true
+        else missingSpec = fItems.some((it) => Boolean((it as { missingSpec?: boolean }).missingSpec)) ? true : false
       }
-      const featPkg = calculateFeaturePkg(fItems, isAccGroup, isBoxGroup, packSpec)
-      const pcsPerPkg = packSpec && Number(packSpec.pack_qty) > 0 ? Number(packSpec.pack_qty) : (fItems[0]?.pcs_per_pkg || 0)
+      // Trường hợp Tồn kho 1010 luôn ước tính theo đôi (kể cả khi resolve ra đơn? caller inventory luôn truyền đôi)
+      if (feat === '1010' && !isAccGroup) {
+        // Nếu pack là đơn nhưng caller là tồn kho (preferred đôi) -> đã resolve đôi ở trên.
+        // Giữ isEstimated khi đôi.
+      }
+      const featPkg = calculateFeaturePkg(fItems, isAccGroup, isBoxGroup, packSpecForCalc)
+      const pcsPerPkg = packInfo.pack_qty > 0 ? Number(packInfo.pack_qty) : (fItems[0]?.pcs_per_pkg || 0)
 
       totalContainerQty += featQty
       if (isAccGroup) {
@@ -354,6 +524,7 @@ export function groupAndSortForecastData(
         it.is_accessory = isAccGroup
         it.is_special = isSpecGroup
         it.is_box = isBoxGroup
+        if (missingSpec) (it as { missingSpec?: boolean }).missingSpec = true
       })
 
       featureGroups.push({
@@ -367,8 +538,10 @@ export function groupAndSortForecastData(
         is_box: isBoxGroup,
         unit_type: unitType,
         missingSpec,
-        packQtyUsed: packSpec ? Number(packSpec.pack_qty) : pcsPerPkg,
-        cartonTypeUsed: packSpec?.carton_type || ''
+        packQtyUsed: packInfo.pack_qty > 0 ? Number(packInfo.pack_qty) : pcsPerPkg,
+        cartonTypeUsed: packInfo.carton_type || '',
+        cartonSpecUsed: packInfo.carton_spec || '',
+        isEstimated,
       })
     })
 
@@ -386,8 +559,6 @@ export function groupAndSortForecastData(
       summaryPkgLabel = '0 Kiện'
     }
 
-    const remainingHours = status === 'ready' ? getRemainingHoursBeforeDelete(statusChangedAt) : undefined
-
     containerGroups.push({
       containerKey: `${po} - ${so}`,
       po,
@@ -397,8 +568,8 @@ export function groupAndSortForecastData(
       loadingDateObj,
       status,
       status_changed_at: statusChangedAt,
-      isExpired: isContainerExpired(status, statusChangedAt),
-      remainingHours,
+      isExpired: false,
+      remainingHours: undefined,
       totalQty: totalContainerQty,
       totalPkg: roundedPkg,
       totalBoxes: roundedBoxes,

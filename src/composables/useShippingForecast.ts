@@ -1,13 +1,14 @@
 import { ref, computed } from 'vue'
 import { supabase, isSupabaseConfigured } from '@/services/supabase'
-import { 
-  ForecastRawItem, 
+import {
+  ForecastRawItem,
   ForecastContainerGroup,
-  groupAndSortForecastData, 
-  filterOutExpiredItems,
+  groupAndSortForecastData,
   extractFeatureFromItemCode,
-  isSpecialStockCode
+  isSpecialStockCode,
+  resolveFeatureFromMetadata,
 } from '@/utils/forecast'
+import { getPackSpecByMaHang } from '@/utils/packingSpec'
 
 // Dữ liệu mẫu ban đầu trong bộ nhớ (In-memory Demo Data) dựa theo file thực tế của nhà máy
 // TUYỆT ĐỐI KHÔNG DÙNG LOCALSTORAGE theo đúng yêu cầu người dùng: "đồng bộ trực tiếp supabase không lưu localstorage tránh cache"
@@ -190,50 +191,53 @@ const DEFAULT_IN_MEMORY_FORECAST: ForecastRawItem[] = [  // Container 1: PO: 0N6
 const forecastItems = ref<ForecastRawItem[]>([])
 const loading = ref(false)
 const quickFilterText = ref('')
-const statusFilter = ref<'all' | 'pending' | 'ready'>('all')
+/** Chỉ còn 2 mục: Chờ chuẩn bị / Đã xong (bỏ Tất cả). Mặc định Chờ chuẩn bị. */
+const statusFilter = ref<'pending' | 'ready'>('pending')
 const lastSync = ref('--:--')
-/** T4: override metadata feature -> pack (do view set sau khi load metadata). */
-type PackSpecOverride = Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean }>
+/** T4: override metadata feature -> pack (do view set sau khi load metadata). Giữ để tương thích. */
+type PackSpecOverride = Record<string, { pack_qty: number; carton_type: string; isSingle?: boolean; missing?: boolean; carton_spec?: string }>
 const forecastPackSpecs = ref<PackSpecOverride>({})
 const setForecastPackSpecs = (m: PackSpecOverride) => {
   forecastPackSpecs.value = m || {}
+}
+/** Chuẩn mới: metadata full (ma_hang -> feature/pack) để resolve trực tiếp, không MID cứng. */
+export interface ForecastMetadataSpec {
+  ma_hang?: string
+  feature?: string
+  item_code?: string
+  pack_qty: number
+  carton_type: string
+  carton_spec?: string
+}
+const forecastMetadataSpecs = ref<ForecastMetadataSpec[]>([])
+const setForecastMetadataSpecs = (list: ForecastMetadataSpec[]) => {
+  forecastMetadataSpecs.value = list || []
+}
+/** Lựa chọn thùng cho mã 1010 (do user chọn trong preview). Mặc định thùng đôi + ước tính. */
+const preferred1010Type = ref<string>('thùng đôi')
+const setPreferred1010Type = (t: string) => {
+  preferred1010Type.value = t || 'thùng đôi'
 }
 
 export function useShippingForecast() {
   const isDemoMode = ref(false)
 
   /**
-   * Tự động xóa các đơn hàng 'ready' quá 3 ngày (72 giờ) — T2
+   * [ĐÃ BỎ] Tự động xóa các đơn hàng 'ready' quá 3 ngày — chuyển sang xóa thủ công.
+   * Giữ hàm rỗng để caller cũ không vỡ.
    */
   const cleanupExpiredItems = async () => {
-    // 1. Dọn dẹp trong bộ nhớ frontend
-    forecastItems.value = filterOutExpiredItems(forecastItems.value)
-
-    // 2. Dọn dẹp trên Supabase nếu đã kết nối
-    if (isSupabaseConfigured) {
-      try {
-        const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
-        await supabase
-          .from('shipping_forecast')
-          .delete()
-          .eq('status', 'ready')
-          .not('status_changed_at', 'is', null)
-          .lt('status_changed_at', threeDaysAgo)
-      } catch (e) {
-        console.warn('Không thể tự động xóa đơn quá hạn trên Supabase:', e)
-      }
-    }
+    return
   }
 
   /**
    * Tải toàn bộ danh sách xuất hàng dự kiến từ Supabase
    * ĐỒNG BỘ 100% VỚI SUPABASE: Nếu database rỗng => hiển thị rỗng, không chèn bất kỳ demo data nào
+   * ĐÃ BỎ auto-xóa 3 ngày: giữ toàn bộ, xóa thủ công.
    */
   const fetchForecast = async () => {
     loading.value = true
     try {
-      await cleanupExpiredItems()
-
       if (!isSupabaseConfigured) {
         // Khi chưa cấu hình Supabase, để trống danh sách
         isDemoMode.value = true
@@ -250,25 +254,57 @@ export function useShippingForecast() {
       if (error) throw error
 
       if (data) {
-        // Ánh xạ dữ liệu từ Supabase - tự động nhận diện phụ kiện & mã đặc biệt nếu DB chưa có cột
+        // Ánh xạ dữ liệu từ Supabase - ưu tiên metadata (ma_hang -> feature/pack) khi có
         const mappedRows = data.map((row: any) => {
+          const code = String(row.item_code || '').trim()
+          // Resolve feature ưu tiên metadata
+          let feat = row.feature
+          let missing = false
+          if (forecastMetadataSpecs.value.length > 0 && code) {
+            const resolved = resolveFeatureFromMetadata(code, forecastMetadataSpecs.value as unknown as Parameters<typeof resolveFeatureFromMetadata>[1], Boolean(row.is_accessory))
+            if (resolved.fromMetadata) {
+              feat = resolved.feature
+            } else if (!feat || feat === 'No data' || feat.toLowerCase() === 'box') {
+              feat = resolved.feature
+              missing = true
+            } else {
+              // Đã có feature nhưng mã không có trong metadata -> đánh dấu thiếu
+              const hit = forecastMetadataSpecs.value.find((s) => String(s.ma_hang || '').trim() === code)
+              if (!hit) missing = true
+            }
+          } else if (!feat || feat === 'No data' || feat.toLowerCase() === 'box') {
+            feat = extractFeatureFromItemCode(code, Boolean(row.is_accessory))
+          }
+          // Resolve pcs_per_pkg ưu tiên metadata
+          let pcs = Number(row.pcs_per_pkg) || 0
+          if (forecastMetadataSpecs.value.length > 0 && code) {
+            const spec = getPackSpecByMaHang(code, forecastMetadataSpecs.value as unknown as Parameters<typeof getPackSpecByMaHang>[1], undefined, feat)
+            if (spec && !spec.missing && Number(spec.pack_qty) > 0) {
+              pcs = Number(spec.pack_qty)
+            } else {
+              missing = true
+            }
+          }
           const isAcc = (row.is_accessory !== undefined && row.is_accessory !== null)
             ? Boolean(row.is_accessory)
-            : (row.feature === row.item_code)
+            : (feat === code)
           const isSpec = (row.is_special !== undefined && row.is_special !== null)
             ? Boolean(row.is_special)
-            : isSpecialStockCode(row.item_code)
+            : isSpecialStockCode(code)
           const unitType: 'kien' | 'thung' = row.unit_type || (isAcc ? 'thung' : 'kien')
 
           return {
             ...row,
+            feature: feat,
+            pcs_per_pkg: pcs,
             is_accessory: isAcc,
             is_special: isSpec,
-            unit_type: unitType
+            unit_type: unitType,
+            missingSpec: missing || undefined,
           } as ForecastRawItem
         })
 
-        forecastItems.value = filterOutExpiredItems(mappedRows)
+        forecastItems.value = mappedRows
         isDemoMode.value = false
       } else {
         forecastItems.value = []
@@ -285,14 +321,50 @@ export function useShippingForecast() {
 
   /**
    * Thêm mới / Nạp dữ liệu danh sách xuất hàng từ Excel
+   * CHUẨN MỚI: cộng dồn (KHÔNG xóa cũ), resolve feature/pcs từ metadata (1010 theo preferred hiện tại).
+   * Lưu ý: preferred1010Type là global cho toàn bộ 1010 (đơn giản, đồng bộ tồn kho luôn đôi).
+   * Nếu cần per-batch khác nhau, mở rộng thêm cột carton_type ở DB trong task sau.
    */
   const addForecastItems = async (items: ForecastRawItem[]) => {
     loading.value = true
     try {
+      const { isCode1010 } = await import('@/utils/packingSpec')
       const preparedItems: ForecastRawItem[] = items.map(it => {
-        const isAcc = Boolean(it.is_accessory)
-        const isSpec = Boolean(it.is_special || isSpecialStockCode(it.item_code))
-        const feature = it.feature || extractFeatureFromItemCode(it.item_code, isAcc)
+        const code = String(it.item_code || '').trim()
+        // Resolve accessory ưu tiên metadata
+        let isAcc = Boolean(it.is_accessory)
+        if (forecastMetadataSpecs.value.length > 0 && code) {
+          const metaHit = forecastMetadataSpecs.value.find((s) => String(s.ma_hang || '').trim() === code)
+          if (metaHit) {
+            const ct = String(metaHit.carton_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            if (ct.includes('phu kien') || ct.includes('phukien') || ct.includes('carton') || ct.includes('plywood') || ct.includes('box')) {
+              isAcc = true
+            } else {
+              isAcc = false
+            }
+          }
+        }
+        const isSpec = Boolean(it.is_special || isSpecialStockCode(code))
+        // Resolve feature ưu tiên metadata
+        let feature = it.feature
+        if (!feature || feature.toLowerCase() === 'box' || feature === 'No data') {
+          if (forecastMetadataSpecs.value.length > 0) {
+            feature = resolveFeatureFromMetadata(code, forecastMetadataSpecs.value as unknown as Parameters<typeof resolveFeatureFromMetadata>[1], isAcc).feature
+          } else {
+            feature = extractFeatureFromItemCode(code, isAcc)
+          }
+        }
+        // Resolve pcs ưu tiên metadata (1010 theo preferred đã chọn ở preview)
+        let pcs = Number(it.pcs_per_pkg) || 0
+        if (forecastMetadataSpecs.value.length > 0 && code) {
+          const spec = getPackSpecByMaHang(
+            code,
+            forecastMetadataSpecs.value as unknown as Parameters<typeof getPackSpecByMaHang>[1],
+            isCode1010(code) ? preferred1010Type.value : undefined,
+            feature,
+          )
+          if (spec && !spec.missing && Number(spec.pack_qty) > 0) pcs = Number(spec.pack_qty)
+        }
         const unitType: 'kien' | 'thung' = isAcc ? 'thung' : 'kien'
 
         return {
@@ -300,11 +372,11 @@ export function useShippingForecast() {
           po: (it.po || '').trim(),
           so: (it.so || '').trim(),
           container_no: (it.container_no || '').trim(),
-          item_code: (it.item_code || '').trim(),
+          item_code: code,
           feature,
           loading_date: (it.loading_date || '').trim(),
           qty: Number(it.qty) || 0,
-          pcs_per_pkg: Number(it.pcs_per_pkg) || 0,
+          pcs_per_pkg: pcs,
           pkg: Number(it.pkg) || 0,
           is_accessory: isAcc,
           is_special: isSpec,
@@ -317,24 +389,15 @@ export function useShippingForecast() {
       })
 
       if (isSupabaseConfigured) {
-        // Tự động xóa sạch dữ liệu cũ trên Supabase trước khi cập nhật dữ liệu mới từ Excel
-        try {
-          await supabase
-            .from('shipping_forecast')
-            .delete()
-            .neq('po', '__clear_before_import__')
-        } catch (delErr) {
-          console.warn('Lưu ý dọn dẹp dữ liệu cũ:', delErr)
-        }
-
+        // CỘNG DỒN: không xóa cũ, chỉ insert thêm
         let { error } = await supabase
           .from('shipping_forecast')
           .insert(preparedItems)
 
         // Tự động tương thích ngược nếu schema cache trên Supabase chưa có cột is_accessory/unit_type
         if (error && (
-          error.message?.includes('is_accessory') || 
-          error.message?.includes('schema cache') || 
+          error.message?.includes('is_accessory') ||
+          error.message?.includes('schema cache') ||
           error.code === 'PGRST204' ||
           error.message?.includes('column')
         )) {
@@ -361,8 +424,8 @@ export function useShippingForecast() {
         }
       }
 
-      // Tự động ghi đè dữ liệu mới (thay thế hoàn toàn dữ liệu cũ)
-      forecastItems.value = [...preparedItems]
+      // Cộng dồn vào memory (không ghi đè)
+      forecastItems.value = [...forecastItems.value, ...preparedItems]
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
       return true
     } catch (err: any) {
@@ -379,9 +442,24 @@ export function useShippingForecast() {
   const editForecastItem = async (updatedItem: ForecastRawItem) => {
     loading.value = true
     try {
-      const isAcc = Boolean(updatedItem.is_accessory)
-      const isSpec = Boolean(updatedItem.is_special || isSpecialStockCode(updatedItem.item_code))
-      const feature = extractFeatureFromItemCode(updatedItem.item_code, isAcc)
+      const code = String(updatedItem.item_code || '').trim()
+      let isAcc = Boolean(updatedItem.is_accessory)
+      if (forecastMetadataSpecs.value.length > 0 && code) {
+        const metaHit = forecastMetadataSpecs.value.find((s) => String(s.ma_hang || '').trim() === code)
+        if (metaHit) {
+          const ct = String(metaHit.carton_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          isAcc = ct.includes('phu kien') || ct.includes('phukien') || ct.includes('carton') || ct.includes('plywood') || ct.includes('box')
+        }
+      }
+      const isSpec = Boolean(updatedItem.is_special || isSpecialStockCode(code))
+      let feature = updatedItem.feature
+      if (forecastMetadataSpecs.value.length > 0) {
+        const resolved = resolveFeatureFromMetadata(code, forecastMetadataSpecs.value as unknown as Parameters<typeof resolveFeatureFromMetadata>[1], isAcc)
+        if (resolved.fromMetadata) feature = resolved.feature
+        else if (!feature) feature = resolved.feature
+      } else {
+        feature = extractFeatureFromItemCode(code, isAcc)
+      }
       const unitType: 'kien' | 'thung' = isAcc ? 'thung' : 'kien'
 
       const payload: ForecastRawItem = {
@@ -401,8 +479,8 @@ export function useShippingForecast() {
 
         // Fallback nếu schema cache chưa có cột mới
         if (error && (
-          error.message?.includes('is_accessory') || 
-          error.message?.includes('schema cache') || 
+          error.message?.includes('is_accessory') ||
+          error.message?.includes('schema cache') ||
           error.code === 'PGRST204' ||
           error.message?.includes('column')
         )) {
@@ -459,6 +537,42 @@ export function useShippingForecast() {
   }
 
   /**
+   * Xóa hàng loạt theo danh sách id (chọn nhiều container/feature).
+   */
+  const deleteForecastItems = async (ids: string[]) => {
+    if (!ids || ids.length === 0) return true
+    loading.value = true
+    try {
+      const realIds = ids.filter((id) => id && !id.startsWith('demo-'))
+      if (isSupabaseConfigured && realIds.length > 0) {
+        const { error } = await supabase
+          .from('shipping_forecast')
+          .delete()
+          .in('id', realIds)
+        if (error) throw error
+      }
+      const set = new Set(ids)
+      forecastItems.value = forecastItems.value.filter((it) => !set.has(String(it.id)))
+      return true
+    } catch (err: any) {
+      console.error('Lỗi xóa hàng loạt:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Xóa 1 container (PO+SO).
+   */
+  const deleteContainer = async (po: string, so: string) => {
+    const targets = forecastItems.value.filter((it) => it.po === po && it.so === so)
+    if (targets.length === 0) return true
+    const ids = targets.map((it) => String(it.id)).filter(Boolean)
+    return deleteForecastItems(ids)
+  }
+
+  /**
    * Nạp demo data (Chỉ dùng cho testing hoặc khi người dùng yêu cầu)
    */
   const seedDemoData = () => {
@@ -499,7 +613,7 @@ export function useShippingForecast() {
 
   /**
    * Đánh dấu Container "Chuẩn bị xong"
-   * Chuyển trạng thái sang 'ready', ghi nhận status_changed_at và bắt đầu đếm ngược 1 ngày tự xóa
+   * Chuyển trạng thái sang 'ready', ghi nhận status_changed_at. ĐÃ BỎ auto-xóa 3 ngày.
    */
   const markContainerReady = async (po: string, so: string) => {
     const nowIso = new Date().toISOString()
@@ -525,6 +639,8 @@ export function useShippingForecast() {
       it.status_changed_at = nowIso
     })
     forecastItems.value = [...forecastItems.value]
+    // UI tự nhảy qua tab Đã xong (xử lý ở View)
+    statusFilter.value = 'ready'
   }
 
   /**
@@ -555,19 +671,22 @@ export function useShippingForecast() {
     forecastItems.value = [...forecastItems.value]
   }
 
-  // Phân nhóm và sắp xếp toàn bộ dữ liệu — T4 truyền pack metadata (nếu có)
+  // Phân nhóm và sắp xếp toàn bộ dữ liệu — truyền metadata full + preferred 1010
   const allGroupedContainers = computed<ForecastContainerGroup[]>(() => {
-    return groupAndSortForecastData(forecastItems.value, forecastPackSpecs.value)
+    return groupAndSortForecastData(forecastItems.value, forecastPackSpecs.value, {
+      metadataSpecs: forecastMetadataSpecs.value as unknown as import('@/utils/forecast').MetadataSpecSource[],
+      preferred1010Type: preferred1010Type.value,
+    })
   })
 
-  // Dữ liệu lọc thông minh
+  // Dữ liệu lọc: chỉ pending/ready (bỏ all). Mặc định pending.
   const filteredContainers = computed<ForecastContainerGroup[]>(() => {
     const q = quickFilterText.value.toLowerCase().trim()
     const status = statusFilter.value
 
     return allGroupedContainers.value.filter(container => {
-      // Lọc theo trạng thái
-      if (status !== 'all' && container.status !== status) {
+      // Lọc theo trạng thái (chỉ 2 mục)
+      if (container.status !== status) {
         return false
       }
 
@@ -626,6 +745,10 @@ export function useShippingForecast() {
     forecastItems,
     forecastPackSpecs,
     setForecastPackSpecs,
+    forecastMetadataSpecs,
+    setForecastMetadataSpecs,
+    preferred1010Type,
+    setPreferred1010Type,
     loading,
     isDemoMode,
     lastSync,
@@ -639,6 +762,8 @@ export function useShippingForecast() {
     addForecastItems,
     editForecastItem,
     deleteForecastItem,
+    deleteForecastItems,
+    deleteContainer,
     markContainerReady,
     revertContainerPending,
     clearAllForecastData,

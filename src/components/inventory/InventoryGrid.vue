@@ -362,15 +362,16 @@ const filteredData = computed(() => {
   })
 })
 
-// Tính số kiện theo feature — T4 chuẩn metadata (thùng đơn không /2, thùng đôi /2, đều Kiện).
+// Tính số kiện theo feature — chuẩn metadata (thùng đơn: tổng/pack, thùng đôi: tổng/2/pack, đều Kiện).
+// 1010 luôn tính theo thùng đôi + "Ước tính" (dù metadata có cả đơn/đôi).
 // Có packSpecs thì dùng pack chuẩn + warn thiếu; chưa có thì fallback cũ (sum/2)/max để không vỡ.
 const featureMetrics = computed(() => {
-  const metrics: Record<string, { sum: number; max: number; kien: number; missing: boolean }> = {}
+  const metrics: Record<string, { sum: number; max: number; kien: number; missing: boolean; estimated: boolean }> = {}
   const grouped: Record<string, number[]> = {}
   filteredData.value.forEach(row => {
     const feat = row.feature
     if (!feat || feat === 'No data') return
-    if (!metrics[feat]) metrics[feat] = { sum: 0, max: 0, kien: 0, missing: false }
+    if (!metrics[feat]) metrics[feat] = { sum: 0, max: 0, kien: 0, missing: false, estimated: false }
     const qty = Number(row.qty) || 0
     metrics[feat].sum += qty
     if (qty > metrics[feat].max) metrics[feat].max = qty
@@ -381,6 +382,14 @@ const featureMetrics = computed(() => {
   Object.keys(metrics).forEach(feat => {
     const m = metrics[feat]
     const spec = props.packSpecs?.[feat]
+    if (feat === '1010' && spec && Number(spec.pack_qty) > 0) {
+      // Tồn kho 1010: luôn thùng đôi + ước tính
+      const raw = (m.sum / 2) / Number(spec.pack_qty)
+      m.kien = Math.round(raw * 100) / 100
+      m.missing = false
+      m.estimated = true
+      return
+    }
     if (spec && Number(spec.pack_qty) > 0) {
       const single = /thùng đơn/i.test(String(spec.carton_type || ''))
       const raw = single ? m.sum / Number(spec.pack_qty) : (m.sum / 2) / Number(spec.pack_qty)
@@ -429,15 +438,19 @@ const allDisplayItems = computed((): DisplayItem[] => {
 
   sortedFeatures.forEach(feat => {
     const rows = groups[feat]
-    const m = featureMetrics.value[feat] || { sum: 0, max: 0, kien: 0, missing: false }
+    const m = featureMetrics.value[feat] || { sum: 0, max: 0, kien: 0, missing: false, estimated: false }
     const kienNum = m.kien
 
-    // Group Header (T4: warn thiếu metadata)
+    // Group Header (warn thiếu metadata, 1010 thêm "Ước tính")
     result.push({
       _id: `group-${feat}`,
       _isGroup: true,
       feature: feat,
-      kienLabel: m.missing ? `${kienNum.toFixed(2)} Kiện ⚠ thiếu metadata [${feat}]` : `${kienNum.toFixed(2)} Kiện`,
+      kienLabel: m.missing
+        ? `${kienNum.toFixed(2)} Kiện ⚠ Thiếu Meta-data [${feat}]`
+        : m.estimated
+          ? `Ước tính ${kienNum.toFixed(2)} Kiện (1010 thùng đôi)`
+          : `${kienNum.toFixed(2)} Kiện`,
       totalQty: m.sum
     })
 

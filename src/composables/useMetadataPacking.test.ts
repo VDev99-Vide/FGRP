@@ -5,12 +5,12 @@ import { useMetadataPacking } from './useMetadataPacking'
  * Môi trường test có Supabase thật: mỗi test dùng mã hàng duy nhất
  * và tự dọn dẹp sau khi chạy để không nhiễm DB dùng chung.
  */
-describe('useMetadataPacking composable', () => {
+describe('useMetadataPacking composable (chuẩn 7 cột, lưu trực tiếp Supabase)', () => {
   let meta: ReturnType<typeof useMetadataPacking>
   let uid: string
   let createdIds: string[]
 
-  const itemCode = (prefix: string) => `${prefix}-${uid}`
+  const maHang = (prefix: string) => `${prefix}${uid}01`
 
   beforeEach(() => {
     meta = useMetadataPacking()
@@ -31,10 +31,11 @@ describe('useMetadataPacking composable', () => {
     meta.clearMemory()
   })
 
-  it('thêm / sửa / xóa 1 dòng quy cách', async () => {
+  it('thêm / sửa / xóa 1 dòng quy cách chuẩn mới (Mã hàng + Feature)', async () => {
     const created = await meta.createPackingSpec({
       customer: 'KH TEST',
-      item_code: itemCode('MT'),
+      ma_hang: maHang('MT'),
+      feature: 'FT1010',
       pack_qty: 100,
       weight_per_unit: 1.5,
       carton_spec: '100*100*100',
@@ -42,10 +43,13 @@ describe('useMetadataPacking composable', () => {
     })
     createdIds.push(created.id)
     expect(meta.rows.value).toHaveLength(1)
+    expect(created.ma_hang).toBe(maHang('MT'))
+    expect(created.feature).toBe('FT1010')
 
     const updated = await meta.updatePackingSpec(created.id, {
       customer: 'KH TEST 2',
-      item_code: itemCode('MT'),
+      ma_hang: maHang('MT'),
+      feature: 'FT1010',
       pack_qty: 200,
       weight_per_unit: 2,
       carton_spec: '200*200*200',
@@ -59,57 +63,50 @@ describe('useMetadataPacking composable', () => {
     expect(meta.rows.value).toHaveLength(0)
   })
 
-  it('validate chặn thiếu khách hàng / mã hàng / số lượng sai', async () => {
+  it('validate chặn thiếu khách hàng / mã hàng / feature / số lượng sai', async () => {
     await expect(
-      meta.createPackingSpec({ customer: '', item_code: 'X', pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' }),
+      meta.createPackingSpec({ customer: '', ma_hang: 'X', feature: 'F', pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' }),
     ).rejects.toThrow('Khách hàng')
     await expect(
-      meta.createPackingSpec({ customer: 'K', item_code: '', pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' }),
+      meta.createPackingSpec({ customer: 'K', ma_hang: '', feature: '', item_code: '', pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' }),
     ).rejects.toThrow('Mã hàng')
     await expect(
-      meta.createPackingSpec({ customer: 'K', item_code: 'X', pack_qty: 0, weight_per_unit: 1, carton_spec: '', carton_type: '' }),
+      meta.createPackingSpec({ customer: 'K', ma_hang: 'X', feature: '', item_code: '', pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' }),
+    ).rejects.toThrow('Feature')
+    await expect(
+      meta.createPackingSpec({ customer: 'K', ma_hang: 'X', feature: 'F', pack_qty: 0, weight_per_unit: 1, carton_spec: '', carton_type: '' }),
     ).rejects.toThrow('Số lượng đóng gói')
   })
 
-  it('seed 136 dòng mẫu: chỉ track đúng dòng test tạo, lần 2 trùng khóa thì bỏ qua', async () => {
-    const before = new Set(meta.rows.value.map((r) => r.id))
-    const first = await meta.seedSampleData()
-    const freshIds = meta.rows.value.map((r) => r.id).filter((id) => !before.has(id))
-    createdIds.push(...freshIds)
-    expect(first.imported).toBe(freshIds.length)
-    expect(first.imported + first.skipped).toBe(136)
-
-    const second = await meta.seedSampleData()
-    expect(second.imported).toBe(0)
-  })
-
-  it('import Excel: dòng mới thì thêm, trùng khóa và sai thì bỏ qua', async () => {
+  it('import Excel: dòng mới thì thêm, trùng khóa và sai thì bỏ qua (1010 đơn/đôi khác khóa)', async () => {
     const first = await meta.createPackingSpec({
       customer: 'KH IMP',
-      item_code: itemCode('IM1'),
+      ma_hang: maHang('IM1'),
+      feature: 'FIM1',
       pack_qty: 50,
       weight_per_unit: 1,
       carton_spec: 'S1',
-      carton_type: 'T1',
+      carton_type: 'thùng đôi',
     })
     createdIds.push(first.id)
 
     const res = await meta.importPackingSpecs([
-      { customer: 'KH IMP', item_code: itemCode('IM1'), pack_qty: 50, weight_per_unit: 1, carton_spec: 'S1', carton_type: 'T1' },
-      { customer: 'KH IMP', item_code: itemCode('IM2'), pack_qty: 70, weight_per_unit: 2, carton_spec: 'S2', carton_type: 'T2' },
-      { customer: '', item_code: itemCode('IM3'), pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' },
+      { customer: 'KH IMP', ma_hang: maHang('IM1'), feature: 'FIM1', item_code: 'FIM1', pack_qty: 50, weight_per_unit: 1, carton_spec: 'S1', carton_type: 'thùng đôi' },
+      { customer: 'KH IMP', ma_hang: maHang('IM2'), feature: 'FIM2', item_code: 'FIM2', pack_qty: 70, weight_per_unit: 2, carton_spec: 'S2', carton_type: 'thùng đơn' },
+      { customer: '', ma_hang: maHang('IM3'), feature: 'F', item_code: 'F', pack_qty: 10, weight_per_unit: 1, carton_spec: '', carton_type: '' },
     ])
-    const imp2 = meta.rows.value.find((r) => r.item_code === itemCode('IM2'))
+    const imp2 = meta.rows.value.find((r) => r.ma_hang === maHang('IM2'))
     if (imp2) createdIds.push(imp2.id)
     expect(res.imported).toBe(1)
     expect(res.skipped).toHaveLength(2)
     expect(imp2?.pack_qty).toBe(70)
   })
 
-  it('lọc theo từ khóa khách hàng / mã hàng', async () => {
+  it('lọc theo từ khóa khách hàng / mã hàng / feature', async () => {
     const a = await meta.createPackingSpec({
       customer: 'KH LOCA',
-      item_code: itemCode('LA'),
+      ma_hang: maHang('LA'),
+      feature: 'FEATA',
       pack_qty: 10,
       weight_per_unit: 1,
       carton_spec: 'A',
@@ -117,7 +114,8 @@ describe('useMetadataPacking composable', () => {
     })
     const b = await meta.createPackingSpec({
       customer: 'KH LOCB',
-      item_code: itemCode('LB'),
+      ma_hang: maHang('LB'),
+      feature: 'FEATB',
       pack_qty: 10,
       weight_per_unit: 1,
       carton_spec: 'A',
@@ -126,6 +124,8 @@ describe('useMetadataPacking composable', () => {
     createdIds.push(a.id, b.id)
 
     meta.searchText.value = 'loca'
+    expect(meta.filteredRows.value).toHaveLength(1)
+    meta.searchText.value = maHang('LA').toLowerCase()
     expect(meta.filteredRows.value).toHaveLength(1)
     meta.searchText.value = ''
     expect(meta.filteredRows.value.length).toBeGreaterThanOrEqual(2)

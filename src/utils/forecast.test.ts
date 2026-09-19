@@ -97,8 +97,8 @@ describe('calculateFeaturePkg (Công thức tính Kiện & Thùng)', () => {
   })
 })
 
-describe('isContainerExpired & filterOutExpiredItems (Tự xóa sau 3 ngày / 72h — T2)', () => {
-  it('đơn đã chuẩn bị xong quá 72h thì hết hạn', () => {
+describe('isContainerExpired & filterOutExpiredItems [ĐÃ BỎ auto-xóa 3 ngày — xóa thủ công]', () => {
+  it('đơn đã chuẩn bị xong quá 72h thì hết hạn (hàm giữ tương thích, không dùng để filter)', () => {
     const seventyThreeHoursAgo = new Date(Date.now() - 73 * 60 * 60 * 1000).toISOString()
     expect(isContainerExpired('ready', seventyThreeHoursAgo)).toBe(true)
   })
@@ -116,15 +116,48 @@ describe('isContainerExpired & filterOutExpiredItems (Tự xóa sau 3 ngày / 72
     expect(getRemainingHoursBeforeDelete(twoHoursAgo)).toBe(70)
   })
 
-  it('filterOutExpiredItems loại bỏ các item đã ready quá 72h', () => {
+  it('filterOutExpiredItems đã bỏ auto-xóa: giữ nguyên toàn bộ (xóa thủ công)', () => {
     const seventyThreeHoursAgo = new Date(Date.now() - 73 * 60 * 60 * 1000).toISOString()
     const items: ForecastRawItem[] = [
       { po: 'PO1', so: 'SO1', item_code: '8163210604', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 50, status: 'ready', status_changed_at: seventyThreeHoursAgo },
       { po: 'PO2', so: 'SO2', item_code: '8163220604', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 50, status: 'pending', status_changed_at: null }
     ]
     const filtered = filterOutExpiredItems(items)
-    expect(filtered.length).toBe(1)
-    expect(filtered[0].po).toBe('PO2')
+    expect(filtered.length).toBe(2)
+  })
+})
+
+describe('metadata-first: resolve 1010 ước tính + duplicate PO-SO', () => {
+  it('1010 mặc định thùng đôi + ước tính, chọn đơn thì không ước tính', async () => {
+    const { groupAndSortForecastData } = await import('./forecast')
+    const items: ForecastRawItem[] = [
+      { po: 'P', so: 'S', item_code: '8101010104', loading_date: '10/09/2026', qty: 500, pcs_per_pkg: 0 },
+      { po: 'P', so: 'S', item_code: '8101020104', loading_date: '10/09/2026', qty: 500, pcs_per_pkg: 0 },
+    ]
+    const specs = [
+      { ma_hang: '8101010104', feature: '1010', pack_qty: 250, carton_type: 'thùng đôi', carton_spec: '1470*1135*925' },
+      { ma_hang: '8101010104', feature: '1010', pack_qty: 250, carton_type: 'thùng đơn', carton_spec: '1150*1140*460' },
+      { ma_hang: '8101020104', feature: '1010', pack_qty: 250, carton_type: 'thùng đôi', carton_spec: '1470*1135*925' },
+      { ma_hang: '8101020104', feature: '1010', pack_qty: 250, carton_type: 'thùng đơn', carton_spec: '1150*1140*460' },
+    ]
+    const gDbl = groupAndSortForecastData(items, null, { metadataSpecs: specs, preferred1010Type: 'thùng đôi' })
+    const fgDbl = gDbl[0].featureGroups.find((x) => x.feature === '1010')!
+    expect(fgDbl.pkgCount).toBe(2) // (1000/2)/250
+    expect(fgDbl.isEstimated).toBe(true)
+
+    const gSgl = groupAndSortForecastData(items, null, { metadataSpecs: specs, preferred1010Type: 'thùng đơn' })
+    const fgSgl = gSgl[0].featureGroups.find((x) => x.feature === '1010')!
+    expect(fgSgl.pkgCount).toBe(4) // 1000/250
+    expect(fgSgl.isEstimated).toBeFalsy()
+  })
+
+  it('findDuplicateContainerKeys cảnh báo PO-SO đã có', async () => {
+    const { findDuplicateContainerKeys } = await import('./forecast')
+    const dups = findDuplicateContainerKeys(
+      [{ po: 'A', so: '1' }, { po: 'B', so: '2' }],
+      [{ po: 'A', so: '1' }],
+    )
+    expect(dups).toEqual(['A - 1'])
   })
 })
 

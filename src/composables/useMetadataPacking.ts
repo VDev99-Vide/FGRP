@@ -8,7 +8,6 @@ import {
   validatePackingSpec,
   type PackingSpecInput,
 } from '@/utils/metadata'
-import { PACKING_SPEC_SEED } from '@/services/metadataSeed'
 import type { MetadataExcelRow } from '@/services/metadataExcel'
 
 const genId = () =>
@@ -28,9 +27,35 @@ const isMissingTableError = (e: unknown): boolean => {
   return code === 'PGRST205' || message.includes('Could not find the table')
 }
 
+const isMissingColumnError = (e: unknown): boolean => {
+  const code = (e as { code?: string })?.code
+  const message = (e as { message?: string })?.message || String(e || '')
+  return code === 'PGRST204' || (message.includes('Could not find the') && message.includes('schema cache'))
+}
+
 const isRlsError = (e: unknown): boolean => {
   const message = (e as { message?: string })?.message || String(e || '')
   return message.includes('row-level security') || message.includes('violates row-level security')
+}
+
+/** Chuẩn hóa 1 row từ Supabase về type mới (tương thích DB cũ thiếu ma_hang/feature). */
+function normalizeRow(r: Record<string, unknown>): MetadataPacking {
+  const itemCode = String((r.item_code ?? '') as string)
+  const ma_hang = String(((r.ma_hang ?? itemCode) as string) || '').trim() || itemCode
+  const feature = String(((r.feature ?? itemCode) as string) || '').trim() || itemCode
+  return {
+    id: String(r.id),
+    customer: String(r.customer ?? ''),
+    ma_hang,
+    feature,
+    item_code: feature || itemCode,
+    pack_qty: Number(r.pack_qty) || 0,
+    weight_per_unit: Number(r.weight_per_unit) || 0,
+    carton_spec: String(r.carton_spec ?? ''),
+    carton_type: String(r.carton_type ?? ''),
+    created_at: r.created_at as string | undefined,
+    updated_at: r.updated_at as string | undefined,
+  }
 }
 
 export function useMetadataPacking() {
@@ -58,18 +83,14 @@ export function useMetadataPacking() {
         }
         throw error
       }
-      rows.value = ((data || []) as MetadataPacking[]).map((r) => ({
-        ...r,
-        pack_qty: Number(r.pack_qty) || 0,
-        weight_per_unit: Number(r.weight_per_unit) || 0,
-      }))
+      rows.value = ((data || []) as Record<string, unknown>[]).map(normalizeRow)
       lastSync.value = new Date().toLocaleTimeString('vi-VN')
     } finally {
       loading.value = false
     }
   }
 
-  /** Thêm 1 dòng quy cách mới. */
+  /** Thêm 1 dòng quy cách mới (lưu trực tiếp Supabase). */
   const createPackingSpec = async (input: PackingSpecInput): Promise<MetadataPacking> => {
     const err = validatePackingSpec(input)
     if (err) throw new Error(err)
@@ -78,8 +99,10 @@ export function useMetadataPacking() {
     if (isSupabaseConfigured && backendAvailable.value) {
       const { error } = await supabase.from('metadata_quy_cach').insert(row)
       if (error) {
-        if (isMissingTableError(error)) {
+        if (isMissingTableError(error) || isMissingColumnError(error)) {
+          // DB chưa migrate schema mới (thiếu ma_hang/feature) -> lưu tạm memory + báo migration
           backendAvailable.value = false
+          console.warn('[Meta-data] Supabase chưa có cột mới, lưu tạm memory. Hãy chạy database/metadata.sql:', error.message)
         } else if (isRlsError(error)) {
           throw new Error('Supabase chặn quyền ghi (RLS). Hãy chạy file database/metadata.sql trong Supabase SQL Editor.')
         } else {
@@ -105,7 +128,10 @@ export function useMetadataPacking() {
     if (isSupabaseConfigured && backendAvailable.value && !id.startsWith('meta-seed-')) {
       const { error } = await supabase.from('metadata_quy_cach').update(updated).eq('id', id)
       if (error) {
-        if (isMissingTableError(error)) backendAvailable.value = false
+        if (isMissingTableError(error) || isMissingColumnError(error)) {
+          backendAvailable.value = false
+          console.warn('[Meta-data] Supabase chưa migrate, sửa tạm memory:', error.message)
+        }
         else throw error
       }
     }
@@ -118,7 +144,7 @@ export function useMetadataPacking() {
     if (isSupabaseConfigured && backendAvailable.value && !id.startsWith('meta-seed-')) {
       const { error } = await supabase.from('metadata_quy_cach').delete().eq('id', id)
       if (error) {
-        if (isMissingTableError(error)) backendAvailable.value = false
+        if (isMissingTableError(error) || isMissingColumnError(error)) backendAvailable.value = false
         else throw error
       }
     }
@@ -126,49 +152,9 @@ export function useMetadataPacking() {
   }
 
   /**
-   * Nạp dữ liệu mẫu chuẩn (136 dòng Sample.xlsx) vào hệ thống.
-   * Dòng trùng khóa tự nhiên (KH + Mã hàng + Quy cách) thì bỏ qua.
-   */
-  const seedSampleData = async (): Promise<{ imported: number; skipped: number }> => {
-    const now = new Date().toISOString()
-    const existingKeys = new Set(rows.value.map(packingSpecKey))
-    const fresh = PACKING_SPEC_SEED.filter((s) => {
-      const k = packingSpecKey(s)
-      if (existingKeys.has(k)) return false
-      existingKeys.add(k)
-      return true
-    }).map((s) => ({
-      id: genId(),
-      ...s,
-      created_at: now,
-      updated_at: now,
-    }))
-
-    if (fresh.length > 0 && isSupabaseConfigured && backendAvailable.value) {
-      const chunkSize = 100
-      for (let i = 0; i < fresh.length; i += chunkSize) {
-        const { error } = await supabase.from('metadata_quy_cach').insert(fresh.slice(i, i + chunkSize))
-        if (error) {
-          if (isMissingTableError(error)) {
-            backendAvailable.value = false
-            break
-          }
-          if (isRlsError(error)) {
-            throw new Error('Supabase chặn quyền ghi (RLS). Hãy chạy file database/metadata.sql trong Supabase SQL Editor.')
-          }
-          throw error
-        }
-      }
-      if (backendAvailable.value) await fetchPackingSpecs()
-    }
-    if (!backendAvailable.value || !isSupabaseConfigured) {
-      rows.value = [...rows.value, ...fresh]
-    }
-    return { imported: fresh.length, skipped: PACKING_SPEC_SEED.length - fresh.length }
-  }
-
-  /**
-   * Import hàng loạt từ Excel: validate từng dòng, trùng khóa tự nhiên thì bỏ qua.
+   * Import hàng loạt từ Excel (chuẩn 7 cột Sample.xlsx mới):
+   * validate từng dòng, trùng khóa tự nhiên (KH + Mã hàng + Feature + Quy cách + Loại) thì bỏ qua.
+   * Lưu trực tiếp Supabase (không qua seed mẫu).
    */
   const importPackingSpecs = async (inputRows: MetadataExcelRow[]): Promise<{ imported: number; skipped: string[] }> => {
     const now = new Date().toISOString()
@@ -179,13 +165,13 @@ export function useMetadataPacking() {
     inputRows.forEach((r) => {
       const err = validatePackingSpec(r)
       if (err) {
-        skipped.push(`${r.customer || '?'} - ${r.item_code || '?'}: ${err}`)
+        skipped.push(`${r.customer || '?'} - ${r.ma_hang || (r as { item_code?: string }).item_code || '?'}: ${err}`)
         return
       }
       const normalized = normalizePackingSpec(r)
       const key = packingSpecKey(normalized)
       if (existingKeys.has(key)) {
-        skipped.push(`${normalized.customer} - ${normalized.item_code}: trùng dòng đã có`)
+        skipped.push(`${normalized.customer} - ${normalized.ma_hang} (${normalized.feature}): trùng dòng đã có`)
         return
       }
       existingKeys.add(key)
@@ -198,8 +184,9 @@ export function useMetadataPacking() {
         for (let i = 0; i < prepared.length; i += chunkSize) {
           const { error } = await supabase.from('metadata_quy_cach').insert(prepared.slice(i, i + chunkSize))
           if (error) {
-            if (isMissingTableError(error)) {
+            if (isMissingTableError(error) || isMissingColumnError(error)) {
               backendAvailable.value = false
+              console.warn('[Meta-data] Supabase chưa migrate, import tạm memory:', error.message)
               break
             }
             if (isRlsError(error)) {
@@ -234,7 +221,6 @@ export function useMetadataPacking() {
     updatePackingSpec,
     deletePackingSpec,
     importPackingSpecs,
-    seedSampleData,
     clearMemory,
   }
 }

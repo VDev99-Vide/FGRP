@@ -45,25 +45,10 @@ create index if not exists idx_shipping_forecast_accessory on shipping_forecast 
 create index if not exists idx_shipping_forecast_special on shipping_forecast (is_special);
 
 -- ==========================================
--- HÀM DỌN DẸP TỰ ĐỘNG CÁC ĐƠN ĐÃ CHUẨN BỊ XONG QUÁ 3 NGÀY (72H) — T2
+-- ĐÃ BỎ cơ chế tự động xóa sau 3 ngày (72h) — chuyển sang xóa thủ công.
+-- Xóa function cleanup cũ nếu còn (idempotent).
 -- ==========================================
-create or replace function cleanup_expired_shipping_forecast()
-returns int
-language plpgsql
-security definer
-as $$
-declare
-  deleted_count int;
-begin
-  delete from shipping_forecast
-  where status = 'ready'
-    and status_changed_at is not null
-    and status_changed_at < now() - interval '3 days';
-  
-  get diagnostics deleted_count = row_count;
-  return deleted_count;
-end;
-$$;
+drop function if exists cleanup_expired_shipping_forecast();
 
 -- ==========================================
 -- PHÂN QUYỀN TRUY CẬP (RLS)

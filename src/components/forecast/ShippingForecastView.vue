@@ -13,7 +13,7 @@
           </div>
           <h3 class="text-sm font-bold text-white">Nạp Dữ Liệu Xuất Hàng</h3>
           <p class="text-[10px] text-[#AEB9E1] mt-0.5">
-            Nhập file Excel .xlsx, tự động tính MID(2,4) & phân kiện
+            Nhập file Excel .xlsx, Feature & PCS/pkg tham chiếu metadata
           </p>
         </div>
 
@@ -89,7 +89,7 @@
             <span class="text-lg font-bold text-[#FDB52A] font-mono">{{ stats.pendingCount }}</span>
             <span class="text-[10px] text-[#AEB9E1]">Chờ</span>
           </div>
-          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Tự xóa sau 72h (3 ngày) khi xong</p>
+          <p class="text-[10px] text-[#AEB9E1] mt-0.5">Xóa thủ công (đã bỏ tự xóa 3 ngày)</p>
         </div>
       </div>
 
@@ -115,17 +115,8 @@
         <!-- Filter Controls -->
         <div class="flex flex-wrap gap-2.5 w-full sm:w-auto items-center">
           
-          <!-- Status Filter Tabs -->
+          <!-- Status Filter Tabs (chỉ 2 mục: Chờ chuẩn bị / Đã xong, bỏ Tất cả) -->
           <div class="flex items-center gap-1 bg-[#18202D]/90 border border-white/15 p-1 rounded-[8px] text-xs">
-            <button 
-              @click="statusFilter = 'all'"
-              :class="[
-                'px-2.5 py-1 rounded-[6px] text-xs font-bold transition cursor-pointer',
-                statusFilter === 'all' ? 'bg-[#CB3CFF] text-white shadow-[0_0_8px_#CB3CFF]' : 'text-[#AEB9E1] hover:text-white'
-              ]"
-            >
-              Tất cả
-            </button>
             <button 
               @click="statusFilter = 'pending'"
               :class="[
@@ -173,11 +164,14 @@
           <!-- Sticky Table Head (Đồng bộ kính mờ toàn hệ thống) -->
           <thead class="glass-table-sticky-head shadow-lg">
             <tr>
+              <th class="py-3.5 px-3 font-bold text-[11px] tracking-wider uppercase text-center w-[36px]">
+                <input type="checkbox" :checked="isAllVisibleSelected" @change="toggleSelectAllVisible" title="Chọn tất cả dòng đang hiển thị" class="w-3.5 h-3.5 accent-[#CB3CFF] cursor-pointer" />
+              </th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">TỔNG QTY (PCS)</th>
-              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG · meta)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN / THÙNG (#PKG)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">LOADING DATE</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">TRẠNG THÁI</th>
@@ -200,7 +194,7 @@
                 ]"
               >
                 <td 
-                  colspan="9" 
+                  colspan="10" 
                   :class="[
                     'py-3 px-4 glass-panel-subtle backdrop-blur-md',
                     row.container.status === 'ready'
@@ -210,8 +204,9 @@
                 >
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     
-                    <!-- Left: PO, SO, Cont No, Loading Date -->
+                    <!-- Left: Checkbox + PO, SO, Cont No, Loading Date -->
                     <div class="flex items-center gap-3">
+                      <input type="checkbox" :checked="isContainerSelected(row.container)" @change="toggleContainer(row.container)" title="Chọn toàn bộ container này để xóa" class="w-3.5 h-3.5 accent-[#CB3CFF] cursor-pointer shrink-0" />
                       <div 
                         :class="[
                           'w-2 h-5 rounded-full shadow-sm',
@@ -263,12 +258,12 @@
                         Tổng: {{ row.container.summaryPkgLabel }}
                       </span>
 
-                      <!-- THAO TÁC "CHUẨN BỊ XONG" -->
+                      <!-- THAO TÁC "CHUẨN BỊ XONG" (màu xanh dương để tránh trùng xanh lá Đã xong) -->
                       <div v-if="row.container.status === 'pending'">
                         <button 
                           @click="handleMarkReady(row.container)"
-                          title="Đánh dấu đơn hàng container đã chuẩn bị xong chờ xuất (Tự động xóa sau 3 ngày)"
-                          class="h-[28px] px-3 rounded-[6px] bg-[#14CA74]/20 hover:bg-[#14CA74]/35 border border-[#14CA74]/40 text-[#14CA74] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+                          title="Đánh dấu đơn hàng container đã chuẩn bị xong (tự nhảy qua tab Đã xong, xóa thủ công)"
+                          class="h-[28px] px-3 rounded-[6px] bg-[#00C2FF]/20 hover:bg-[#00C2FF]/35 border border-[#00C2FF]/50 text-[#00C2FF] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
                         >
                           <CheckCircle2 class="w-3.5 h-3.5" />
                           <span>Chuẩn bị xong</span>
@@ -278,10 +273,10 @@
                       <div v-else class="flex items-center gap-2">
                         <span 
                           class="text-[11px] font-bold text-[#14CA74] bg-[#14CA74]/20 border border-[#14CA74]/40 px-2.5 py-1 rounded-[6px] flex items-center gap-1.5"
-                          :title="`Tự động xóa khỏi hệ thống sau ${row.container.remainingHours || 72} giờ (3 ngày)`"
+                          title="Đã chuẩn bị xong — xóa thủ công (đã bỏ tự xóa 3 ngày)"
                         >
                           <CheckCircle2 class="w-3.5 h-3.5" />
-                          <span>Đã xong (Tự xóa sau {{ row.container.remainingHours || 72 }}h)</span>
+                          <span>Đã xong</span>
                         </span>
 
                         <button 
@@ -303,6 +298,10 @@
                 v-else-if="row._type === 'feature-row' && row.featureGroup"
                 class="transition-colors duration-150 hover:bg-white/[0.08]"
               >
+                <!-- Checkbox chọn feature -->
+                <td class="py-3 px-3 text-center">
+                  <input type="checkbox" :checked="isFeatureSelected(row.featureGroup)" @change="toggleFeature(row.container, row.featureGroup)" title="Chọn dòng feature này để xóa" class="w-3.5 h-3.5 accent-[#CB3CFF] cursor-pointer" />
+                </td>
                 <!-- PO / SO -->
                 <td class="py-3 px-4 font-mono text-[#AEB9E1] text-[11px]">
                   {{ row.container.po }} / {{ row.container.so }}
@@ -375,7 +374,7 @@
                   {{ Number(row.featureGroup.pcs_per_pkg || 0).toLocaleString() }}
                 </td>
 
-                <!-- Số kiện / thùng (#pkg) - Chuẩn xác theo Group Feature, không bị double! -->
+                <!-- Số kiện / thùng (#pkg) - Chuẩn metadata, 1010 đôi thêm "ước tính" -->
                 <td class="py-3 px-4 text-center">
                   <span
                     :class="[
@@ -384,12 +383,13 @@
                         ? 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/40 shadow-[0_0_8px_rgba(253,181,42,0.2)]'
                         : 'bg-[#CB3CFF]/20 text-[#CB3CFF] border-[#CB3CFF]/40 shadow-[0_0_8px_rgba(203,60,255,0.25)]'
                     ]"
-                    :title="row.featureGroup.missingSpec ? `Thiếu metadata cho feature [${row.featureGroup.feature}] — kiểm tra lại Meta-data Quy cách` : (row.featureGroup.cartonTypeUsed ? `Chuẩn metadata: ${row.featureGroup.packQtyUsed} pcs/kiện (${row.featureGroup.cartonTypeUsed})` : '')"
+                    :title="row.featureGroup.missingSpec ? `Thiếu metadata cho feature [${row.featureGroup.feature}] — kiểm tra lại Meta-data Quy cách` : (row.featureGroup.cartonTypeUsed ? `Chuẩn metadata: ${row.featureGroup.packQtyUsed} pcs/kiện (${row.featureGroup.cartonTypeUsed}${row.featureGroup.cartonSpecUsed ? ' · ' + row.featureGroup.cartonSpecUsed : ''})` : '')"
                   >
                     <Box class="w-3.5 h-3.5" />
-                    <span>{{ row.featureGroup.pkgCount }} {{ row.featureGroup.unit_type === 'thung' ? 'Thùng' : 'Kiện' }}</span>
+                    <span><span v-if="row.featureGroup.isEstimated" class="opacity-80 font-bold">ước tính </span>{{ row.featureGroup.pkgCount }} {{ row.featureGroup.unit_type === 'thung' ? 'Thùng' : 'Kiện' }}</span>
                   </span>
-                  <p v-if="row.featureGroup.missingSpec" class="text-[10px] text-[#FF5A65] font-bold mt-1">⚠ thiếu metadata [{{ row.featureGroup.feature }}]</p>
+                  <p v-if="row.featureGroup.missingSpec" class="text-[10px] text-[#FF5A65] font-bold mt-1">⚠ Thiếu Meta-data [{{ row.featureGroup.feature }}]</p>
+                  <p v-else-if="row.featureGroup.isEstimated" class="text-[10px] text-[#CB3CFF] font-bold mt-1">1010 tính theo thùng đôi</p>
                 </td>
 
                 <!-- Loading Date -->
@@ -437,7 +437,7 @@
 
             <!-- Trạng Thái Trống -->
             <tr v-if="renderedDisplayRows.length === 0">
-              <td colspan="9" class="text-center py-16 text-[#AEB9E1] italic text-xs">
+              <td colspan="10" class="text-center py-16 text-[#AEB9E1] italic text-xs">
                 <div v-if="stats.totalContainers === 0" class="flex flex-col items-center justify-center gap-2.5">
                   <div class="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#AEB9E1]/50 mb-1">
                     <PackageOpen class="w-6 h-6 text-[#AEB9E1]/70" />
@@ -465,36 +465,48 @@
         </table>
       </div>
 
-      <!-- Footer Info & Virtual Scroll Count -->
+      <!-- Footer Info & Bulk Delete -->
       <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs border-t border-white/[0.08]">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[#AEB9E1]">
           <span>
             Đang hiển thị: <b class="text-white">{{ renderedDisplayRows.length }}</b> / {{ allDisplayRows.length }} dòng
           </span>
           <span class="text-white/20">|</span>
+          <span v-if="selectedCount > 0" class="text-[#CB3CFF] font-bold">Đã chọn: {{ selectedCount }} dòng</span>
+          <span v-if="selectedCount > 0" class="text-white/20">|</span>
           <span class="text-[11px] text-[#00C2FF]">
-            (Tự render thêm khi cuộn chuột xuống, tự động ẩn dòng 51 trở đi khi cuộn lên)
+            (Tự render thêm khi cuộn chuột xuống)
           </span>
         </div>
 
-        <div class="flex items-center gap-2 text-xs font-mono text-[#AEB9E1] flex-wrap">
-          <span>Tổng kiện FG: <b class="text-[#CB3CFF] font-bold">{{ stats.totalPkg }}</b> Kiện</span>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            v-if="selectedCount > 0"
+            @click="showBulkDeleteModal = true"
+            class="px-3 py-1.5 bg-[#FF5A65]/15 hover:bg-[#FF5A65]/25 border border-[#FF5A65]/40 text-[#FF5A65] rounded-[6px] text-xs font-bold transition cursor-pointer"
+          >
+            Xóa đã chọn ({{ selectedCount }})
+          </button>
           <span class="text-white/20">|</span>
-          <span v-if="stats.totalBoxes > 0" class="text-[#FDB52A]">
+          <span class="text-xs font-mono text-[#AEB9E1]">Tổng kiện FG: <b class="text-[#CB3CFF] font-bold">{{ stats.totalPkg }}</b> Kiện</span>
+          <span class="text-white/20">|</span>
+          <span v-if="stats.totalBoxes > 0" class="text-[#FDB52A] text-xs font-mono">
             Tổng thùng PK: <b class="font-bold">{{ stats.totalBoxes }}</b> Thùng
             <span class="text-white/20 ml-2">|</span>
           </span>
-          <span>Tổng PCS: <b class="text-[#14CA74] font-bold">{{ stats.totalQty.toLocaleString() }}</b></span>
+          <span class="text-xs font-mono text-[#AEB9E1]">Tổng PCS: <b class="text-[#14CA74] font-bold">{{ stats.totalQty.toLocaleString() }}</b></span>
         </div>
       </div>
 
     </div>
 
     <!-- Modals -->
-    <!-- 1. Modal Nạp File Excel -->
-    <ForecastUploadModal 
+    <!-- 1. Modal Nạp File Excel (cộng dồn + metadata + 1010) -->
+    <ForecastUploadModal
       v-model:visible="showUploadModal"
       :loading="loading"
+      :metadata-specs="metadataSpecsForPreview"
+      :existing-items="forecastItems"
       @upload="handleUploadSubmit"
     />
 
@@ -520,6 +532,17 @@
       @confirm="executeClearAll"
     />
 
+    <!-- 4. Confirm Modal Xóa hàng loạt đã chọn -->
+    <ConfirmModal
+      v-model:visible="showBulkDeleteModal"
+      title="Xác nhận xóa các dòng đã chọn"
+      :message="`Bạn có chắc muốn xóa ${selectedCount} dòng đã chọn khỏi Supabase? Không thể hoàn tác.`"
+      confirmText="Xác nhận xóa"
+      cancelText="Hủy bỏ"
+      severity="danger"
+      @confirm="executeBulkDelete"
+    />
+
   </div>
 </template>
 
@@ -541,6 +564,7 @@ import {
 } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { useShippingForecast } from '@/composables/useShippingForecast'
+import { useMetadataPacking } from '@/composables/useMetadataPacking'
 import { ForecastRawItem, ForecastContainerGroup, ForecastFeatureGroup } from '@/utils/forecast'
 import ForecastUploadModal from './ForecastUploadModal.vue'
 import ForecastEditModal from './ForecastEditModal.vue'
@@ -553,6 +577,7 @@ const emit = defineEmits<{
 const toast = useToast()
 
 const {
+  forecastItems,
   loading,
   quickFilterText,
   statusFilter,
@@ -560,20 +585,89 @@ const {
   lastSync,
   filteredContainers,
   fetchForecast,
+  setPreferred1010Type,
+  setForecastMetadataSpecs,
   addForecastItems,
   editForecastItem,
   deleteForecastItem,
+  deleteForecastItems,
   markContainerReady,
   revertContainerPending,
   clearAllForecastData
 } = useShippingForecast()
 
+const { rows: metaRows, fetchPackingSpecs } = useMetadataPacking()
+const metadataSpecsForPreview = computed(() =>
+  (metaRows.value || []).map((r) => ({
+    ma_hang: (r as { ma_hang?: string }).ma_hang || (r as { item_code: string }).item_code,
+    feature: (r as { feature?: string }).feature || (r as { item_code: string }).item_code,
+    item_code: (r as { item_code: string }).item_code,
+    pack_qty: Number((r as { pack_qty: number }).pack_qty) || 0,
+    carton_type: String((r as { carton_type: string }).carton_type || ''),
+    carton_spec: String((r as { carton_spec?: string }).carton_spec || ''),
+  })),
+)
+
 // Modals State
 const showUploadModal = ref(false)
 const showEditModal = ref(false)
 const showClearAllModal = ref(false)
+const showBulkDeleteModal = ref(false)
 const editingTargetGroup = ref<ForecastFeatureGroup | null>(null)
 const editingTargetContainer = ref<ForecastContainerGroup | null>(null)
+
+// Bulk select (2 cấp: container + feature)
+const selectedIds = ref<Set<string>>(new Set())
+const selectedCount = computed(() => selectedIds.value.size)
+const containerItemIds = (c: ForecastContainerGroup): string[] =>
+  (c.allItems || []).map((it) => String(it.id)).filter(Boolean)
+const featureItemIds = (fg: ForecastFeatureGroup): string[] =>
+  (fg.items || []).map((it) => String(it.id)).filter(Boolean)
+const isContainerSelected = (c: ForecastContainerGroup): boolean => {
+  const ids = containerItemIds(c)
+  return ids.length > 0 && ids.every((id) => selectedIds.value.has(id))
+}
+const isFeatureSelected = (fg: ForecastFeatureGroup): boolean => {
+  const ids = featureItemIds(fg)
+  return ids.length > 0 && ids.every((id) => selectedIds.value.has(id))
+}
+const toggleContainer = (c: ForecastContainerGroup) => {
+  const ids = containerItemIds(c)
+  const all = ids.every((id) => selectedIds.value.has(id))
+  const next = new Set(selectedIds.value)
+  if (all) ids.forEach((id) => next.delete(id))
+  else ids.forEach((id) => next.add(id))
+  selectedIds.value = next
+}
+const toggleFeature = (_c: ForecastContainerGroup, fg: ForecastFeatureGroup) => {
+  const ids = featureItemIds(fg)
+  const all = ids.every((id) => selectedIds.value.has(id))
+  const next = new Set(selectedIds.value)
+  if (all) ids.forEach((id) => next.delete(id))
+  else ids.forEach((id) => next.add(id))
+  selectedIds.value = next
+}
+const isAllVisibleSelected = computed(() => {
+  const allIds: string[] = []
+  allDisplayRows.value.forEach((r) => {
+    if (r._type === 'feature-row' && r.featureGroup) allIds.push(...featureItemIds(r.featureGroup))
+  })
+  return allIds.length > 0 && allIds.every((id) => selectedIds.value.has(id))
+})
+const toggleSelectAllVisible = () => {
+  const allIds: string[] = []
+  allDisplayRows.value.forEach((r) => {
+    if (r._type === 'feature-row' && r.featureGroup) allIds.push(...featureItemIds(r.featureGroup))
+  })
+  const all = allIds.every((id) => selectedIds.value.has(id))
+  const next = new Set(selectedIds.value)
+  if (all) allIds.forEach((id) => next.delete(id))
+  else allIds.forEach((id) => next.add(id))
+  selectedIds.value = next
+}
+const clearSelection = () => {
+  selectedIds.value = new Set()
+}
 
 // Virtual Scrolling State (Mặc định 50 dòng, tự động render thêm khi cuộn xuống, ẩn dòng 51 trở đi khi cuộn lên)
 const visibleCount = ref(50)
@@ -668,6 +762,7 @@ const handleTableScroll = (e: Event) => {
 // Reset visible count khi thay đổi filter
 watch([quickFilterText, statusFilter], () => {
   visibleCount.value = 50
+  clearSelection()
   if (scrollContainerRef.value) {
     scrollContainerRef.value.scrollTop = 0
   }
@@ -679,7 +774,15 @@ onMounted(() => {
     localStorage.removeItem('fgrp_forecast_cache')
     sessionStorage.removeItem('fgrp_forecast_cache')
   } catch (e) {}
+  fetchPackingSpecs().then(() => {
+    setForecastMetadataSpecs(metadataSpecsForPreview.value as unknown as Parameters<typeof setForecastMetadataSpecs>[0])
+  })
   fetchForecast()
+})
+
+// Đồng bộ metadata vào forecast khi rows thay đổi
+watch(metadataSpecsForPreview, (list) => {
+  setForecastMetadataSpecs(list as unknown as Parameters<typeof setForecastMetadataSpecs>[0])
 })
 
 // Đồng bộ thủ công với Supabase
@@ -701,6 +804,7 @@ const handleClearAll = () => {
 const executeClearAll = async () => {
   try {
     await clearAllForecastData()
+    clearSelection()
     toast.add({
       severity: 'success',
       summary: 'Đã xóa dữ liệu',
@@ -717,14 +821,36 @@ const executeClearAll = async () => {
   }
 }
 
-// Thao tác "Chuẩn bị xong"
+const executeBulkDelete = async () => {
+  try {
+    const ids = Array.from(selectedIds.value)
+    await deleteForecastItems(ids)
+    clearSelection()
+    toast.add({
+      severity: 'success',
+      summary: 'Đã xóa các dòng đã chọn',
+      detail: `Đã xóa ${ids.length} dòng khỏi Supabase!`,
+      life: 3000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi xóa hàng loạt',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+
+// Thao tác "Chuẩn bị xong" (tự nhảy qua tab Đã xong để tránh render lag)
 const handleMarkReady = async (container: ForecastContainerGroup) => {
   try {
     await markContainerReady(container.po, container.so)
+    clearSelection()
     toast.add({
       severity: 'success',
       summary: 'Đã chuẩn bị xong',
-      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] đã sẵn sàng xuất cont. Hệ thống sẽ tự động dọn dẹp sau 72h (3 ngày).`,
+      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] đã sẵn sàng xuất cont (xóa thủ công, không tự xóa).`,
       life: 4000
     })
   } catch (err: any) {
@@ -823,15 +949,17 @@ const handleDeleteGroup = async (items: ForecastRawItem[]) => {
   }
 }
 
-// Nạp file Excel
-const handleUploadSubmit = async (rows: ForecastRawItem[]) => {
+// Nạp file Excel (cộng dồn + 1010 đơn/đôi)
+const handleUploadSubmit = async (rows: ForecastRawItem[], preferred1010Type: string) => {
   try {
+    setPreferred1010Type(preferred1010Type || 'thùng đôi')
     await addForecastItems(rows)
     showUploadModal.value = false
+    clearSelection()
     toast.add({
       severity: 'success',
       summary: 'Nạp dữ liệu thành công',
-      detail: `Đã nhập ${rows.length} dòng kế hoạch xuất hàng vào hệ thống!`,
+      detail: `Đã cộng thêm ${rows.length} dòng kế hoạch xuất hàng vào hệ thống!`,
       life: 4000
     })
   } catch (err: any) {

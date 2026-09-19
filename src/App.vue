@@ -206,36 +206,40 @@
                 </div>
               </div>
 
-              <!-- Accessories Frosted Glass Table (DỮ LIỆU GẮN TRỰC TIẾP TRÊN BẢNG KÍNH MỜ TIÊU CHUẨN) -->
+              <!-- Accessories Frosted Glass Table (tham chiếu trực tiếp metadata loại "phụ kiện") -->
               <div class="overflow-x-auto overflow-y-auto max-h-[600px] custom-scroll">
                 <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
                   <thead class="bg-[#283241]/75 backdrop-blur-md text-[#AEB9E1] font-semibold border-b border-white/10 sticky top-0 z-10">
                     <tr>
                       <th class="py-3.5 px-4 font-semibold">MÃ PHỤ KIỆN (CODE)</th>
                       <th class="py-3.5 px-4 text-right font-semibold">SỐ LƯỢNG (QTY)</th>
+                      <th class="py-3.5 px-4 text-right font-semibold" title="Tham chiếu metadata loại phụ kiện">SL ĐÓNG GÓI (meta)</th>
+                      <th class="py-3.5 px-4 text-right font-semibold" title="Tham chiếu metadata loại phụ kiện">TRỌNG LƯỢNG/CÁI (meta)</th>
                       <th class="py-3.5 px-4 text-center font-semibold">VỊ TRÍ (BIN)</th>
                       <th class="py-3.5 px-4 text-center font-semibold">THAO TÁC</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-white/[0.06] font-medium">
-                    <tr 
-                      v-for="row in filteredPkData" 
+                    <tr
+                      v-for="row in filteredPkData"
                       :key="row.id"
                       class="transition-colors duration-150 hover:bg-white/[0.08]"
                     >
                       <td class="py-3.5 px-4 font-bold text-[#00C2FF] font-mono text-xs">{{ row.code }}</td>
                       <td class="py-3.5 px-4 text-right font-bold text-[#14CA74] text-xs">{{ formatNumber(row.qty) }}</td>
+                      <td class="py-3.5 px-4 text-right font-mono text-xs" :class="accessoryMeta(row.code) ? 'text-white/90' : 'text-[#FF5A65]'">{{ accessoryMeta(row.code)?.pack_qty ?? 'Thiếu meta' }}</td>
+                      <td class="py-3.5 px-4 text-right font-mono text-xs" :class="accessoryMeta(row.code) ? 'text-white/90' : 'text-[#FF5A65]'">{{ accessoryMeta(row.code)?.weight_per_unit ?? '—' }}</td>
                       <td class="py-3.5 px-4 text-center text-[#AEB9E1] font-mono text-xs">{{ row.bin || 'N/A' }}</td>
                       <td class="py-3.5 px-4 text-center">
                         <div class="flex justify-center gap-2">
-                          <button 
-                            @click="triggerEditAccessory(row)" 
+                          <button
+                            @click="triggerEditAccessory(row)"
                             class="px-3 py-1 bg-[#FDB52A]/15 hover:bg-[#FDB52A]/25 text-[#FDB52A] rounded-[4px] border border-[#FDB52A]/30 text-xs font-bold cursor-pointer transition"
                           >
                             Sửa
                           </button>
-                          <button 
-                            @click="triggerOutboundAccessory(row)" 
+                          <button
+                            @click="triggerOutboundAccessory(row)"
                             class="px-3 py-1 bg-[#FF5A65]/15 hover:bg-[#FF5A65]/25 text-[#FF5A65] rounded-[4px] border border-[#FF5A65]/30 text-xs font-bold cursor-pointer transition"
                           >
                             Xuất
@@ -244,13 +248,14 @@
                       </td>
                     </tr>
                     <tr v-if="filteredPkData.length === 0">
-                      <td colspan="4" class="text-center py-12 text-[#AEB9E1] italic text-xs">
+                      <td colspan="6" class="text-center py-12 text-[#AEB9E1] italic text-xs">
                         Không tìm thấy phụ kiện phù hợp!
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+              <p class="text-[11px] text-[#AEB9E1]">SL đóng gói &amp; Trọng lượng tham chiếu trực tiếp metadata (loại "phụ kiện"). Mã thiếu meta sẽ báo "Thiếu meta" — bổ sung trong Meta-data.</p>
             </div>
 
             <!-- 4. TAB DANH SÁCH XUẤT HÀNG DỰ KIẾN -->
@@ -326,11 +331,11 @@
       @upload="handleUploadMasterSubmit"
     />
 
-    <!-- 6. Accessory Inbound Modal (T5: gợi ý từ metadata loại 3 + codes hiện có) -->
+    <!-- 6. Accessory Inbound Modal (gợi ý từ metadata loại phụ kiện + codes hiện có) -->
     <AccessoryInboundModal
       v-model:visible="showAccInboundModal"
       :unique-codes="uniqueCodes"
-      :metadata-codes="metaRows.map(r => String((r as { item_code: string }).item_code || ''))"
+      :metadata-codes="accessoryMetaCodes"
       :loading="loading"
       @cancel="showAccInboundModal = false"
       @save="handleAccInboundSubmit"
@@ -451,6 +456,7 @@ const {
   analysis,
   lastSync,
   setInventoryPackSpecs,
+  setInventoryMetadataSpecs,
   fetchInventory,
   inbound,
   importCsvData,
@@ -459,26 +465,75 @@ const {
   replaceMasterData
 } = useInventory()
 
-// T4: metadata là class module phân phối pack chuẩn cho forecast + tồn kho
+// Metadata là class module phân phối pack chuẩn cho forecast + tồn kho + phụ kiện (chuẩn 7 cột mới)
 const { rows: metaRows, fetchPackingSpecs } = useMetadataPacking()
-const { setForecastPackSpecs } = useShippingForecast()
-const packSpecsMap = computed<Record<string, { pack_qty: number; carton_type: string; isSingle: boolean }>>(() => {
-  const m: Record<string, { pack_qty: number; carton_type: string; isSingle: boolean }> = {}
+const { setForecastPackSpecs, setForecastMetadataSpecs } = useShippingForecast()
+const packSpecsMap = computed<Record<string, { pack_qty: number; carton_type: string; isSingle: boolean; carton_spec?: string }>>(() => {
+  const m: Record<string, { pack_qty: number; carton_type: string; isSingle: boolean; carton_spec?: string }> = {}
   ;(metaRows.value || []).forEach((r) => {
-    const k = String((r as { item_code: string }).item_code || '').trim()
-    if (!k || m[k]) return
-    m[k] = {
+    const feat = String((r as { feature?: string }).feature || (r as { item_code: string }).item_code || '').trim()
+    if (!feat) return
+    const ct = String((r as { carton_type: string }).carton_type || '')
+    const single = /thùng đơn/i.test(ct)
+    const cand = {
       pack_qty: Number((r as { pack_qty: number }).pack_qty) || 0,
-      carton_type: String((r as { carton_type: string }).carton_type || ''),
-      isSingle: /thùng đơn/i.test(String((r as { carton_type: string }).carton_type || '')),
+      carton_type: ct,
+      isSingle: single,
+      carton_spec: String((r as { carton_spec?: string }).carton_spec || ''),
+    }
+    if (!m[feat]) {
+      m[feat] = cand
+      return
+    }
+    // 1010 có 2 dòng đơn/đôi: ưu tiên thùng đôi cho tồn kho (luôn ước tính)
+    if (feat === '1010' && !single && m[feat].isSingle) {
+      m[feat] = cand
     }
   })
   return m
 })
+const metadataSpecsFull = computed(() =>
+  (metaRows.value || []).map((r) => ({
+    ma_hang: String((r as { ma_hang?: string }).ma_hang || (r as { item_code: string }).item_code || '').trim(),
+    feature: String((r as { feature?: string }).feature || (r as { item_code: string }).item_code || '').trim(),
+    item_code: String((r as { item_code: string }).item_code || '').trim(),
+    pack_qty: Number((r as { pack_qty: number }).pack_qty) || 0,
+    carton_type: String((r as { carton_type: string }).carton_type || ''),
+    carton_spec: String((r as { carton_spec?: string }).carton_spec || ''),
+  })),
+)
 watch(packSpecsMap, (m) => {
   setForecastPackSpecs(m)
   setInventoryPackSpecs(m)
 }, { immediate: true })
+watch(metadataSpecsFull, (list) => {
+  setForecastMetadataSpecs(list as unknown as Parameters<typeof setForecastMetadataSpecs>[0])
+  setInventoryMetadataSpecs(list as unknown as Parameters<typeof setInventoryMetadataSpecs>[0])
+}, { immediate: true })
+
+// Phụ kiện tham chiếu trực tiếp metadata loại "phụ kiện" (chuẩn hóa 3 loại)
+const isPhuKienRow = (r: { carton_type: string }) => {
+  const n = String(r.carton_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  return n.includes('phu kien') || n.includes('phukien') || n.includes('carton') || n.includes('plywood') || n.includes('box') || n === 'phu kien'
+}
+const accessoryMetaCodes = computed(() =>
+  (metaRows.value || [])
+    .filter((r) => isPhuKienRow(r as { carton_type: string }))
+    .map((r) => String((r as { ma_hang?: string }).ma_hang || (r as { item_code: string }).item_code || '').trim())
+    .filter(Boolean),
+)
+const accessoryMeta = (code: string): { pack_qty: number; weight_per_unit: number } | null => {
+  const c = String(code || '').trim()
+  if (!c) return null
+  const hit = (metaRows.value || []).find(
+    (r) =>
+      (String((r as { ma_hang?: string }).ma_hang || '').trim() === c ||
+        String((r as { item_code: string }).item_code || '').trim() === c) &&
+      isPhuKienRow(r as { carton_type: string }),
+  ) as unknown as { pack_qty: number; weight_per_unit: number } | undefined
+  if (!hit) return null
+  return { pack_qty: Number(hit.pack_qty) || 0, weight_per_unit: Number(hit.weight_per_unit) || 0 }
+}
 
 const {
   accessoriesData,
@@ -578,13 +633,13 @@ const handleJumpToInventory = (payload: { filterText: string; feature: string })
   })
 }
 
-// Load All System Data
+// Load All System Data — metadata trước để inventory override feature kịp (tránh race stale MID)
 const loadAllData = async () => {
   try {
+    await fetchPackingSpecs()
     await Promise.all([
       fetchInventory(),
       fetchAccessories(),
-      fetchPackingSpecs(),
     ])
   } catch (e: any) {
     toast.add({

@@ -176,11 +176,18 @@ export interface PoStats {
 }
 
 // ================= META-DATA: QUY CÁCH ĐÓNG GÓI CHUẨN =================
-// Class module gốc (trích từ Sample.xlsx), phân phối cho toàn hệ thống ở task sau.
+// Chuẩn Sample.xlsx (7 cột): Khách Hàng, Mã hàng (full, VD 8101010104),
+// Feature (VD 1010), Số lượng đóng gói, Trọng lượng/Cái, Quy cách thùng, Loại thùng.
+// item_code giữ lại để tương thích ngược (= feature cho FG, = full code cho phụ kiện).
 
 export interface MetadataPacking {
   id: string;
   customer: string;
+  /** Mã hàng full (VD 8101010104). Chuẩn mới. */
+  ma_hang: string;
+  /** Feature (VD 1010, 1009, 1220, hoặc full code cho phụ kiện). Chuẩn mới. */
+  feature: string;
+  /** Legacy: giữ = feature để lookup cũ không vỡ. */
   item_code: string;
   pack_qty: number;
   weight_per_unit: number;

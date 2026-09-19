@@ -12,7 +12,7 @@
           </div>
           <div>
             <h3 class="text-base font-bold text-white tracking-wide">Import Quy Cách Từ Excel</h3>
-            <p class="text-[11px] text-[#AEB9E1]">Đúng 6 cột chuẩn <span class="text-[#00C2FF] font-semibold">Sample.xlsx</span> · Trùng dòng thì bỏ qua</p>
+            <p class="text-[11px] text-[#AEB9E1]">Đúng 7 cột chuẩn <span class="text-[#00C2FF] font-semibold">Sample.xlsx</span> · Trùng dòng thì bỏ qua · Lưu trực tiếp Supabase</p>
           </div>
         </div>
         <button
@@ -29,7 +29,7 @@
             <FileSpreadsheet class="w-5 h-5 text-[#14CA74]" />
             <div>
               <p class="text-xs font-bold text-white">Chưa có file mẫu chuẩn?</p>
-              <p class="text-[10px] text-[#AEB9E1]">Khách Hàng, Feature (Mã hàng cũ), Số lượng đóng gói, Trọng trượng/Cái, Quy cách thùng, Loại thùng</p>
+              <p class="text-[10px] text-[#AEB9E1]">Khách Hàng, Mã hàng, Feature, Số lượng đóng gói, Trọng lượng/Cái, Quy cách thùng, Loại thùng</p>
             </div>
           </div>
           <button
@@ -91,6 +91,7 @@
                 <tr>
                   <th class="py-2 px-3">KHÁCH HÀNG</th>
                   <th class="py-2 px-3">MÃ HÀNG</th>
+                  <th class="py-2 px-3">FEATURE</th>
                   <th class="py-2 px-3 text-right">SL ĐÓNG GÓI</th>
                   <th class="py-2 px-3 text-right">TL/CÁI</th>
                   <th class="py-2 px-3">QUY CÁCH THÙNG</th>
@@ -100,7 +101,8 @@
               <tbody class="divide-y divide-white/5">
                 <tr v-for="(r, idx) in previewRows.slice(0, 8)" :key="idx" class="hover:bg-white/5">
                   <td class="py-2 px-3 font-bold text-white">{{ r.customer }}</td>
-                  <td class="py-2 px-3 font-mono text-[#00C2FF]">{{ r.item_code }}</td>
+                  <td class="py-2 px-3 font-mono text-[#00C2FF]">{{ r.ma_hang }}</td>
+                  <td class="py-2 px-3 font-mono text-[#CB3CFF]">{{ r.feature }}</td>
                   <td class="py-2 px-3 text-right font-mono font-bold text-[#14CA74]">{{ r.pack_qty }}</td>
                   <td class="py-2 px-3 text-right font-mono">{{ r.weight_per_unit }}</td>
                   <td class="py-2 px-3 font-mono text-[#AEB9E1]">{{ r.carton_spec }}</td>
@@ -154,7 +156,8 @@ const emit = defineEmits<{
 
 const mappingFields: { key: keyof MetadataColumnMapping; label: string }[] = [
   { key: 'customer', label: 'Khách hàng *' },
-  { key: 'item_code', label: 'Feature (Mã hàng cũ) *' },
+  { key: 'ma_hang', label: 'Mã hàng (full) *' },
+  { key: 'feature', label: 'Feature *' },
   { key: 'pack_qty', label: 'Số lượng đóng gói *' },
   { key: 'weight_per_unit', label: 'Trọng lượng/Cái' },
   { key: 'carton_spec', label: 'Quy cách thùng' },
@@ -171,7 +174,8 @@ const rawRows = ref<Record<string, unknown>[]>([])
 
 const customMapping = reactive<MetadataColumnMapping>({
   customer: '',
-  item_code: '',
+  ma_hang: '',
+  feature: '',
   pack_qty: '',
   weight_per_unit: '',
   carton_spec: '',
@@ -179,7 +183,7 @@ const customMapping = reactive<MetadataColumnMapping>({
 })
 
 const previewRows = computed(() => {
-  if (rawRows.value.length === 0 || !customMapping.customer || !customMapping.item_code || !customMapping.pack_qty) {
+  if (rawRows.value.length === 0 || !customMapping.customer || !customMapping.ma_hang || !customMapping.pack_qty) {
     return []
   }
   return mapRowsToPackingSpecs(rawRows.value, { ...customMapping })

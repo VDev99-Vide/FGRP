@@ -40,6 +40,11 @@ export function useInventory() {
   const setInventoryPackSpecs = (m: Record<string, { pack_qty: number; carton_type: string }>) => {
     inventoryPackSpecs.value = m || {}
   }
+  /** Chuẩn mới: metadata full (ma_hang -> feature/pack) để resolve trực tiếp, không MID cứng. */
+  const inventoryMetadataSpecs = ref<{ ma_hang?: string; feature?: string; item_code?: string; pack_qty: number; carton_type: string }[]>([])
+  const setInventoryMetadataSpecs = (list: { ma_hang?: string; feature?: string; item_code?: string; pack_qty: number; carton_type: string }[]) => {
+    inventoryMetadataSpecs.value = list || []
+  }
   
   const kpi = reactive<KpiState>({
     totalActual: 0,
@@ -98,7 +103,22 @@ export function useInventory() {
 
       isDemoMode.value = false
       // Khử fan-out từ view: nhiều dòng master_data trùng tag_id chỉ giữ 1 dòng cho mỗi tag vật lý
-      inventoryData.value = dedupeByInventoryId(detailRows || [])
+      let rows = dedupeByInventoryId(detailRows || [])
+      // Chuẩn mới: ghi đè feature trực tiếp từ metadata (ma_hang -> feature), không MID cứng.
+      // View cũ vẫn tách MID(2,4) — frontend override để scale khi quy tắc tách khác nhau.
+      if (inventoryMetadataSpecs.value.length > 0) {
+        rows = rows.map((r) => {
+          const code = String(r.lp_no || '').trim()
+          if (!code || code === 'No data') return r
+          const hit = inventoryMetadataSpecs.value.find((s) => String(s.ma_hang || '').trim() === code)
+          if (hit) {
+            const f = String(hit.feature || (hit as { item_code?: string }).item_code || '').trim()
+            if (f && f !== r.feature) return { ...r, feature: f }
+          }
+          return r
+        })
+      }
+      inventoryData.value = rows
       
       if (sumRows && sumRows.length > 0) {
         summaryData.value = sumRows
@@ -203,10 +223,12 @@ export function useInventory() {
     const mid: any[] = []
 
     Object.entries(featureGroups).forEach(([feat, g]) => {
-      // T4: ưu tiên metadata khi có override, fallback (sum/2)/max khi chưa có
+      // Chuẩn metadata: đơn = tổng/pack, đôi = tổng/2/pack. 1010 luôn đôi + ước tính (hiển thị ở Grid).
       const spec = inventoryPackSpecs.value[feat]
       let kien: number
-      if (spec && Number(spec.pack_qty) > 0) {
+      if (feat === '1010' && spec && Number(spec.pack_qty) > 0) {
+        kien = Math.round(((g.sum / 2) / Number(spec.pack_qty)) * 100) / 100
+      } else if (spec && Number(spec.pack_qty) > 0) {
         const single = /thùng đơn/i.test(String(spec.carton_type || ''))
         const raw = single ? g.sum / Number(spec.pack_qty) : (g.sum / 2) / Number(spec.pack_qty)
         kien = Math.round(raw * 100) / 100
@@ -456,6 +478,8 @@ export function useInventory() {
     lastSync,
     inventoryPackSpecs,
     setInventoryPackSpecs,
+    inventoryMetadataSpecs,
+    setInventoryMetadataSpecs,
     fetchInventory,
     inbound,
     importCsvData,

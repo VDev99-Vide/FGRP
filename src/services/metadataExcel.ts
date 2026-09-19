@@ -1,16 +1,23 @@
 import * as XLSX from 'xlsx'
+import { normalizeCartonType, stringifyMaHang } from '@/utils/metadata'
 
 export interface MetadataColumnMapping {
   customer: string
-  item_code: string
+  ma_hang: string
+  feature: string
   pack_qty: string
   weight_per_unit: string
   carton_spec: string
   carton_type: string
+  /** Legacy alias: khi file cũ chỉ có 1 cột Mã hàng (=feature), map về ma_hang. */
+  item_code?: string
 }
 
 export interface MetadataExcelRow {
   customer: string
+  ma_hang: string
+  feature: string
+  /** Legacy alias giữ cho caller cũ (luôn = feature). */
   item_code: string
   pack_qty: number
   weight_per_unit: number
@@ -44,13 +51,43 @@ function findHeader(normHeaders: { original: string; norm: string }[], patterns:
   return ''
 }
 
-/** Tự động nhận diện 6 cột chuẩn Sample.xlsx (hàm thuần túy, dễ unit test). */
+/**
+ * Tự động nhận diện 7 cột chuẩn Sample.xlsx mới:
+ * Khách Hàng | Mã hàng (full) | Feature | Số lượng đóng gói | Trọng lượng | Quy cách thùng | Loại thùng
+ * Tương thích ngược file 6 cột cũ (chỉ có Mã hàng = feature): feature sẽ fallback = ma_hang ở mapRows.
+ */
 export function detectMetadataColumnMapping(headers: string[]): MetadataColumnMapping {
   const normHeaders = headers.map((h) => ({ original: h, norm: normalizeHeaderName(h) }))
 
+  // Feature phải detect trước để không bị 'mahang' nuốt.
+  // 'Mã hàng' (mahang) -> ma_hang; 'Feature' (feature) -> feature.
+  const feature = findHeader(normHeaders, ['feature'])
+  let ma_hang = ''
+  // Ưu tiên header chứa 'mahang' nhưng không phải 'feature'
+  for (const h of normHeaders) {
+    if (h.norm.includes('mahang') || h.norm === 'mahang' || h.norm.includes('itemcode') || h.norm.includes('masanpham')) {
+      // Nếu header là 'Feature' thì bỏ qua (đã map feature)
+      if (h.original !== feature) {
+        ma_hang = h.original
+        break
+      }
+    }
+  }
+  if (!ma_hang) {
+    ma_hang = findHeader(normHeaders, ['mahang', 'itemcode', 'masanpham', 'code', 'item'])
+    // Nếu chỉ có 1 cột mã và nó trùng feature (file cũ), giữ ma_hang, feature sẽ fallback sau.
+    if (ma_hang && ma_hang === feature) {
+      // file cũ 6 cột: 'Mã hàng' vừa là ma_hang vừa là feature -> giữ ma_hang, feature để trống để fallback
+    }
+  }
+  // Nếu file cũ không có cột Feature riêng, feature = '' để mapRows fallback.
+  // Nếu ma_hang rỗng nhưng feature có (hiếm), dùng feature làm ma_hang tạm.
+  if (!ma_hang && feature) ma_hang = feature
+
   return {
     customer: findHeader(normHeaders, ['khachhang', 'customer', 'client', 'kh']),
-    item_code: findHeader(normHeaders, ['mahang', 'itemcode', 'masanpham', 'code', 'item']),
+    ma_hang,
+    feature: feature === ma_hang ? '' : feature,
     pack_qty: findHeader(normHeaders, ['soluongdonggoi', 'packqty', 'packingqty', 'soluong', 'qty', 'quantity']),
     weight_per_unit: findHeader(normHeaders, ['trongluong', 'trongtruong', 'weight', 'khoiluong']),
     carton_spec: findHeader(normHeaders, ['quycachthung', 'cartonspec', 'quycach', 'kichthuoc', 'spec']),
@@ -58,19 +95,30 @@ export function detectMetadataColumnMapping(headers: string[]): MetadataColumnMa
   }
 }
 
-/** Ép ô số Excel (hỗ trợ chuỗi có dấu phẩy/chấm phân cách). */
+/** Ép ô số Excel (hỗ trợ locale VN: '1,48' -> 1.48, '1,480' nghìn -> 1480, '1.480' -> 1480). */
 export function normalizeMetadataNumber(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
   const cleaned = String(value ?? '').replace(/\s/g, '')
   if (cleaned === '') return 0
-  // Chuỗi "1.480" hay "1,480": nếu có cả . và , thì coi là phân cách nghìn
-  const num = Number(cleaned.replace(/,/g, ''))
+  const hasComma = cleaned.includes(',')
+  const hasDot = cleaned.includes('.')
+  let norm = cleaned
+  if (hasComma && hasDot) {
+    // Có cả , và . -> coi , là phân cách nghìn
+    norm = cleaned.replace(/,/g, '')
+  } else if (hasComma) {
+    // Chỉ có , : nếu đuôi ,ddd (3 số) -> nghìn, ngược lại thập phân VN -> dot
+    if (/,\d{3}$/.test(cleaned)) norm = cleaned.replace(/,/g, '')
+    else norm = cleaned.replace(/,/g, '.')
+  }
+  const num = Number(norm)
   return Number.isFinite(num) ? num : 0
 }
 
 /**
- * Ánh xạ các dòng JSON thô từ sheet Excel thành dòng quy cách hợp lệ.
- * Lọc dòng thiếu Khách hàng / Mã hàng / Số lượng đóng gói <= 0.
+ * Ánh xạ các dòng JSON thô từ sheet Excel thành dòng quy cách hợp lệ (chuẩn 7 cột).
+ * - Yêu cầu: Khách hàng + Mã hàng + Feature (fallback = Mã hàng cho file cũ/phụ kiện) + SL > 0.
+ * - Chuẩn hóa Loại thùng về 3 loại (thùng đơn / thùng đôi / phụ kiện).
  */
 export function mapRowsToPackingSpecs(
   jsonRows: Record<string, unknown>[],
@@ -79,17 +127,22 @@ export function mapRowsToPackingSpecs(
   const rows: MetadataExcelRow[] = []
   jsonRows.forEach((r) => {
     const customer = String(mapping.customer ? (r[mapping.customer] ?? '') : '').trim()
-    const item_code = String(mapping.item_code ? (r[mapping.item_code] ?? '') : '').trim()
+    const ma_hang = stringifyMaHang(mapping.ma_hang ? r[mapping.ma_hang] : '')
+    const featureRaw = String(mapping.feature ? (r[mapping.feature] ?? '') : '').trim()
+    // Fallback: file cũ 6 cột không có Feature riêng -> feature = ma_hang
+    const feature = featureRaw || ma_hang
     const pack_qty = normalizeMetadataNumber(mapping.pack_qty ? r[mapping.pack_qty] : 0)
-    if (!customer || !item_code || !(pack_qty > 0)) return
+    if (!customer || !ma_hang || !feature || !(pack_qty > 0)) return
 
     rows.push({
       customer,
-      item_code,
+      ma_hang,
+      feature,
+      item_code: feature,
       pack_qty,
       weight_per_unit: normalizeMetadataNumber(mapping.weight_per_unit ? r[mapping.weight_per_unit] : 0),
       carton_spec: String(mapping.carton_spec ? (r[mapping.carton_spec] ?? '') : '').trim(),
-      carton_type: String(mapping.carton_type ? (r[mapping.carton_type] ?? '') : '').trim(),
+      carton_type: normalizeCartonType(mapping.carton_type ? (r[mapping.carton_type] ?? '') : ''),
     })
   })
   return rows
@@ -114,7 +167,7 @@ export async function parseMetadataExcelFile(file: File): Promise<ParseMetadataE
     const headers = Object.keys(jsonRows[0])
     const detectedMapping = detectMetadataColumnMapping(headers)
 
-    if (!detectedMapping.customer || !detectedMapping.item_code || !detectedMapping.pack_qty) {
+    if (!detectedMapping.customer || !detectedMapping.ma_hang || !detectedMapping.pack_qty) {
       return {
         headers,
         detectedMapping,
@@ -126,7 +179,7 @@ export async function parseMetadataExcelFile(file: File): Promise<ParseMetadataE
 
     const rows = mapRowsToPackingSpecs(jsonRows, detectedMapping)
     if (rows.length === 0) {
-      return { headers, detectedMapping, rows, rawRows: jsonRows, error: 'Không có dòng nào hợp lệ (mỗi dòng cần Khách hàng + Mã hàng + Số lượng > 0)!' }
+      return { headers, detectedMapping, rows, rawRows: jsonRows, error: 'Không có dòng nào hợp lệ (mỗi dòng cần Khách hàng + Mã hàng + Feature + Số lượng > 0)!' }
     }
     return { headers, detectedMapping, rows, rawRows: jsonRows }
   } catch (err: unknown) {
@@ -135,28 +188,48 @@ export async function parseMetadataExcelFile(file: File): Promise<ParseMetadataE
   }
 }
 
-/** Tải file Excel mẫu đúng định dạng Sample.xlsx (sheet Quy cách, 6 cột chuẩn). */
+/** Tải file Excel mẫu đúng định dạng Sample.xlsx mới (7 cột chuẩn). */
 export function downloadMetadataSampleTemplate(): void {
   const sample = [
     {
       'Khách Hàng': 'Best Chair',
-      'Mã hàng': 1009,
+      'Mã hàng': 8100920004,
+      'Feature': 1009,
       'Số lượng đóng gói': 220,
       'Trọng trượng/Cái': 1.48,
       'Quy cách thùng': '1470*1135*925',
       'Loại thùng': 'thùng đôi',
     },
     {
-      'Khách Hàng': 'England',
-      'Mã hàng': 7201940001,
-      'Số lượng đóng gói': 60,
-      'Trọng trượng/Cái': 0.165,
-      'Quy cách thùng': '335*190*170',
-      'Loại thùng': 'carton box',
+      'Khách Hàng': 'Cleverland/ Distribution/West Coast',
+      'Mã hàng': 8101010104,
+      'Feature': 1010,
+      'Số lượng đóng gói': 250,
+      'Trọng trượng/Cái': 1.32,
+      'Quy cách thùng': '1470*1135*925',
+      'Loại thùng': 'thùng đôi',
+    },
+    {
+      'Khách Hàng': 'Stanley/ West Coast',
+      'Mã hàng': 8101010104,
+      'Feature': 1010,
+      'Số lượng đóng gói': 250,
+      'Trọng trượng/Cái': 1.32,
+      'Quy cách thùng': '1150*1140*460',
+      'Loại thùng': 'thùng đơn',
+    },
+    {
+      'Khách Hàng': 'Southern Motion',
+      'Mã hàng': 1326810101,
+      'Feature': 1326810101,
+      'Số lượng đóng gói': 40,
+      'Trọng trượng/Cái': 0.666,
+      'Quy cách thùng': '475*230*140',
+      'Loại thùng': 'phụ kiện',
     },
   ]
   const ws = XLSX.utils.json_to_sheet(sample)
-  ws['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 14 }]
+  ws['!cols'] = [{ wch: 32 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 14 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Quy cách')
   XLSX.writeFile(wb, 'QuyCach_Template_Mau.xlsx')

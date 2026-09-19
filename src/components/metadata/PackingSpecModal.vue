@@ -14,7 +14,7 @@
             <h3 class="text-base font-bold text-white tracking-wide">
               {{ editing ? 'Sửa Quy Cách Đóng Gói' : 'Thêm Quy Cách Đóng Gói' }}
             </h3>
-            <p class="text-[11px] text-[#AEB9E1]">Chuẩn Sample.xlsx · sheet Quy cách</p>
+            <p class="text-[11px] text-[#AEB9E1]">Chuẩn Sample.xlsx · 7 cột (Mã hàng + Feature)</p>
           </div>
         </div>
         <button
@@ -26,21 +26,37 @@
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Khách hàng <span class="text-[#FF5A65]">*</span></label>
+          <input
+            v-model="form.customer"
+            type="text"
+            list="meta-customer-list"
+            placeholder="Gõ để gợi ý, vẫn thêm mới được..."
+            class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
+          />
+          <datalist id="meta-customer-list">
+            <option v-for="c in customers" :key="c" :value="c" />
+          </datalist>
+        </div>
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Khách hàng <span class="text-[#FF5A65]">*</span></label>
+            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Mã hàng (full) <span class="text-[#FF5A65]">*</span></label>
             <input
-              v-model="form.customer"
+              v-model="form.ma_hang"
               type="text"
-              class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
+              placeholder="VD 8101010104"
+              class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-[#00C2FF] font-mono font-bold outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5" title="Tên cũ: Mã hàng (cột DB item_code giữ nguyên)">Feature <span class="text-[#FF5A65]">*</span></label>
+            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Feature <span class="text-[#FF5A65]">*</span></label>
             <input
-              v-model="form.item_code"
+              v-model="form.feature"
               type="text"
-              class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-[#00C2FF] font-mono font-bold outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
+              placeholder="VD 1010 (phụ kiện = mã hàng)"
+              class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-[#CB3CFF] font-mono font-bold outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             />
           </div>
         </div>
@@ -74,16 +90,26 @@
             <input
               v-model="form.carton_spec"
               type="text"
+              list="meta-spec-list"
+              placeholder="Gõ để gợi ý, vẫn thêm mới được..."
               class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white font-mono outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             />
+            <datalist id="meta-spec-list">
+              <option v-for="s in cartonSpecs" :key="s" :value="s" />
+            </datalist>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Loại thùng</label>
+            <label class="block text-xs font-semibold text-[#AEB9E1] mb-1.5">Loại thùng (thùng đơn / thùng đôi / phụ kiện)</label>
             <input
               v-model="form.carton_type"
               type="text"
+              list="meta-type-list"
+              placeholder="Chọn hoặc gõ mới..."
               class="w-full h-[40px] px-3.5 bg-[#18202D]/80 border border-white/15 rounded-[10px] text-xs text-white outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             />
+            <datalist id="meta-type-list">
+              <option v-for="t in cartonTypes" :key="t" :value="t" />
+            </datalist>
           </div>
         </div>
 
@@ -124,6 +150,9 @@ const props = defineProps<{
   visible: boolean
   loading?: boolean
   editing?: MetadataPacking | null
+  customers?: string[]
+  cartonSpecs?: string[]
+  cartonTypes?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -133,6 +162,8 @@ const emit = defineEmits<{
 
 const form = reactive<PackingSpecInput>({
   customer: '',
+  ma_hang: '',
+  feature: '',
   item_code: '',
   pack_qty: 0,
   weight_per_unit: 0,
@@ -148,6 +179,8 @@ watch(
     formError.value = ''
     if (editing) {
       form.customer = editing.customer
+      form.ma_hang = (editing as { ma_hang?: string }).ma_hang || editing.item_code
+      form.feature = (editing as { feature?: string }).feature || editing.item_code
       form.item_code = editing.item_code
       form.pack_qty = editing.pack_qty
       form.weight_per_unit = editing.weight_per_unit
@@ -155,6 +188,8 @@ watch(
       form.carton_type = editing.carton_type
     } else {
       form.customer = ''
+      form.ma_hang = ''
+      form.feature = ''
       form.item_code = ''
       form.pack_qty = 0
       form.weight_per_unit = 0
