@@ -200,46 +200,67 @@ end;
 $$;
 
 -- ============================================================
+-- BƯỚC 4b: RPC REPLACE_INVENTORY (Làm mới kho từ file: xóa cũ + nạp mới)
+-- ============================================================
+create or replace function replace_inventory(payload jsonb)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  -- Xóa sạch dữ liệu tồn kho cũ
+  delete from inventory;
+
+  -- Nạp dữ liệu mới từ file
+  insert into inventory (tag_id, bin)
+  select
+    coalesce(nullif(trim(item->>'tag_id'), ''), nullif(trim(item->>'batch'), '')),
+    coalesce(trim(item->>'bin'), '')
+  from jsonb_array_elements(payload) as item
+  where coalesce(nullif(trim(item->>'tag_id'), ''), nullif(trim(item->>'batch'), '')) is not null;
+end;
+$$;
+
+-- ============================================================
 -- BƯỚC 5: BẬT RLS VÀ TẠO POLICIES (bỏ qua nếu đã có)
 -- ============================================================
 
--- Bật RLS
-alter table inventory      enable row level security;
-alter table master_data    enable row level security;
-alter table hang_phu_kien  enable row level security;
+-- ============================================================
+-- BƯỚC 5: PHÂN QUYỀN TRUY CẬP (đồng bộ toàn hệ thống: tắt RLS cho hệ thống nội bộ)
+-- Cấp toàn quyền cho PUBLIC (bao gồm cả anon và authenticated khi đăng nhập)
+-- ============================================================
+
+-- Tắt RLS để tránh chặn người dùng đã đăng nhập (authenticated)
+alter table inventory      disable row level security;
+alter table master_data    disable row level security;
+alter table hang_phu_kien  disable row level security;
 
 -- Xóa policies cũ trước (tránh lỗi trùng tên)
 drop policy if exists "allow_anon_select_inventory"        on inventory;
 drop policy if exists "allow_anon_insert_inventory"        on inventory;
 drop policy if exists "allow_anon_update_inventory"        on inventory;
 drop policy if exists "allow_anon_delete_inventory"        on inventory;
+drop policy if exists "allow_all_inventory"                on inventory;
+
 drop policy if exists "allow_anon_select_master_data"      on master_data;
 drop policy if exists "allow_anon_insert_master_data"      on master_data;
 drop policy if exists "allow_anon_update_master_data"      on master_data;
 drop policy if exists "allow_anon_delete_master_data"      on master_data;
+drop policy if exists "allow_all_master_data"              on master_data;
+
 drop policy if exists "allow_anon_select_hang_phu_kien"    on hang_phu_kien;
 drop policy if exists "allow_anon_insert_hang_phu_kien"    on hang_phu_kien;
 drop policy if exists "allow_anon_update_hang_phu_kien"    on hang_phu_kien;
 drop policy if exists "allow_anon_delete_hang_phu_kien"    on hang_phu_kien;
+drop policy if exists "allow_all_hang_phu_kien"            on hang_phu_kien;
 
--- Tạo lại Policies cho role anon (public, không cần login)
--- inventory
-create policy "allow_anon_select_inventory"     on inventory for select     to anon using (true);
-create policy "allow_anon_insert_inventory"     on inventory for insert     to anon with check (true);
-create policy "allow_anon_update_inventory"     on inventory for update     to anon using (true) with check (true);
-create policy "allow_anon_delete_inventory"     on inventory for delete     to anon using (true);
+-- Tạo lại Policies cho toàn bộ PUBLIC (cả anon và user đăng nhập đều thao tác được)
+create policy "allow_all_inventory"     on inventory     for all to public using (true) with check (true);
+create policy "allow_all_master_data"   on master_data   for all to public using (true) with check (true);
+create policy "allow_all_hang_phu_kien" on hang_phu_kien for all to public using (true) with check (true);
 
--- master_data
-create policy "allow_anon_select_master_data"   on master_data for select   to anon using (true);
-create policy "allow_anon_insert_master_data"   on master_data for insert   to anon with check (true);
-create policy "allow_anon_update_master_data"   on master_data for update   to anon using (true) with check (true);
-create policy "allow_anon_delete_master_data"   on master_data for delete   to anon using (true);
-
--- hang_phu_kien
-create policy "allow_anon_select_hang_phu_kien" on hang_phu_kien for select to anon using (true);
-create policy "allow_anon_insert_hang_phu_kien" on hang_phu_kien for insert to anon with check (true);
-create policy "allow_anon_update_hang_phu_kien" on hang_phu_kien for update to anon using (true) with check (true);
-create policy "allow_anon_delete_hang_phu_kien" on hang_phu_kien for delete to anon using (true);
+-- Làm mới schema cache của Supabase ngay lập tức
+notify pgrst, 'reload schema';
 
 -- ============================================================
 -- BƯỚC 6: Kiểm tra kết quả

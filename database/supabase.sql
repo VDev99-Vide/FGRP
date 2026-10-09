@@ -100,6 +100,28 @@ end;
 $$;
 
 -- ==========================================
+-- 4b. RPC LÀM MỚI TỒN KHO TỪ FILE (REPLACE_INVENTORY)
+-- ==========================================
+create or replace function replace_inventory(payload jsonb)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  -- Xóa sạch dữ liệu tồn kho cũ
+  delete from inventory;
+
+  -- Nạp dữ liệu mới từ file
+  insert into inventory (tag_id, bin)
+  select
+    coalesce(nullif(trim(item->>'tag_id'), ''), nullif(trim(item->>'batch'), '')),
+    coalesce(trim(item->>'bin'), '')
+  from jsonb_array_elements(payload) as item
+  where coalesce(nullif(trim(item->>'tag_id'), ''), nullif(trim(item->>'batch'), '')) is not null;
+end;
+$$;
+
+-- ==========================================
 -- 5. VIEW HIỂN THỊ TỒN KHO THÀNH PHẨM (VW_KHO_THANH_PHAM)
 -- ==========================================
 create or replace view vw_kho_thanh_pham as
@@ -168,26 +190,34 @@ alter table inventory enable row level security;
 alter table master_data enable row level security;
 alter table hang_phu_kien enable row level security;
 
--- Do hệ thống chạy nội bộ không login, cho phép anon (public) toàn quyền CRUD
--- Cảnh báo: RLS cho anon chỉ nên sử dụng trong môi trường mạng nội bộ hoặc app riêng tư.
+-- Phân quyền truy cập (đồng bộ toàn hệ thống: tắt RLS cho hệ thống nội bộ)
+alter table inventory      disable row level security;
+alter table master_data    disable row level security;
+alter table hang_phu_kien  disable row level security;
 
--- Inventory Policies
-create policy "allow_anon_select_inventory" on inventory for select to anon using (true);
-create policy "allow_anon_insert_inventory" on inventory for insert to anon with check (true);
-create policy "allow_anon_update_inventory" on inventory for update to anon using (true) with check (true);
-create policy "allow_anon_delete_inventory" on inventory for delete to anon using (true);
+-- Xóa policies cũ nếu có
+drop policy if exists "allow_anon_select_inventory" on inventory;
+drop policy if exists "allow_anon_insert_inventory" on inventory;
+drop policy if exists "allow_anon_update_inventory" on inventory;
+drop policy if exists "allow_anon_delete_inventory" on inventory;
+drop policy if exists "allow_all_inventory"         on inventory;
 
--- Master Data Policies
-create policy "allow_anon_select_master_data" on master_data for select to anon using (true);
-create policy "allow_anon_insert_master_data" on master_data for insert to anon with check (true);
-create policy "allow_anon_update_master_data" on master_data for update to anon using (true) with check (true);
-create policy "allow_anon_delete_master_data" on master_data for delete to anon using (true);
+drop policy if exists "allow_anon_select_master_data" on master_data;
+drop policy if exists "allow_anon_insert_master_data" on master_data;
+drop policy if exists "allow_anon_update_master_data" on master_data;
+drop policy if exists "allow_anon_delete_master_data" on master_data;
+drop policy if exists "allow_all_master_data"         on master_data;
 
--- Hang Phu Kien Policies
-create policy "allow_anon_select_hang_phu_kien" on hang_phu_kien for select to anon using (true);
-create policy "allow_anon_insert_hang_phu_kien" on hang_phu_kien for insert to anon with check (true);
-create policy "allow_anon_update_hang_phu_kien" on hang_phu_kien for update to anon using (true) with check (true);
-create policy "allow_anon_delete_hang_phu_kien" on hang_phu_kien for delete to anon using (true);
+drop policy if exists "allow_anon_select_hang_phu_kien" on hang_phu_kien;
+drop policy if exists "allow_anon_insert_hang_phu_kien" on hang_phu_kien;
+drop policy if exists "allow_anon_update_hang_phu_kien" on hang_phu_kien;
+drop policy if exists "allow_anon_delete_hang_phu_kien" on hang_phu_kien;
+drop policy if exists "allow_all_hang_phu_kien"         on hang_phu_kien;
+
+-- Tạo Policies cho PUBLIC (cả anon và authenticated)
+create policy "allow_all_inventory"     on inventory     for all to public using (true) with check (true);
+create policy "allow_all_master_data"   on master_data   for all to public using (true) with check (true);
+create policy "allow_all_hang_phu_kien" on hang_phu_kien for all to public using (true) with check (true);
 
 -- ==========================================
 -- 8. BẢNG DANH SÁCH XUẤT HÀNG DỰ KIẾN (SHIPPING_FORECAST)

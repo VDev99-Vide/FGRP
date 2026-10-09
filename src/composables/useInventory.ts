@@ -311,12 +311,11 @@ export function useInventory() {
     }
   }
 
-  // Nhập kho qua CSV (hỗ trợ import batch lớn)
-  const importCsvData = async (rows: { tag_id: string; bin: string }[]) => {
+  // Nhập kho bằng file Excel/CSV: tự động xóa toàn bộ dữ liệu cũ và thay thế bằng dữ liệu mới từ file
+  const replaceInventoryData = async (rows: { tag_id: string; bin: string }[]) => {
     loading.value = true
     try {
       if (isDemoMode.value || !isSupabaseConfigured) {
-        const local = getMockInventory()
         const newRows: InventoryRow[] = rows.map((r, i) => ({
           inventory_id: `mock-import-${Date.now()}-${i}`,
           tag_id: r.tag_id,
@@ -328,32 +327,56 @@ export function useInventory() {
           create_date: new Date().toLocaleDateString('vi-VN'),
           stock_in_date: new Date().toISOString()
         }))
-        const merged = [...newRows, ...local]
-        saveMockInventory(merged)
-        inventoryData.value = merged
-        summaryData.value = generateMockSummary(merged)
+        // Tự động xóa sạch dữ liệu cũ và thay thế bằng dữ liệu mới từ file
+        saveMockInventory(newRows)
+        inventoryData.value = newRows
+        summaryData.value = generateMockSummary(newRows)
         updateMetrics()
         return
       }
 
       // Live Supabase
-      const chunkSize = 200
-      for (let i = 0; i < rows.length; i += chunkSize) {
-        const chunk = rows.slice(i, i + chunkSize).map(r => ({
-          tag_id: r.tag_id,
-          bin: r.bin
-        }))
-        const { error } = await supabase.from('inventory').insert(chunk)
-        if (error) throw error
+      // Thử gọi RPC replace_inventory nếu có
+      const { error: rpcErr } = await supabase.rpc('replace_inventory', { payload: rows })
+      if (rpcErr) {
+        console.warn('RPC replace_inventory không khả dụng, sử dụng fallback xóa sạch và chèn mới:', rpcErr.message)
+        // 1. Xóa toàn bộ dữ liệu cũ của bảng inventory
+        const { error: delErr } = await supabase
+          .from('inventory')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000')
+        if (delErr) {
+          console.warn('Xóa bằng id thất bại, thử xóa bằng tag_id:', delErr.message)
+          const { error: delErr2 } = await supabase
+            .from('inventory')
+            .delete()
+            .neq('tag_id', 'dummy_dummy_never_match')
+          if (delErr2) throw delErr2
+        }
+
+        // 2. Chèn toàn bộ dữ liệu mới theo từng chunk 200 dòng
+        const chunkSize = 200
+        for (let i = 0; i < rows.length; i += chunkSize) {
+          const chunk = rows.slice(i, i + chunkSize).map(r => ({
+            tag_id: r.tag_id,
+            bin: r.bin
+          }))
+          const { error: insErr } = await supabase.from('inventory').insert(chunk)
+          if (insErr) throw insErr
+        }
       }
+
       await fetchInventory()
     } catch (e: any) {
-      console.error(e)
-      throw new Error(e.message || 'Lỗi import CSV')
+      console.error('Lỗi làm mới tồn kho từ file:', e)
+      throw new Error(e.message || 'Lỗi cập nhật dữ liệu tồn kho từ file')
     } finally {
       loading.value = false
     }
   }
+
+  // Giữ alias importCsvData để tương thích ngược hoàn toàn
+  const importCsvData = replaceInventoryData
 
   // Xuất kho nhanh bằng ID ảo (an toàn không trùng)
   const deleteInventoryItem = async (inventoryId: string) => {
@@ -403,14 +426,29 @@ export function useInventory() {
       }
 
       // Live Supabase
-      const { error } = await supabase
-        .from('inventory')
-        .update({ tag_id: tagId, bin })
-        .eq('id', inventoryId)
-      if (error) throw error
+      if (inventoryId) {
+        const { error } = await supabase
+          .from('inventory')
+          .update({ tag_id: tagId, bin })
+          .eq('id', inventoryId)
+        if (error) {
+          console.warn('Cập nhật theo inventory_id thất bại, thử cập nhật theo tag_id:', error.message)
+          const { error: fbErr } = await supabase
+            .from('inventory')
+            .update({ bin })
+            .eq('tag_id', tagId)
+          if (fbErr) throw fbErr
+        }
+      } else {
+        const { error: fbErr } = await supabase
+          .from('inventory')
+          .update({ bin })
+          .eq('tag_id', tagId)
+        if (fbErr) throw fbErr
+      }
       await fetchInventory()
     } catch (e: any) {
-      console.error(e)
+      console.error('Lỗi cập nhật dòng tồn kho:', e)
       throw new Error(e.message || 'Lỗi cập nhật dòng tồn kho')
     } finally {
       loading.value = false
@@ -448,20 +486,38 @@ export function useInventory() {
       // Live Supabase RPC or Fallback
       const { error } = await supabase.rpc('replace_master_data', { payload })
       if (error) {
-        console.warn('RPC replace_master_data failed, falling back to manual delete & insert', error)
-        const { error: delErr } = await supabase.from('master_data').delete().neq('batch', 'dummy')
-        if (delErr) throw delErr
+        console.warn('RPC replace_master_data failed, falling back to manual delete & insert:', error.message)
+        // Xóa an toàn không phụ thuộc cột 'batch'
+        const { error: delErr } = await supabase
+          .from('master_data')
+          .delete()
+          .gte('qty', -999999999)
+        if (delErr) {
+          console.warn('Lỗi xóa master_data cũ, thử xóa điều kiện phụ:', delErr.message)
+          await supabase.from('master_data').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+        }
         
         const chunkSize = 200
         for (let i = 0; i < payload.length; i += chunkSize) {
           const chunk = payload.slice(i, i + chunkSize)
-          const { error: insErr } = await supabase.from('master_data').insert(chunk)
+          // Chuẩn hóa chunk để tương thích CẢ 2 bộ tên cột (tag_id/batch, lp_no/stock_code, wh_location/warehouse)
+          const mappedChunk = chunk.map(p => ({
+            batch: p.batch || p.tag_id || '',
+            tag_id: p.batch || p.tag_id || '',
+            stock_code: p.stock_code || p.lp_no || '',
+            lp_no: p.stock_code || p.lp_no || '',
+            qty: Number(p.qty) || 0,
+            warehouse: p.warehouse || p.wh_location || '',
+            wh_location: p.warehouse || p.wh_location || '',
+            create_date: p.create_date || ''
+          }))
+          const { error: insErr } = await supabase.from('master_data').insert(mappedChunk)
           if (insErr) throw insErr
         }
       }
       await fetchInventory()
     } catch (e: any) {
-      console.error(e)
+      console.error('Lỗi cập nhật dữ liệu nguồn:', e)
       throw new Error(e.message || 'Lỗi cập nhật dữ liệu nguồn')
     } finally {
       loading.value = false
@@ -482,6 +538,7 @@ export function useInventory() {
     setInventoryMetadataSpecs,
     fetchInventory,
     inbound,
+    replaceInventoryData,
     importCsvData,
     deleteInventoryItem,
     editInventoryItem,

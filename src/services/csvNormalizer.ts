@@ -8,20 +8,27 @@ function removeAccents(str: string): string {
 }
 
 // Clean and normalize a header string for matching
-function cleanHeader(header: string): string {
+export function cleanHeader(header: string): string {
   if (!header) return '';
   return removeAccents(header)
+    .replace(/[\uFEFF\u200B\u00A0]/g, '') // Bỏ UTF-8 BOM và khoảng trắng tàng hình
     .trim()
     .toLowerCase()
-    .replace(/[\s\-_./()]/g, ''); // Bỏ khoảng trắng, _, -, ., /, (, )
+    .replace(/[\s\-_./():,;"']/g, ''); // Bỏ khoảng trắng, _, -, ., /, (, ), :, ,, ;, ", '
 }
 
 // =============================================
 // INVENTORY CSV: map về tag_id + bin
 // =============================================
 const INVENTORY_ALIASES: Record<string, string[]> = {
-  tag_id: ['tagid', 'batch', 'lpno', 'code', 'barcode', 'tagid', 'tag'],
-  bin:    ['bin', 'location', 'vitri', 'vi_tri', 'kho', 'warehouse', 'loc']
+  tag_id: [
+    'tagid', 'tag_id', 'batch', 'lpno', 'code', 'barcode', 'tag',
+    'matag', 'ma_tag', 'makien', 'ma_kien', 'lot', 'solo', 'so_lo'
+  ],
+  bin: [
+    'bin', 'location', 'vitri', 'vi_tri', 'kho', 'warehouse', 'loc',
+    'vitrikho', 'vi_tri_kho', 'okho', 'o_kho'
+  ]
 };
 
 // =============================================
@@ -31,29 +38,28 @@ const INVENTORY_ALIASES: Record<string, string[]> = {
 // =============================================
 const MASTER_DATA_ALIASES: Record<string, string[]> = {
   batch: [
-    'batch', 'tagid', 'tag_id', 'code', 'barcode',
-    // CSV mẫu dùng "BATCH"
-    'BATCH'
+    'batch', 'tagid', 'tag_id', 'code', 'barcode', 'tag', 'matag', 'ma_tag',
+    'lot', 'lotno', 'solo', 'so_lo', 'malo', 'ma_lo', 'batchno', 'batch_no',
+    'makien', 'ma_kien', 'kien', 'BATCH'
   ],
   stock_code: [
-    'stockcode', 'lpno', 'lp_no', 'lpno(stockcode)', 'itemcode', 'productcode',
-    // CSV mẫu dùng "Stock Code"
-    'stockcode', 'stock code', 'stock_code'
+    'stockcode', 'lpno', 'lp_no', 'lpno(stockcode)', 'itemcode', 'item_code',
+    'productcode', 'product_code', 'stock code', 'stock_code', 'mahang', 'ma_hang',
+    'masanpham', 'ma_san_pham', 'partno', 'part_no', 'itemno', 'item_no'
   ],
   qty: [
-    'qty', 'quantity', 'soluong', 'so_luong', 'pcs', 'count',
-    // CSV mẫu dùng "Qty"
+    'qty', 'quantity', 'soluong', 'so_luong', 'pcs', 'count', 'actual',
+    'soluongthucte', 'so_luong_thuc_te', 'soluongton', 'so_luong_ton', 'sl',
     'Qty', 'QTY'
   ],
   warehouse: [
     'warehouse', 'wh', 'kho', 'whcode', 'whlocation', 'wh_location',
-    // CSV mẫu dùng "Warehouse"
-    'Warehouse', 'WAREHOUSE'
+    'makho', 'ma_kho', 'whse', 'location', 'Warehouse', 'WAREHOUSE'
   ],
   create_date: [
-    'createdate', 'create_date', 'date',
-    // CSV mẫu dùng "CREATEDATE"
-    'CREATEDATE', 'CreateDate', 'Create Date', 'createdatetime'
+    'createdate', 'create_date', 'date', 'ngaytao', 'ngay_tao', 'ngaynhap',
+    'ngay_nhap', 'creationdate', 'datecreated', 'CREATEDATE', 'CreateDate',
+    'Create Date', 'createdatetime'
   ]
 };
 

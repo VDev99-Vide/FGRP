@@ -393,7 +393,8 @@
       v-model:visible="showInboundModal"
       :inventory-data="inventoryData"
       @inbound="handleInboundSubmit"
-      @import-csv="handleCsvImportSubmit"
+      @import-excel="handleExcelImportSubmit"
+      @import-csv="handleExcelImportSubmit"
     />
 
     <!-- 2. Outbound Inventory Modal -->
@@ -557,7 +558,7 @@ const {
   setInventoryMetadataSpecs,
   fetchInventory,
   inbound,
-  importCsvData,
+  replaceInventoryData,
   deleteInventoryItem,
   editInventoryItem,
   replaceMasterData
@@ -888,21 +889,21 @@ const handleInboundSubmit = async (payload: { tagId: string; bin: string; option
   }
 }
 
-// Inbound CSV Import
-const handleCsvImportSubmit = async (rows: { tag_id: string; bin: string }[]) => {
+// Inbound Excel/File Import - Tự động xóa tồn kho cũ và làm mới bằng dữ liệu file
+const handleExcelImportSubmit = async (rows: { tag_id: string; bin: string }[]) => {
   try {
-    await importCsvData(rows)
+    await replaceInventoryData(rows)
     showInboundModal.value = false
     toast.add({
       severity: 'success',
-      summary: 'Nhập CSV thành công',
-      detail: `Đã nhập thêm ${rows.length} dòng tồn kho`,
+      summary: 'Làm mới kho thành công',
+      detail: `Đã xóa dữ liệu cũ và cập nhật ${rows.length} dòng tồn kho mới từ file`,
       life: 4000
     })
   } catch (e: any) {
     toast.add({
       severity: 'error',
-      summary: 'Lỗi import CSV',
+      summary: 'Lỗi làm mới tồn kho',
       detail: e.message,
       life: 4000
     })

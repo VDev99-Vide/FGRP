@@ -10,26 +10,26 @@
     <div class="space-y-4 pt-2">
       <div class="p-6 border-2 border-dashed border-[#CB3CFF]/40 rounded-xl bg-white/[0.04] backdrop-blur-md text-center">
         <label class="block text-xs font-bold text-[#CB3CFF] mb-3 uppercase tracking-wider">
-          Tải lên file: Stock Balance With Batch.csv
+          Tải lên file Excel: Stock Balance With Batch (.xlsx)
         </label>
         
         <input 
           type="file" 
           ref="fileInput" 
-          accept=".csv" 
+          accept=".xlsx, .xls, .csv" 
           @change="handleFileChange"
           class="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-[7px] file:border-0 file:text-xs file:font-bold file:bg-[#CB3CFF]/20 file:text-[#CB3CFF] hover:file:bg-[#CB3CFF]/30 cursor-pointer text-[#AEB9E1] mx-auto"
         />
 
         <p class="text-[10px] text-[#AEB9E1] mt-3 font-medium">
-          Lưu ý: Hành động này sẽ đồng bộ và cập nhật lại toàn bộ danh sách nguồn master data.
+          Hỗ trợ file Excel (.xlsx, .xls) hoặc CSV. Hệ thống sẽ tự động đối chiếu các cột và xóa dữ liệu cũ để cập nhật mới toàn bộ nguồn Master Data.
         </p>
       </div>
 
       <!-- Tin nhắn trạng thái -->
-      <p v-if="statusMsg" :class="['text-xs font-bold text-center h-4', statusClass]">{{ statusMsg }}</p>
+      <p v-if="statusMsg" :class="['text-xs font-bold text-center min-h-4 py-1', statusClass]">{{ statusMsg }}</p>
 
-      <!-- CSV Preview -->
+      <!-- CSV/Excel Preview -->
       <div v-if="previewRows.length > 0" class="p-4 border border-white/10 rounded-xl bg-white/[0.04] backdrop-blur-md space-y-3">
         <p class="text-[10px] font-bold text-[#AEB9E1] uppercase tracking-widest">Xem trước file tải lên</p>
         <div class="p-2 bg-white/5 rounded-[6px] text-xs font-bold text-center">
@@ -76,6 +76,7 @@
 import { ref, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import { normalizeCsvData } from '@/services/csvNormalizer'
 
 const props = defineProps<{
@@ -98,6 +99,29 @@ let finalPayload: any[] = []
 
 const statusClass = computed(() => isError.value ? 'text-[#FF5A65]' : 'text-[#00C2FF]')
 
+const processRawRows = (rawRows: Record<string, any>[]) => {
+  try {
+    const normalized = normalizeCsvData(rawRows, 'master_data')
+    finalPayload = normalized.filter(row => row.batch)
+
+    if (finalPayload.length === 0) {
+      const firstRow = rawRows[0] || {}
+      const detectedHeaders = Object.keys(firstRow).slice(0, 6).join(', ')
+      statusMsg.value = `File không có cột Batch/Tag ID hợp lệ! (Các cột tìm thấy: ${detectedHeaders || 'Rỗng'})`
+      isError.value = true
+      return
+    }
+
+    totalCount.value = finalPayload.length
+    previewRows.value = finalPayload.slice(0, 8)
+    statusMsg.value = `Đọc thành công ${totalCount.value} dòng. Vui lòng kiểm tra bản xem trước và bấm CẬP NHẬT.`
+    isError.value = false
+  } catch (e: any) {
+    statusMsg.value = 'Lỗi xử lý dữ liệu: ' + e.message
+    isError.value = true
+  }
+}
+
 const handleFileChange = (event: any) => {
   const file = event.target.files[0]
   if (!file) return
@@ -106,35 +130,41 @@ const handleFileChange = (event: any) => {
   isError.value = false
   previewRows.value = []
 
-  Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    complete: (results) => {
+  const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+
+  if (isExcel) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
       try {
-        const rawRows = results.data as Record<string, any>[]
-        const normalized = normalizeCsvData(rawRows, 'master_data')
-        
-        finalPayload = normalized.filter(row => row.batch)
-
-        if (finalPayload.length === 0) {
-          statusMsg.value = 'File không có dữ liệu Batch/Tag ID hợp lệ!'
-          isError.value = true
-          return
-        }
-
-        totalCount.value = finalPayload.length
-        previewRows.value = finalPayload.slice(0, 8)
-        statusMsg.value = 'Đọc file hoàn tất. Vui lòng kiểm tra bản xem trước.'
-      } catch (e: any) {
-        statusMsg.value = 'Lỗi xử lý file: ' + e.message
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const firstSheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[firstSheetName]
+        const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' })
+        processRawRows(rawRows)
+      } catch (err: any) {
+        statusMsg.value = 'Lỗi đọc file Excel: ' + err.message
         isError.value = true
       }
-    },
-    error: (err) => {
-      statusMsg.value = 'Lỗi parse CSV: ' + err.message
+    }
+    reader.onerror = () => {
+      statusMsg.value = 'Không thể đọc file Excel.'
       isError.value = true
     }
-  })
+    reader.readAsArrayBuffer(file)
+  } else {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        processRawRows(results.data as Record<string, any>[])
+      },
+      error: (err) => {
+        statusMsg.value = 'Lỗi parse CSV: ' + err.message
+        isError.value = true
+      }
+    })
+  }
 }
 
 const submit = () => {

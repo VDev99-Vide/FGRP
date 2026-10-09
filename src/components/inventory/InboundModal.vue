@@ -40,27 +40,47 @@
         <p v-if="manualMsg" class="text-xs font-bold text-center mt-3 text-[#14CA74]">{{ manualMsg }}</p>
       </div>
 
-      <!-- 2. Nhập file CSV -->
-      <div class="p-5 border border-[#00C2FF]/25 rounded-xl bg-white/[0.04] backdrop-blur-md">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="w-2 h-2 bg-[#00C2FF] rounded-full shadow-[0_0_6px_#00C2FF]"></span>
-          <p class="text-[11px] font-bold text-[#00C2FF] uppercase tracking-wider">
-            NHẬP BẰNG FILE CSV
-          </p>
+      <!-- 2. Nhập file Excel (.xlsx) -->
+      <div class="p-5 border border-[#00C2FF]/30 rounded-xl bg-white/[0.04] backdrop-blur-md space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 bg-[#00C2FF] rounded-full shadow-[0_0_6px_#00C2FF]"></span>
+            <p class="text-[11px] font-bold text-[#00C2FF] uppercase tracking-wider">
+              NHẬP BẰNG FILE EXCEL (.XLSX)
+            </p>
+          </div>
+          <span class="text-[10px] font-mono text-[#AEB9E1] px-2 py-0.5 bg-white/5 border border-white/10 rounded">
+            Thay thế toàn bộ
+          </span>
+        </div>
+
+        <!-- Cảnh báo cơ chế làm mới kho tự động -->
+        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-start gap-2.5">
+          <AlertCircle class="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+          <div>
+            <p class="font-bold">Làm mới kho tự động:</p>
+            <p class="text-[10px] text-amber-200/80 leading-relaxed mt-0.5">
+              Khi tải file lên, hệ thống sẽ <strong>tự động xóa sạch dữ liệu tồn kho cũ</strong> và <strong>thay thế bằng danh sách mới trong file</strong> (tương tự modal Cập Nhật Nguồn).
+            </p>
+          </div>
         </div>
         
         <!-- File Picker -->
         <div class="flex flex-col gap-2">
+          <label class="text-[10px] font-bold text-[#AEB9E1] uppercase">Chọn file Excel (.xlsx, .xls) hoặc CSV</label>
           <input 
             type="file" 
             ref="fileInput" 
-            accept=".csv" 
-            @change="handleCsvSelected"
+            accept=".xlsx, .xls, .csv" 
+            @change="handleFileSelected"
             class="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-[7px] file:border-0 file:text-xs file:font-bold file:bg-[#00C2FF]/20 file:text-[#00C2FF] hover:file:bg-[#00C2FF]/30 cursor-pointer text-[#AEB9E1]"
           />
+          <p class="text-[10px] text-[#AEB9E1]">
+            File cần có các cột: Tag ID (hoặc Mã kiện) và Vị trí (Bin).
+          </p>
         </div>
 
-        <!-- CSV Preview Section (Frosted Glass Table) -->
+        <!-- CSV/Excel Preview Section (Frosted Glass Table) -->
         <div v-if="csvPreview" class="mt-4 p-4 border border-white/10 rounded-xl bg-white/[0.04] backdrop-blur-md space-y-3">
           <p class="text-[10px] font-bold text-[#AEB9E1] uppercase tracking-widest">Xem trước file tải lên</p>
           <div class="grid grid-cols-3 gap-2 text-center text-xs font-bold">
@@ -84,7 +104,7 @@
               <thead class="bg-[#283241]/85 backdrop-blur-md sticky top-0 font-bold text-[#AEB9E1]">
                 <tr>
                   <th class="p-2">Tag ID</th>
-                  <th class="p-2">Bin</th>
+                  <th class="p-2">Vị Trí (Bin)</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-white/5 text-white">
@@ -99,9 +119,10 @@
           <div class="flex gap-2 pt-1">
             <button 
               @click="submitCsv"
-              class="flex-1 bg-[#00C2FF] hover:bg-[#00C2FF]/90 text-[#081028] font-bold py-2.5 rounded-[7px] text-xs transition cursor-pointer shadow-md"
+              class="flex-1 bg-[#00C2FF] hover:bg-[#00C2FF]/90 text-[#081028] font-bold py-2.5 rounded-[7px] text-xs transition cursor-pointer shadow-md flex items-center justify-center gap-1.5"
             >
-              XÁC NHẬN TẢI LÊN ({{ csvStats.valid }} dòng)
+              <RefreshCw class="w-3.5 h-3.5" />
+              <span>LÀM MỚI KHO TỪ FILE ({{ csvStats.valid }} dòng)</span>
             </button>
             <button 
               @click="cancelCsv"
@@ -154,8 +175,9 @@
 import { ref, reactive, nextTick } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import { HelpCircle } from 'lucide-vue-next'
+import { HelpCircle, RefreshCw, AlertCircle } from 'lucide-vue-next'
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import { normalizeCsvData } from '@/services/csvNormalizer'
 import { InventoryRow } from '@/types'
 
@@ -167,6 +189,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
   (e: 'inbound', payload: { tagId: string; bin: string; option: 'update' | 'insert' }): void
+  (e: 'import-excel', rows: { tag_id: string; bin: string }[]): void
   (e: 'import-csv', rows: { tag_id: string; bin: string }[]): void
 }>()
 
@@ -236,30 +259,54 @@ const resolveConflict = (option: 'update' | 'insert') => {
   })
 }
 
-const handleCsvSelected = (event: any) => {
+const processRawRows = (rawRows: Record<string, any>[]) => {
+  const normalized = normalizeCsvData(rawRows, 'inventory') as { tag_id: string; bin: string }[]
+  
+  finalCsvRows = normalized.filter(row => row.tag_id)
+  const invalidCount = normalized.length - finalCsvRows.length
+
+  csvStats.total = normalized.length
+  csvStats.valid = finalCsvRows.length
+  csvStats.invalid = invalidCount
+  csvPreview.value = finalCsvRows.slice(0, 8)
+}
+
+const handleFileSelected = (event: any) => {
   const file = event.target.files[0]
   if (!file) return
 
-  Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    complete: (results) => {
-      const rawRows = results.data as Record<string, any>[]
-      const normalized = normalizeCsvData(rawRows, 'inventory') as { tag_id: string; bin: string }[]
-      
-      finalCsvRows = normalized.filter(row => row.tag_id)
-      const invalidCount = normalized.length - finalCsvRows.length
+  const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
 
-      csvStats.total = normalized.length
-      csvStats.valid = finalCsvRows.length
-      csvStats.invalid = invalidCount
-      csvPreview.value = finalCsvRows.slice(0, 8)
+  if (isExcel) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const firstSheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[firstSheetName]
+        const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' })
+        processRawRows(rawRows)
+      } catch (err: any) {
+        console.error('Lỗi đọc Excel:', err)
+        csvPreview.value = null
+      }
     }
-  })
+    reader.readAsArrayBuffer(file)
+  } else {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        processRawRows(results.data as Record<string, any>[])
+      }
+    })
+  }
 }
 
 const submitCsv = () => {
   if (finalCsvRows.length > 0) {
+    emit('import-excel', finalCsvRows)
     emit('import-csv', finalCsvRows)
     cancelCsv()
   }
