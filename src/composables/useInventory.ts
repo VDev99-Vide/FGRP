@@ -96,8 +96,9 @@ export function useInventory() {
     loading.value = true
     try {
       // Live Supabase - Tải toàn bộ dữ liệu từ Views không giới hạn 1,000 dòng
+      // Dùng tag_id thay vì inventory_id để tận dụng btree index, tránh timeout (57014)
       const [detailRows, sumRows] = await Promise.all([
-        fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham', 'inventory_id'),
+        fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham', 'tag_id'),
         fetchAllFromSupabase<SummaryAnalysisRow>('vw_summary_analysis', 'feature')
       ])
 
@@ -344,13 +345,13 @@ export function useInventory() {
         const { error: delErr } = await supabase
           .from('inventory')
           .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000')
+          .not('id', 'is', null)
         if (delErr) {
           console.warn('Xóa bằng id thất bại, thử xóa bằng tag_id:', delErr.message)
           const { error: delErr2 } = await supabase
             .from('inventory')
             .delete()
-            .neq('tag_id', 'dummy_dummy_never_match')
+            .not('tag_id', 'is', null)
           if (delErr2) throw delErr2
         }
 
@@ -487,14 +488,21 @@ export function useInventory() {
       const { error } = await supabase.rpc('replace_master_data', { payload })
       if (error) {
         console.warn('RPC replace_master_data failed, falling back to manual delete & insert:', error.message)
-        // Xóa an toàn không phụ thuộc cột 'batch'
+        // Xóa an toàn: xóa theo batch / tag_id / qty (master_data không có cột id)
         const { error: delErr } = await supabase
           .from('master_data')
           .delete()
-          .gte('qty', -999999999)
+          .not('batch', 'is', null)
         if (delErr) {
-          console.warn('Lỗi xóa master_data cũ, thử xóa điều kiện phụ:', delErr.message)
-          await supabase.from('master_data').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+          console.warn('Lỗi xóa master_data cũ theo batch, thử xóa theo tag_id:', delErr.message)
+          const { error: delErr2 } = await supabase
+            .from('master_data')
+            .delete()
+            .not('tag_id', 'is', null)
+          if (delErr2) {
+            console.warn('Lỗi xóa master_data cũ theo tag_id, thử xóa theo qty:', delErr2.message)
+            await supabase.from('master_data').delete().gte('qty', -999999999)
+          }
         }
         
         const chunkSize = 200

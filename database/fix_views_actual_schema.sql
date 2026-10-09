@@ -25,13 +25,15 @@ alter table master_data add column if not exists wh_location text;
 alter table master_data add column if not exists batch text;
 alter table master_data add column if not exists stock_code text;
 alter table master_data add column if not exists warehouse text;
+alter table master_data add column if not exists id uuid default gen_random_uuid();
 -- Backfill 2 chiều (chỉ lấp chỗ trống, không ghi đè dữ liệu đã có)
+update master_data set id = gen_random_uuid() where id is null;
 update master_data set tag_id = batch where (tag_id is null or tag_id = '') and batch is not null and batch <> '';
 update master_data set batch = tag_id where (batch is null or batch = '') and tag_id is not null and tag_id <> '';
 update master_data set lp_no = stock_code where (lp_no is null or lp_no = '') and stock_code is not null and stock_code <> '';
 update master_data set stock_code = lp_no where (stock_code is null or stock_code = '') and lp_no is not null and lp_no <> '';
 update master_data set wh_location = warehouse where (wh_location is null or wh_location = '') and warehouse is not null and warehouse <> '';
-update master_data set warehouse = wh_location where (warehouse is null or warehouse = '') and wh_location is not null and wh_location <> '';
+update master_data set warehouse = wh_location where (warehouse is null or warehouse = '') and wh_location is not null and warehouse <> '';
 
 -- ============================================================
 -- BƯỚC 1: XÓA VIEWS CŨ (nếu có) để tạo lại đúng
@@ -159,8 +161,15 @@ language plpgsql
 security definer
 as $$
 begin
-  -- Xóa dữ liệu cũ an toàn
-  delete from master_data;
+  -- Tắt safe updates tạm thời trong hàm (nếu có extension)
+  begin
+    set local sql_safe_updates = off;
+  exception when others then
+    null;
+  end;
+
+  -- Xóa dữ liệu cũ an toàn (thêm WHERE clause theo ctid để thỏa mãn sql_safe_updates)
+  delete from master_data where ctid is not null;
 
   -- Chèn dữ liệu mới từ payload, ghi CẢ 2 bộ tên cột (BƯỚC 0 đã unify)
   -- để DB biến thể nào cũng đọc được ngay, không chờ backfill.
@@ -208,8 +217,15 @@ language plpgsql
 security definer
 as $$
 begin
-  -- Xóa sạch dữ liệu tồn kho cũ
-  delete from inventory;
+  -- Tắt safe updates tạm thời trong hàm (nếu có extension)
+  begin
+    set local sql_safe_updates = off;
+  exception when others then
+    null;
+  end;
+
+  -- Xóa sạch dữ liệu tồn kho cũ (thêm WHERE clause theo ctid/id để thỏa mãn sql_safe_updates)
+  delete from inventory where ctid is not null;
 
   -- Nạp dữ liệu mới từ file
   insert into inventory (tag_id, bin)

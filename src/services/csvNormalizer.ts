@@ -63,6 +63,42 @@ const MASTER_DATA_ALIASES: Record<string, string[]> = {
   ]
 };
 
+import * as XLSX from 'xlsx';
+
+// Helper để chuẩn hóa định dạng ngày từ Excel (kể cả số serial 46201) về dd/mm/yyyy
+export function formatDateValue(val: any): string {
+  if (val === null || val === undefined || val === '') return '';
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    const d = String(val.getUTCDate()).padStart(2, '0');
+    const m = String(val.getUTCMonth() + 1).padStart(2, '0');
+    const y = val.getUTCFullYear();
+    return `${d}/${m}/${y}`;
+  }
+  const s = String(val).trim();
+  // Nhận diện dãy số serial date của Excel (ví dụ: 46201, 46201.5 -> 28/06/2026)
+  if (/^\d{4,5}(\.\d+)?$/.test(s)) {
+    try {
+      const num = Number(s);
+      if (num >= 10000 && num <= 90000) {
+        const parsed = XLSX.SSF.parse_date_code(num);
+        if (parsed) {
+          const d = String(parsed.d).padStart(2, '0');
+          const m = String(parsed.m).padStart(2, '0');
+          const y = parsed.y;
+          return `${d}/${m}/${y}`;
+        }
+      }
+    } catch {}
+  }
+  // Nhận diện định dạng ISO YYYY-MM-DD
+  const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return s;
+}
+
 export function normalizeCsvData(
   rawRows: Record<string, any>[],
   type: 'inventory' | 'master_data'
@@ -95,6 +131,8 @@ export function normalizeCsvData(
           if (schemaKey === 'qty') {
             const parsedQty = parseFloat(String(val).replace(/,/g, ''));
             normalizedRow[schemaKey] = isNaN(parsedQty) ? 0 : parsedQty;
+          } else if (schemaKey === 'create_date') {
+            normalizedRow[schemaKey] = formatDateValue(val);
           } else {
             normalizedRow[schemaKey] = val !== null && val !== undefined
               ? String(val).trim()

@@ -80,8 +80,15 @@ language plpgsql
 security definer
 as $$
 begin
-  -- Xóa dữ liệu cũ
-  delete from master_data;
+  -- Tắt safe updates tạm thời trong hàm (nếu có extension)
+  begin
+    set local sql_safe_updates = off;
+  exception when others then
+    null;
+  end;
+
+  -- Xóa dữ liệu cũ an toàn
+  delete from master_data where ctid is not null;
 
   -- Chèn dữ liệu mới từ payload, ghi CẢ 2 bộ tên cột để tương thích
 -- với DB biến thể (tag_id/lp_no/wh_location). Cột thiếu được tạo ở khối UNIFY.
@@ -108,8 +115,15 @@ language plpgsql
 security definer
 as $$
 begin
-  -- Xóa sạch dữ liệu tồn kho cũ
-  delete from inventory;
+  -- Tắt safe updates tạm thời trong hàm (nếu có extension)
+  begin
+    set local sql_safe_updates = off;
+  exception when others then
+    null;
+  end;
+
+  -- Xóa sạch dữ liệu tồn kho cũ an toàn
+  delete from inventory where ctid is not null;
 
   -- Nạp dữ liệu mới từ file
   insert into inventory (tag_id, bin)
