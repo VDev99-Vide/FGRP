@@ -131,4 +131,69 @@ begin
   end;
 end $$;
 
-\echo '   OK: 9/9 nhóm assert chức năng PASS'
+-- 10. Cập nhật nguồn: token sai phải bị chặn
+do $$
+begin
+  begin
+    perform public.api_replace_master_data('sai-token', '[]'::jsonb, true);
+    raise exception 'FAIL: token sai không bị chặn (master)';
+  exception when others then
+    if sqlerrm <> 'Token không hợp lệ.' then raise; end if;
+  end;
+end $$;
+
+-- 11. dry-run master: đếm đúng, KHÔNG ghi dữ liệu (bỏ dòng batch rỗng)
+truncate public.master_data;
+insert into public.master_data (batch, stock_code) values ('OLD-M', 'OLD-S');
+do $$
+declare v integer;
+begin
+  v := public.api_replace_master_data(
+    'c20695cbfa064b3c98f6c376ff97f4d62d99bc5b',
+    '[{"batch":"B1","stock_code":"8101010104","qty":10,"warehouse":"1","create_date":"01/01/2026"},
+      {"batch":"","stock_code":"8101010104","qty":1},
+      {"batch":"B2","stock_code":"1220190004","qty":"20"}]'::jsonb,
+    true
+  );
+  if v <> 2 then raise exception 'FAIL: dry-run master trả % (kỳ vọng 2, bỏ dòng batch rỗng)', v; end if;
+  select count(*) into v from public.master_data;
+  if v <> 1 then raise exception 'FAIL: dry-run master đã ghi dữ liệu (count=%)', v; end if;
+end $$;
+
+-- 12. Ghi thật master: mapping đủ cột (batch+tag_id, stock_code+lp_no, warehouse+wh_location)
+do $$
+declare v integer;
+begin
+  v := public.api_replace_master_data(
+    'c20695cbfa064b3c98f6c376ff97f4d62d99bc5b',
+    '[{"batch":"B1","stock_code":"8101010104","qty":10,"warehouse":"1","create_date":"01/01/2026"},
+      {"batch":"","stock_code":"8101010104","qty":1},
+      {"batch":"B2","stock_code":"1220190004","qty":"20","warehouse":"60","create_date":"15/03/2026"}]'::jsonb,
+    false
+  );
+  if v <> 2 then raise exception 'FAIL: ghi thật master trả % (kỳ vọng 2)', v; end if;
+  select count(*) into v from public.master_data;
+  if v <> 2 then raise exception 'FAIL: master count = % (kỳ vọng 2)', v; end if;
+  select count(*) into v from public.master_data
+   where batch = 'B1' and tag_id = 'B1'
+     and stock_code = '8101010104' and lp_no = '8101010104'
+     and qty = 10 and warehouse = '1' and wh_location = '1'
+     and create_date = '01/01/2026';
+  if v <> 1 then raise exception 'FAIL: mapping cột master sai (B1)'; end if;
+end $$;
+
+-- 13. Kênh web (replace_master_data, không token) vẫn hoạt động + bỏ dòng batch rỗng
+do $$
+declare v integer;
+begin
+  perform public.replace_master_data(
+    '[{"batch":"WEB-B","stock_code":"9999999999","qty":5},
+      {"batch":"   ","stock_code":"8888888888","qty":1}]'::jsonb
+  );
+  select count(*) into v from public.master_data;
+  if v <> 1 then raise exception 'FAIL: replace_master_data (web) count = % (kỳ vọng 1)', v; end if;
+  select count(*) into v from public.master_data where batch = 'WEB-B';
+  if v <> 1 then raise exception 'FAIL: replace_master_data (web) sai dữ liệu'; end if;
+end $$;
+
+\echo '   OK: 13/13 nhóm assert chức năng PASS'

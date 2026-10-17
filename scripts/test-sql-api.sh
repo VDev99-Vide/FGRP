@@ -82,6 +82,24 @@ fi
 C=$(Q "select count(*) from public.inventory")
 [ "$C" = "2508" ] || { echo "FAIL: count sau chờ lock = $C"; exit 1; }
 
+echo "== [4c/5] Advisory lock master_data (khóa 738001,3) =="
+Q "truncate public.master_data" >/dev/null
+docker exec -i "$CONTAINER" psql -U postgres -q -c "begin; select pg_advisory_xact_lock(738001,3); select pg_sleep(2); commit;" >/dev/null &
+LOCK_PID=$!
+sleep 0.5
+START_MS=$(date +%s%3N)
+Q "select public.replace_master_data((select jsonb_agg(jsonb_build_object('batch','MB-'||i,'stock_code','8101'||lpad(i::text,6,'0'),'qty',i)) from generate_series(1,100) i))" >/dev/null
+END_MS=$(date +%s%3N)
+ELAPSED_MS2=$(( END_MS - START_MS ))
+wait "$LOCK_PID"
+echo "   lời gọi mất ${ELAPSED_MS2}ms (bắt đầu sau 0.5s, lock giữ 2s => phải >= ~1400ms)"
+if [ "$ELAPSED_MS2" -lt 1300 ]; then
+  echo "FAIL: replace_master_data không chờ advisory lock (${ELAPSED_MS2}ms)"
+  exit 1
+fi
+C=$(Q "select count(*) from public.master_data")
+[ "$C" = "100" ] || { echo "FAIL: master count sau chờ lock = $C"; exit 1; }
+
 echo "== [5/5] Assert chức năng API =="
 "${PSQL[@]}" < "$ROOT/scripts/sql/test_api.sql"
 
@@ -90,6 +108,7 @@ echo "============================================================"
 echo "PASS TOÀN BỘ: SQL API đã được kiểm chứng thật trên Postgres 16"
 echo "  - Bug cũ tái hiện:    2508 x 2 = 5016 (hàm không khóa)"
 echo "  - Hàm mới có lock:    2508 (5/5 vòng song song)"
-echo "  - Lời gọi thứ 2 chờ advisory lock: ${ELAPSED_MS}ms"
-echo "  - 9/9 nhóm assert chức năng PASS"
+echo "  - Lời gọi thứ 2 chờ advisory lock inventory: ${ELAPSED_MS}ms"
+echo "  - Lời gọi thứ 2 chờ advisory lock master_data: ${ELAPSED_MS2}ms"
+echo "  - 13/13 nhóm assert chức năng PASS"
 echo "============================================================"

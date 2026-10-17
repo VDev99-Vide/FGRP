@@ -90,9 +90,9 @@ Script SQL này bao gồm:
 
 Chạy thêm **một lần** [database/api_vba.sql](database/api_vba.sql) trong Supabase SQL Editor để:
 - Gia cố `replace_inventory`: advisory lock + chặn file trùng Tag ID + Bin (fix bug nhân đôi 2.508 → 5.016 dòng).
-- Tạo API cho VBA: `api_replace_inventory`, `api_import_shipping_forecast`, `api_healthcheck` (xác thực token + hỗ trợ dry-run).
+- Tạo API cho VBA: `api_replace_inventory`, `api_replace_master_data`, `api_import_shipping_forecast`, `api_healthcheck` (xác thực token + hỗ trợ dry-run).
 - Tạo khóa advisory cho `replace_master_data`.
 
-Hướng dẫn cài đặt và dùng module VBA: xem [vba/README.md](vba/README.md).
+Hướng dẫn cài đặt và dùng module VBA (lọc file nguồn 1 nút bấm cho Tồn Kho + Cập Nhật Nguồn): xem [vba/README.md](vba/README.md).
 Kiểm chứng API (read-only + dry-run): `node scripts/test-api-live.mjs`.
 Test SQL trên Postgres local (bằng chứng bug + fix): `bash scripts/test-sql-api.sh`.

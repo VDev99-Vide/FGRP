@@ -6,9 +6,10 @@
 -- Gồm 3 nhóm:
 --   A. Gia cố replace_inventory: advisory lock + chặn file trùng Tag ID+Bin
 --      (nguyên nhân bug 2.508 dòng -> 5.016 khi bấm nạp 1 lần).
---   B. API cho VBA: api_replace_inventory / api_import_shipping_forecast /
---      api_healthcheck — xác thực bằng import_token, hỗ trợ dry-run.
---   C. Khóa an toàn cho replace_master_data.
+--   B. API cho VBA: api_replace_inventory / api_replace_master_data /
+--      api_import_shipping_forecast / api_healthcheck — xác thực bằng
+--      import_token, hỗ trợ dry-run.
+--   C. Khóa an toàn cho replace_inventory + replace_master_data (kênh web).
 --
 -- Sau khi chạy xong, KHÔNG cần deploy gì thêm. VBA gọi trực tiếp HTTPS.
 -- Đổi token: update public.app_config set value = '<token-moi>' where key = 'import_token';
@@ -264,6 +265,89 @@ begin
 end;
 $$;
 
+-- A9. Chuẩn hóa payload master data -> (batch, stock_code, qty, warehouse, create_date)
+--     Nhận cả 2 tên trường (batch/tag_id, stock_code/lp_no, warehouse/wh_location…)
+create or replace function fg_internal.normalize_master_payload(payload jsonb)
+returns table(batch text, stock_code text, qty numeric, warehouse text, create_date text)
+language sql
+immutable
+set search_path = ''
+as $$
+  select
+    coalesce(
+      nullif(trim(item->>'batch'), ''),
+      nullif(trim(item->>'tag_id'), ''),
+      nullif(trim(item->>'BATCH'), '')
+    ) as batch,
+    coalesce(
+      nullif(trim(item->>'stock_code'), ''),
+      nullif(trim(item->>'lp_no'), ''),
+      nullif(trim(item->>'LP.No'), '')
+    ) as stock_code,
+    nullif(trim(item->>'qty'), '')::numeric as qty,
+    coalesce(
+      nullif(trim(item->>'warehouse'), ''),
+      nullif(trim(item->>'wh_location'), '')
+    ) as warehouse,
+    coalesce(
+      nullif(trim(item->>'create_date'), ''),
+      nullif(trim(item->>'createdate'), ''),
+      nullif(trim(item->>'CREATEDATE'), '')
+    ) as create_date
+  from jsonb_array_elements(payload) as item
+$$;
+
+-- A10. Validate payload master data: đếm số dòng có batch (bỏ dòng batch rỗng)
+create or replace function fg_internal.validate_master_payload(payload jsonb)
+returns integer
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_valid integer;
+begin
+  perform fg_internal.assert_payload_is_array(payload);
+
+  select count(*) into v_valid
+  from fg_internal.normalize_master_payload(payload) t
+  where t.batch is not null;
+
+  return v_valid;
+end;
+$$;
+
+-- A11. Thực thi thay thế toàn bộ master_data (đã khóa, bỏ dòng batch rỗng)
+create or replace function fg_internal.replace_master_data_impl(payload jsonb)
+returns integer
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_count integer;
+begin
+  begin
+    set local sql_safe_updates = off;
+  exception when others then
+    null;
+  end;
+
+  perform fg_internal.assert_payload_is_array(payload);
+
+  -- Khóa advisory theo transaction: cùng khóa với replace_master_data cũ (738001, 3)
+  perform pg_advisory_xact_lock(738001, 3);
+
+  delete from public.master_data where ctid is not null;
+
+  insert into public.master_data (tag_id, batch, lp_no, stock_code, qty, wh_location, warehouse, create_date)
+  select t.batch, t.batch, t.stock_code, t.stock_code, t.qty, t.warehouse, t.warehouse, t.create_date
+  from fg_internal.normalize_master_payload(payload) t
+  where t.batch is not null;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
 -- ============================================================
 -- B. API PUBLIC CHO VBA (PostgREST expose — gọi qua /rest/v1/rpc/)
 -- ============================================================
@@ -337,6 +421,28 @@ begin
 end;
 $$;
 
+-- B4. Cập nhật nguồn (MASTER DATA): thay thế toàn bộ (giống "CẬP NHẬT NGUỒN" trên web)
+create or replace function public.api_replace_master_data(
+  p_token text,
+  payload jsonb,
+  p_dry_run boolean default false
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform fg_internal.check_import_token(p_token);
+
+  if coalesce(p_dry_run, false) then
+    return fg_internal.validate_master_payload(payload);
+  end if;
+
+  return fg_internal.replace_master_data_impl(payload);
+end;
+$$;
+
 -- ============================================================
 -- C. GIA CỐ HÀM CŨ (WEB ĐANG DÙNG)
 -- ============================================================
@@ -353,7 +459,8 @@ begin
 end;
 $$;
 
--- C2. replace_master_data: thêm advisory lock chống chạy song song
+-- C2. replace_master_data: giữ nguyên chữ ký void cho web, thân đã khóa
+--     (advisory 738001,3) + bỏ dòng batch rỗng thay vì lỗi not-null
 create or replace function public.replace_master_data(payload jsonb)
 returns void
 language plpgsql
@@ -361,42 +468,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  begin
-    set local sql_safe_updates = off;
-  exception when others then
-    null;
-  end;
-
-  perform pg_advisory_xact_lock(738001, 3);
-
-  delete from public.master_data where ctid is not null;
-
-  insert into public.master_data (tag_id, batch, lp_no, stock_code, qty, wh_location, warehouse, create_date)
-  with vals as (
-    select
-      coalesce(
-        nullif(trim(item->>'batch'), ''),
-        nullif(trim(item->>'tag_id'), ''),
-        nullif(trim(item->>'BATCH'), '')
-      ) as b,
-      coalesce(
-        nullif(trim(item->>'stock_code'), ''),
-        nullif(trim(item->>'lp_no'), ''),
-        nullif(trim(item->>'LP.No'), '')
-      ) as c,
-      nullif(trim(item->>'qty'), '')::numeric as q,
-      coalesce(
-        nullif(trim(item->>'warehouse'), ''),
-        nullif(trim(item->>'wh_location'), '')
-      ) as w,
-      coalesce(
-        nullif(trim(item->>'create_date'), ''),
-        nullif(trim(item->>'createdate'), ''),
-        nullif(trim(item->>'CREATEDATE'), '')
-      ) as d
-    from jsonb_array_elements(payload) as item
-  )
-  select b, b, c, c, q, w, w, d from vals;
+  perform fg_internal.replace_master_data_impl(payload);
 end;
 $$;
 
@@ -406,6 +478,7 @@ $$;
 grant execute on function public.replace_inventory(jsonb) to anon, authenticated;
 grant execute on function public.replace_master_data(jsonb) to anon, authenticated;
 grant execute on function public.api_replace_inventory(text, jsonb, boolean) to anon, authenticated;
+grant execute on function public.api_replace_master_data(text, jsonb, boolean) to anon, authenticated;
 grant execute on function public.api_import_shipping_forecast(text, jsonb, text, boolean) to anon, authenticated;
 grant execute on function public.api_healthcheck(text) to anon, authenticated;
 

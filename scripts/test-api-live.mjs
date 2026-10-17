@@ -138,6 +138,21 @@ if (fcDry.status < 300 && Number(fcDry.text.trim()) === 1) {
   fail('dry-run kế hoạch xuất', `status=${fcDry.status} body=${fcDry.text.slice(0, 160)}`)
 }
 
+console.log('\n[5b] DRY-RUN cập nhật nguồn (2 dòng giả, 1 dòng thiếu batch)')
+const mdDry = await rpc('api_replace_master_data', {
+  p_token: TOKEN,
+  payload: [
+    { batch: 'DRY-BATCH-1', stock_code: '8101010104', qty: 10, warehouse: '60', create_date: '01/01/2027' },
+    { batch: '', stock_code: '8101010104', qty: 1 }
+  ],
+  p_dry_run: true
+})
+if (mdDry.status < 300 && Number(mdDry.text.trim()) === 1) {
+  ok('dry-run master bỏ dòng batch rỗng, trả đúng 1', mdDry.text.trim())
+} else {
+  fail('dry-run master', `status=${mdDry.status} body=${mdDry.text.slice(0, 160)}`)
+}
+
 console.log('\n[6] Xác nhận dry-run KHÔNG ghi dữ liệu')
 const invAfter = await count('inventory')
 const fcAfter = await count('shipping_forecast')
