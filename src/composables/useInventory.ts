@@ -8,6 +8,12 @@ import {
 import { InventoryRow, SummaryAnalysisRow, KpiState, AnalysisState } from '@/types'
 // T3: dùng module feature trung tâm (hard-code 1220), giữ re-export để không vỡ import cũ
 import { extractFeatureFromStockCode as extractFeatureCentral } from '@/utils/feature'
+import { createSingleFlight } from '@/utils/singleFlight'
+
+// Chống gọi song song thao tác "xóa toàn bộ + nạp mới" (nguyên nhân gây nhân đôi dữ liệu).
+// Khóa ở module-level: mọi instance useInventory() dùng chung 1 khóa.
+export const replaceInventoryFlight = createSingleFlight('Làm mới tồn kho từ file')
+export const replaceMasterFlight = createSingleFlight('Cập nhật dữ liệu nguồn')
 
 // Hàm trích xuất Feature (re-export centralize — giữ tên cũ cho tương thích):
 // - Mã 1220: lấy 4 số đầu '1220' (hard-code toàn hệ thống)
@@ -63,19 +69,23 @@ export function useInventory() {
   })
 
   // Hàm tải toàn bộ dữ liệu từ View Supabase (vượt qua giới hạn 1,000 dòng mặc định)
-  // orderColumn giữ thứ tự dòng ổn định giữa các trang .range() (tránh trùng/sót dòng khi phân trang)
-  const fetchAllFromSupabase = async <T>(viewName: string, orderColumn: string): Promise<T[]> => {
+  // orderColumn giữ thứ tự dòng ổn định giữa các trang .range() (tránh trùng/sót dòng khi phân trang).
+  // tieBreakerColumn: cột phụ đảm bảo thứ tự tuyệt đối ổn định khi orderColumn bị trùng giá trị.
+  const fetchAllFromSupabase = async <T>(viewName: string, orderColumn: string, tieBreakerColumn?: string): Promise<T[]> => {
     let allRows: T[] = []
     let from = 0
     const step = 1000
     let keepGoing = true
 
     while (keepGoing) {
-      const { data, error } = await supabase
+      let query = supabase
         .from(viewName)
         .select('*')
         .order(orderColumn, { ascending: true })
-        .range(from, from + step - 1)
+      if (tieBreakerColumn) {
+        query = query.order(tieBreakerColumn, { ascending: true })
+      }
+      const { data, error } = await query.range(from, from + step - 1)
 
       if (error) throw error
       if (data && data.length > 0) {
@@ -98,7 +108,7 @@ export function useInventory() {
       // Live Supabase - Tải toàn bộ dữ liệu từ Views không giới hạn 1,000 dòng
       // Dùng tag_id thay vì inventory_id để tận dụng btree index, tránh timeout (57014)
       const [detailRows, sumRows] = await Promise.all([
-        fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham', 'tag_id'),
+        fetchAllFromSupabase<InventoryRow>('vw_kho_thanh_pham', 'tag_id', 'inventory_id'),
         fetchAllFromSupabase<SummaryAnalysisRow>('vw_summary_analysis', 'feature')
       ])
 
@@ -313,67 +323,70 @@ export function useInventory() {
   }
 
   // Nhập kho bằng file Excel/CSV: tự động xóa toàn bộ dữ liệu cũ và thay thế bằng dữ liệu mới từ file
-  const replaceInventoryData = async (rows: { tag_id: string; bin: string }[]) => {
-    loading.value = true
-    try {
-      if (isDemoMode.value || !isSupabaseConfigured) {
-        const newRows: InventoryRow[] = rows.map((r, i) => ({
-          inventory_id: `mock-import-${Date.now()}-${i}`,
-          tag_id: r.tag_id,
-          bin: r.bin,
-          lp_no: '8101010104',
-          feature: extractFeatureFromStockCode('8101010104'),
-          qty: 250,
-          warehouse: '62',
-          create_date: new Date().toLocaleDateString('vi-VN'),
-          stock_in_date: new Date().toISOString()
-        }))
-        // Tự động xóa sạch dữ liệu cũ và thay thế bằng dữ liệu mới từ file
-        saveMockInventory(newRows)
-        inventoryData.value = newRows
-        summaryData.value = generateMockSummary(newRows)
-        updateMetrics()
-        return
-      }
+  // Bọc single-flight: mọi lời gọi thứ 2 trong lúc đang chạy sẽ bị từ chối (chống nhân đôi dữ liệu).
+  const replaceInventoryData = (rows: { tag_id: string; bin: string }[]) => {
+    return replaceInventoryFlight.run(async () => {
+      loading.value = true
+      try {
+        if (isDemoMode.value || !isSupabaseConfigured) {
+          const newRows: InventoryRow[] = rows.map((r, i) => ({
+            inventory_id: `mock-import-${Date.now()}-${i}`,
+            tag_id: r.tag_id,
+            bin: r.bin,
+            lp_no: '8101010104',
+            feature: extractFeatureFromStockCode('8101010104'),
+            qty: 250,
+            warehouse: '62',
+            create_date: new Date().toLocaleDateString('vi-VN'),
+            stock_in_date: new Date().toISOString()
+          }))
+          // Tự động xóa sạch dữ liệu cũ và thay thế bằng dữ liệu mới từ file
+          saveMockInventory(newRows)
+          inventoryData.value = newRows
+          summaryData.value = generateMockSummary(newRows)
+          updateMetrics()
+          return
+        }
 
-      // Live Supabase
-      // Thử gọi RPC replace_inventory nếu có
-      const { error: rpcErr } = await supabase.rpc('replace_inventory', { payload: rows })
-      if (rpcErr) {
-        console.warn('RPC replace_inventory không khả dụng, sử dụng fallback xóa sạch và chèn mới:', rpcErr.message)
-        // 1. Xóa toàn bộ dữ liệu cũ của bảng inventory
-        const { error: delErr } = await supabase
-          .from('inventory')
-          .delete()
-          .not('id', 'is', null)
-        if (delErr) {
-          console.warn('Xóa bằng id thất bại, thử xóa bằng tag_id:', delErr.message)
-          const { error: delErr2 } = await supabase
+        // Live Supabase
+        // Thử gọi RPC replace_inventory nếu có
+        const { error: rpcErr } = await supabase.rpc('replace_inventory', { payload: rows })
+        if (rpcErr) {
+          console.warn('RPC replace_inventory không khả dụng, sử dụng fallback xóa sạch và chèn mới:', rpcErr.message)
+          // 1. Xóa toàn bộ dữ liệu cũ của bảng inventory
+          const { error: delErr } = await supabase
             .from('inventory')
             .delete()
-            .not('tag_id', 'is', null)
-          if (delErr2) throw delErr2
+            .not('id', 'is', null)
+          if (delErr) {
+            console.warn('Xóa bằng id thất bại, thử xóa bằng tag_id:', delErr.message)
+            const { error: delErr2 } = await supabase
+              .from('inventory')
+              .delete()
+              .not('tag_id', 'is', null)
+            if (delErr2) throw delErr2
+          }
+
+          // 2. Chèn toàn bộ dữ liệu mới theo từng chunk 200 dòng
+          const chunkSize = 200
+          for (let i = 0; i < rows.length; i += chunkSize) {
+            const chunk = rows.slice(i, i + chunkSize).map(r => ({
+              tag_id: r.tag_id,
+              bin: r.bin
+            }))
+            const { error: insErr } = await supabase.from('inventory').insert(chunk)
+            if (insErr) throw insErr
+          }
         }
 
-        // 2. Chèn toàn bộ dữ liệu mới theo từng chunk 200 dòng
-        const chunkSize = 200
-        for (let i = 0; i < rows.length; i += chunkSize) {
-          const chunk = rows.slice(i, i + chunkSize).map(r => ({
-            tag_id: r.tag_id,
-            bin: r.bin
-          }))
-          const { error: insErr } = await supabase.from('inventory').insert(chunk)
-          if (insErr) throw insErr
-        }
+        await fetchInventory()
+      } catch (e: any) {
+        console.error('Lỗi làm mới tồn kho từ file:', e)
+        throw new Error(e.message || 'Lỗi cập nhật dữ liệu tồn kho từ file')
+      } finally {
+        loading.value = false
       }
-
-      await fetchInventory()
-    } catch (e: any) {
-      console.error('Lỗi làm mới tồn kho từ file:', e)
-      throw new Error(e.message || 'Lỗi cập nhật dữ liệu tồn kho từ file')
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   // Giữ alias importCsvData để tương thích ngược hoàn toàn
@@ -457,7 +470,12 @@ export function useInventory() {
   }
 
   // Upload Master Data
-  const replaceMasterData = async (payload: any[]) => {
+  // Bọc single-flight tương tự replaceInventoryData (cùng cơ chế xóa sạch + nạp mới).
+  const replaceMasterData = (payload: any[]) => {
+    return replaceMasterFlight.run(() => replaceMasterDataInner(payload))
+  }
+
+  const replaceMasterDataInner = async (payload: any[]) => {
     loading.value = true
     try {
       if (isDemoMode.value || !isSupabaseConfigured) {

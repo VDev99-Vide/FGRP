@@ -108,12 +108,17 @@ $$;
 
 -- ==========================================
 -- 4b. RPC LÀM MỚI TỒN KHO TỪ FILE (REPLACE_INVENTORY)
+-- ĐÃ GIA CỐ (fix nhân đôi dữ liệu): advisory lock + chặn file trùng Tag ID+Bin.
+-- Bản đầy đủ kèm API cho VBA nằm trong database/api_vba.sql
 -- ==========================================
 create or replace function replace_inventory(payload jsonb)
 returns void
 language plpgsql
 security definer
 as $$
+declare
+  v_dup_groups integer;
+  v_dup_example text;
 begin
   -- Tắt safe updates tạm thời trong hàm (nếu có extension)
   begin
@@ -121,6 +126,26 @@ begin
   exception when others then
     null;
   end;
+
+  -- Chặn file có cặp Tag ID + Bin trùng lặp
+  select count(*), min(t.tag_id || ' | ' || t.bin || ' (x' || t.c || ')')
+    into v_dup_groups, v_dup_example
+  from (
+    select
+      coalesce(nullif(trim(item->>'tag_id'), ''), nullif(trim(item->>'batch'), '')) as tag_id,
+      coalesce(trim(item->>'bin'), '') as bin,
+      count(*) as c
+    from jsonb_array_elements(payload) as item
+    group by 1, 2
+    having count(*) > 1
+  ) t;
+
+  if v_dup_groups > 0 then
+    raise exception 'File có % nhóm Tag ID + Bin bị trùng (ví dụ: %). Vui lòng sửa file trước khi nạp.', v_dup_groups, v_dup_example;
+  end if;
+
+  -- Khóa advisory: 2 lời gọi song song xếp hàng thay vì cùng xóa rồi cùng chèn
+  perform pg_advisory_xact_lock(738001, 1);
 
   -- Xóa sạch dữ liệu tồn kho cũ an toàn
   delete from inventory where ctid is not null;

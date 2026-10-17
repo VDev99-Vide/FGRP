@@ -392,9 +392,9 @@
     <InboundModal 
       v-model:visible="showInboundModal"
       :inventory-data="inventoryData"
+      :loading="loading"
       @inbound="handleInboundSubmit"
       @import-excel="handleExcelImportSubmit"
-      @import-csv="handleExcelImportSubmit"
     />
 
     <!-- 2. Outbound Inventory Modal -->

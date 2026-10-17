@@ -116,13 +116,24 @@
             </table>
           </div>
 
+          <!-- Cảnh báo file trùng Tag ID + Bin: chặn nạp, yêu cầu sửa file -->
+          <div v-if="csvError" class="p-3 rounded-xl bg-[#FF5A65]/10 border border-[#FF5A65]/40 text-[11px] text-[#FF5A65] flex items-start gap-2.5">
+            <AlertCircle class="w-4 h-4 shrink-0 text-[#FF5A65] mt-0.5" />
+            <div>
+              <p class="font-bold">File không hợp lệ — có dòng trùng lặp:</p>
+              <p class="text-[10px] leading-relaxed mt-0.5 whitespace-pre-line">{{ csvError }}</p>
+            </div>
+          </div>
+
           <div class="flex gap-2 pt-1">
             <button 
               @click="submitCsv"
-              class="flex-1 bg-[#00C2FF] hover:bg-[#00C2FF]/90 text-[#081028] font-bold py-2.5 rounded-[7px] text-xs transition cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+              :disabled="isBusy || !!csvError"
+              class="flex-1 bg-[#00C2FF] hover:bg-[#00C2FF]/90 text-[#081028] font-bold py-2.5 rounded-[7px] text-xs transition cursor-pointer shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCw class="w-3.5 h-3.5" />
-              <span>LÀM MỚI KHO TỪ FILE ({{ csvStats.valid }} dòng)</span>
+              <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isBusy }" />
+              <span v-if="isBusy">ĐANG NẠP DỮ LIỆU...</span>
+              <span v-else>LÀM MỚI KHO TỪ FILE ({{ csvStats.valid }} dòng)</span>
             </button>
             <button 
               @click="cancelCsv"
@@ -172,25 +183,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import { HelpCircle, RefreshCw, AlertCircle } from 'lucide-vue-next'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
-import { normalizeCsvData } from '@/services/csvNormalizer'
+import { normalizeCsvData, findDuplicateInventoryRows } from '@/services/csvNormalizer'
 import { InventoryRow } from '@/types'
 
 const props = defineProps<{
   visible: boolean
   inventoryData: InventoryRow[]
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
   (e: 'inbound', payload: { tagId: string; bin: string; option: 'update' | 'insert' }): void
   (e: 'import-excel', rows: { tag_id: string; bin: string }[]): void
-  (e: 'import-csv', rows: { tag_id: string; bin: string }[]): void
 }>()
 
 const bin = ref('')
@@ -204,8 +215,28 @@ const conflictExistingBin = ref('')
 
 const fileInput = ref<any>(null)
 const csvPreview = ref<any[] | null>(null)
-const csvStats = reactive({ total: 0, valid: 0, invalid: 0 })
+const csvError = ref('')
+/** Khóa chống double-click ngay tại modal (lớp bảo vệ thứ nhất) */
+const submitting = ref(false)
+const isBusy = computed(() => submitting.value || Boolean(props.loading))
+const csvStats = reactive({ total: 0, valid: 0, invalid: 0, duplicateGroups: 0, duplicateRows: 0 })
 let finalCsvRows: { tag_id: string; bin: string }[] = []
+
+// Đóng/mở modal: reset trạng thái khóa để lần sau dùng bình thường
+watch(() => props.visible, (val) => {
+  if (!val) {
+    submitting.value = false
+    cancelCsv()
+  }
+})
+
+// Nếu cha xử lý xong (loading true -> false) mà modal vẫn mở (tức là lỗi),
+// tự mở khóa để người dùng bấm lại — tránh kẹt nút vĩnh viễn.
+watch(() => props.loading, (now, before) => {
+  if (before && !now) {
+    submitting.value = false
+  }
+})
 
 const focusTag = () => {
   if (tagInput.value) {
@@ -265,9 +296,26 @@ const processRawRows = (rawRows: Record<string, any>[]) => {
   finalCsvRows = normalized.filter(row => row.tag_id)
   const invalidCount = normalized.length - finalCsvRows.length
 
+  // Chặn file có cặp Tag ID + Bin trùng lặp — yêu cầu sửa file trước khi nạp
+  const dup = findDuplicateInventoryRows(finalCsvRows)
+
   csvStats.total = normalized.length
   csvStats.valid = finalCsvRows.length
   csvStats.invalid = invalidCount
+  csvStats.duplicateGroups = dup.duplicateGroups
+  csvStats.duplicateRows = dup.duplicateRows
+
+  if (dup.duplicateGroups > 0) {
+    const sampleText = dup.samples
+      .map(s => `• ${s.tag_id} | ${s.bin || '(trống)'} — xuất hiện ${s.count} lần`)
+      .join('\n')
+    csvError.value =
+      `Phát hiện ${dup.duplicateRows} dòng dư do trùng cặp Tag ID + Bin (${dup.duplicateGroups} nhóm).\n` +
+      `Vui lòng sửa file trước khi nạp. Ví dụ:\n${sampleText}`
+  } else {
+    csvError.value = ''
+  }
+
   csvPreview.value = finalCsvRows.slice(0, 8)
 }
 
@@ -305,18 +353,27 @@ const handleFileSelected = (event: any) => {
 }
 
 const submitCsv = () => {
-  if (finalCsvRows.length > 0) {
-    emit('import-excel', finalCsvRows)
-    emit('import-csv', finalCsvRows)
-    cancelCsv()
-  }
+  // Guard đa lớp: không nạp khi đang bận, file lỗi hoặc không có dòng hợp lệ.
+  // Chỉ phát DUY NHẤT 1 event import-excel cho 1 lần bấm (nguyên nhân cũ gây x2 dữ liệu
+  // là emit cả import-excel lẫn import-csv khiến handler cha chạy 2 lần song song).
+  if (isBusy.value || csvError.value || finalCsvRows.length === 0) return
+  submitting.value = true
+  emit('import-excel', finalCsvRows)
+  // Giữ nguyên preview để nếu cha báo lỗi người dùng bấm lại được ngay.
+  // Preview sẽ được dọn tự động khi modal đóng (watch visible).
 }
 
 const cancelCsv = () => {
   csvPreview.value = null
+  csvError.value = ''
   finalCsvRows = []
+  csvStats.duplicateGroups = 0
+  csvStats.duplicateRows = 0
   if (fileInput.value) {
     fileInput.value.value = ''
   }
 }
+
+// Mở cho unit test gọi trực tiếp (không ảnh hưởng runtime)
+defineExpose({ processRawRows, submitCsv, cancelCsv, csvError, csvStats, submitting })
 </script>

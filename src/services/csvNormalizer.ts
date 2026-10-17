@@ -159,6 +159,47 @@ export function filterValidInventoryRows(rows: any[]): { tag_id: string; bin: st
     }));
 }
 
+// =============================================
+// DUPLICATE CHECK (INVENTORY): phát hiện cặp Tag ID + Bin bị lặp trong file
+// =============================================
+export interface DuplicateInventoryInfo {
+  /** Số nhóm (tag_id + bin) xuất hiện nhiều hơn 1 lần */
+  duplicateGroups: number
+  /** Số dòng dư thừa nếu bỏ trùng (tổng dòng - số nhóm) */
+  duplicateRows: number
+  /** Vài ví dụ để hiển thị cho người dùng */
+  samples: { tag_id: string; bin: string; count: number }[]
+}
+
+export function findDuplicateInventoryRows(
+  rows: { tag_id: string; bin: string }[]
+): DuplicateInventoryInfo {
+  const map = new Map<string, { tag_id: string; bin: string; count: number }>()
+
+  for (const row of rows || []) {
+    const tagId = String(row?.tag_id || '').trim()
+    if (!tagId) continue
+    const bin = String(row?.bin || '').trim()
+    const key = `${tagId}\u0000${bin}`
+    const hit = map.get(key)
+    if (hit) {
+      hit.count++
+    } else {
+      map.set(key, { tag_id: tagId, bin, count: 1 })
+    }
+  }
+
+  const duplicates = Array.from(map.values())
+    .filter(item => item.count > 1)
+    .sort((a, b) => b.count - a.count)
+
+  return {
+    duplicateGroups: duplicates.length,
+    duplicateRows: duplicates.reduce((sum, item) => sum + (item.count - 1), 0),
+    samples: duplicates.slice(0, 5)
+  }
+}
+
 export function filterValidMasterDataRows(rows: any[]): any[] {
   return rows
     .filter(r => r.batch && r.batch.trim() !== '' && r.stock_code && r.stock_code.trim() !== '')
