@@ -119,11 +119,15 @@ export function useShippingForecast() {
           const isSpec = (row.is_special !== undefined && row.is_special !== null)
             ? Boolean(row.is_special)
             : isSpecialStockCode(code)
-          const unitType: 'kien' | 'thung' = row.unit_type || (isAcc ? 'thung' : 'kien')
+          const rawUnitStr = String(row.unit_type || '')
+          const [cleanUnitPart, whFromUnit] = rawUnitStr.split('|wh:')
+          const unitType: 'kien' | 'thung' = cleanUnitPart === 'thung' ? 'thung' : (cleanUnitPart === 'kien' ? 'kien' : (isAcc ? 'thung' : 'kien'))
+          const warehouseVal = String(row.warehouse ?? whFromUnit ?? '').trim()
 
           return {
             ...row,
             feature: feat,
+            warehouse: warehouseVal,
             pcs_per_pkg: pcs,
             is_accessory: isAcc,
             is_special: isSpec,
@@ -204,6 +208,7 @@ export function useShippingForecast() {
           feature,
           loading_date: (it.loading_date || '').trim(),
           qty: Number(it.qty) || 0,
+          warehouse: String(it.warehouse ?? '').trim(),
           pcs_per_pkg: pcs,
           pkg: Number(it.pkg) || 0,
           is_accessory: isAcc,
@@ -222,6 +227,25 @@ export function useShippingForecast() {
           .from('shipping_forecast')
           .insert(preparedItems)
 
+        // Tự động tương thích ngược nếu schema cache trên Supabase chưa cập nhật cột warehouse
+        if (error && (
+          error.message?.includes('warehouse') ||
+          error.message?.includes('schema cache') ||
+          error.code === 'PGRST204'
+        )) {
+          const noWhItems = preparedItems.map(it => {
+            const { warehouse, ...rest } = it
+            return {
+              ...rest,
+              unit_type: warehouse ? (`${it.unit_type || 'kien'}|wh:${warehouse}` as any) : it.unit_type,
+            }
+          })
+          const retryWh = await supabase
+            .from('shipping_forecast')
+            .insert(noWhItems)
+          error = retryWh.error
+        }
+
         // Tự động tương thích ngược nếu schema cache trên Supabase chưa có cột is_accessory/unit_type
         if (error && (
           error.message?.includes('is_accessory') ||
@@ -229,9 +253,9 @@ export function useShippingForecast() {
           error.code === 'PGRST204' ||
           error.message?.includes('column')
         )) {
-          console.warn('⚠️ Supabase schema cache chưa có cột is_accessory. Tự động insert danh sách các trường cơ bản...', error.message)
+          console.warn('⚠️ Supabase schema cache chưa có cột mở rộng. Tự động insert danh sách các trường cơ bản...', error.message)
           const fallbackItems = preparedItems.map(it => {
-            const { is_accessory, is_special, unit_type, ...rest } = it
+            const { warehouse, is_accessory, is_special, unit_type, ...rest } = it
             return rest
           })
           const retryRes = await supabase
@@ -293,6 +317,7 @@ export function useShippingForecast() {
       const payload: ForecastRawItem = {
         ...updatedItem,
         feature,
+        warehouse: String(updatedItem.warehouse ?? '').trim(),
         is_accessory: isAcc,
         is_special: isSpec,
         unit_type: unitType,
@@ -300,10 +325,28 @@ export function useShippingForecast() {
       }
 
       if (isSupabaseConfigured && updatedItem.id && !updatedItem.id.startsWith('demo-')) {
+        const { missingSpec: _ms, ...dbPayload } = payload as ForecastRawItem & { missingSpec?: boolean }
         let { error } = await supabase
           .from('shipping_forecast')
-          .update(payload)
+          .update(dbPayload)
           .eq('id', updatedItem.id)
+
+        // Fallback nếu schema cache chưa có cột warehouse
+        if (error && (
+          error.message?.includes('warehouse') ||
+          error.message?.includes('schema cache') ||
+          error.code === 'PGRST204'
+        )) {
+          const { warehouse, ...noWhPayload } = dbPayload
+          const retryWh = await supabase
+            .from('shipping_forecast')
+            .update({
+              ...noWhPayload,
+              unit_type: warehouse ? (`${unitType}|wh:${warehouse}` as any) : unitType,
+            })
+            .eq('id', updatedItem.id)
+          error = retryWh.error
+        }
 
         // Fallback nếu schema cache chưa có cột mới
         if (error && (
@@ -312,8 +355,8 @@ export function useShippingForecast() {
           error.code === 'PGRST204' ||
           error.message?.includes('column')
         )) {
-          console.warn('⚠️ Supabase schema cache chưa có cột is_accessory khi cập nhật. Thử cập nhật các cột cơ bản...', error.message)
-          const { is_accessory, is_special, unit_type, ...legacyPayload } = payload
+          console.warn('⚠️ Supabase schema cache chưa có cột mở rộng khi cập nhật. Thử cập nhật các cột cơ bản...', error.message)
+          const { warehouse, is_accessory, is_special, unit_type, ...legacyPayload } = dbPayload
           const retryRes = await supabase
             .from('shipping_forecast')
             .update(legacyPayload)
@@ -433,6 +476,77 @@ export function useShippingForecast() {
   }
 
   /**
+   * Đánh dấu các dòng (line/feature items) đã chọn là "Chuẩn bị xong" (ready)
+   * Các line cùng PO+SO sẽ tự đồng bộ vào cùng 1 Group bên tab Đã xong.
+   * Các line chưa chọn vẫn ở lại Group bên tab Chờ chuẩn bị.
+   */
+  const markItemsReady = async (ids: string[], switchTab = false) => {
+    if (!ids || ids.length === 0) return
+    const nowIso = new Date().toISOString()
+    const idSet = new Set(ids.map(String))
+    const targetItems = forecastItems.value.filter(it => it.id && idSet.has(String(it.id)))
+    if (targetItems.length === 0) return
+
+    const realIds = ids.filter(id => id && !id.startsWith('demo-') && !id.startsWith('fc-'))
+    if (isSupabaseConfigured && realIds.length > 0) {
+      const { error } = await supabase
+        .from('shipping_forecast')
+        .update({
+          status: 'ready',
+          status_changed_at: nowIso,
+          updated_at: nowIso
+        })
+        .in('id', realIds)
+
+      if (error) throw error
+    }
+
+    targetItems.forEach(it => {
+      it.status = 'ready'
+      it.status_changed_at = nowIso
+    })
+    forecastItems.value = [...forecastItems.value]
+    if (switchTab) {
+      statusFilter.value = 'ready'
+    }
+  }
+
+  /**
+   * Khôi phục các dòng (line/feature items) đã chọn về "Chờ chuẩn bị" (pending)
+   * Tự động đồng bộ lại với Group cùng PO+SO bên tab Chờ chuẩn bị.
+   */
+  const revertItemsPending = async (ids: string[], switchTab = false) => {
+    if (!ids || ids.length === 0) return
+    const nowIso = new Date().toISOString()
+    const idSet = new Set(ids.map(String))
+    const targetItems = forecastItems.value.filter(it => it.id && idSet.has(String(it.id)))
+    if (targetItems.length === 0) return
+
+    const realIds = ids.filter(id => id && !id.startsWith('demo-') && !id.startsWith('fc-'))
+    if (isSupabaseConfigured && realIds.length > 0) {
+      const { error } = await supabase
+        .from('shipping_forecast')
+        .update({
+          status: 'pending',
+          status_changed_at: null,
+          updated_at: nowIso
+        })
+        .in('id', realIds)
+
+      if (error) throw error
+    }
+
+    targetItems.forEach(it => {
+      it.status = 'pending'
+      it.status_changed_at = null
+    })
+    forecastItems.value = [...forecastItems.value]
+    if (switchTab) {
+      statusFilter.value = 'pending'
+    }
+  }
+
+  /**
    * Đánh dấu Container "Chuẩn bị xong"
    * Chuyển trạng thái sang 'ready', ghi nhận status_changed_at. ĐÃ BỎ auto-xóa 3 ngày.
    */
@@ -530,12 +644,15 @@ export function useShippingForecast() {
         const itemStr = [
           item.item_code,
           item.feature,
+          item.warehouse,
           item.po,
           item.so,
           item.is_accessory ? 'accessories phukien' : '',
           item.is_special ? 'special 1220' : ''
         ].join(' ').toLowerCase()
         return itemStr.includes(q)
+      }) || container.featureGroups.some(fg => {
+        return String(fg.warehouseLabel || '').toLowerCase().includes(q)
       })
 
       return hasMatchingChild
@@ -545,7 +662,8 @@ export function useShippingForecast() {
   // Thống kê tổng hợp
   const stats = computed(() => {
     const containers = allGroupedContainers.value
-    const totalContainers = containers.length
+    const uniquePoSo = new Set(containers.map(c => `${c.po}___${c.so}`))
+    const totalContainers = uniquePoSo.size
     const totalPkg = containers.reduce((s, c) => s + c.totalPkg, 0)
     const totalBoxes = containers.reduce((s, c) => s + c.totalBoxes, 0)
     const totalQty = containers.reduce((s, c) => s + c.totalQty, 0)
@@ -585,6 +703,8 @@ export function useShippingForecast() {
     deleteForecastItem,
     deleteForecastItems,
     deleteContainer,
+    markItemsReady,
+    revertItemsPending,
     markContainerReady,
     revertContainerPending,
     clearAllForecastData,

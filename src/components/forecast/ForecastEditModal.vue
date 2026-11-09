@@ -61,7 +61,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-3 gap-3">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <!-- Container No -->
             <div>
               <label class="block text-[11px] font-semibold text-[#AEB9E1] mb-1">Số Cont</label>
@@ -70,6 +70,17 @@
                 type="text" 
                 placeholder="TGHU-882103"
                 class="w-full h-[36px] px-3 bg-[#18202D]/90 border border-white/15 rounded-lg text-xs text-white outline-none focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition font-mono"
+              >
+            </div>
+
+            <!-- Kho xuất (WH) -->
+            <div>
+              <label class="block text-[11px] font-semibold text-[#AEB9E1] mb-1">Kho Xuất (WH)</label>
+              <input 
+                v-model="editForm.warehouse"
+                type="text" 
+                placeholder="60, 01 hoặc 1=01;43=60"
+                class="w-full h-[36px] px-3 bg-[#18202D]/90 border border-white/15 rounded-lg text-xs text-[#FDB52A] font-bold outline-none focus:border-[#FDB52A] focus:ring-1 ring-[#FDB52A] transition font-mono"
               >
             </div>
 
@@ -192,7 +203,7 @@
               Tổng số lượng: <b class="text-[#14CA74] font-mono">{{ calculatedTotalQty.toLocaleString() }}</b> PCS
             </span>
             <p class="text-[10px] text-[#AEB9E1] mt-0.5">
-              Quy cách: {{ calculatedPcsPerPkg }} PCS/PKG | Feature: {{ previewFeature }}
+              Quy cách: {{ calculatedPcsPerPkg }} PCS/PKG | Feature: {{ previewFeature }} | Kho xuất: <b class="text-[#FDB52A]">{{ previewWarehouseLabel }}</b>
             </p>
           </div>
 
@@ -257,6 +268,7 @@ import {
   extractFeatureFromItemCode, 
   isSpecialStockCode, 
   calculateFeaturePkg,
+  formatWarehouseDisplay,
   ForecastRawItem, 
   ForecastFeatureGroup, 
   ForecastContainerGroup 
@@ -267,6 +279,7 @@ interface EditGroupFormState {
   po: string
   so: string
   container_no: string
+  warehouse: string
   loading_date: string
   status: 'pending' | 'ready'
   feature: string
@@ -301,6 +314,7 @@ watch(() => [props.visible, props.group, props.container], () => {
       po: props.container.po,
       so: props.container.so,
       container_no: props.container.container_no || '',
+      warehouse: props.group.warehouse || props.group.items[0]?.warehouse || '',
       loading_date: props.container.loading_date,
       status: props.container.status || 'pending',
       feature: props.group.feature,
@@ -346,6 +360,11 @@ const calculatedPkgCount = computed(() => {
   )
 })
 
+const previewWarehouseLabel = computed(() => {
+  if (!editForm.value) return '—'
+  return formatWarehouseDisplay(editForm.value.warehouse, editForm.value.is_accessory ? 'thung' : 'kien')
+})
+
 const handleSave = () => {
   if (!editForm.value) return
   
@@ -362,6 +381,7 @@ const handleSave = () => {
       po: editForm.value!.po.trim(),
       so: editForm.value!.so.trim(),
       container_no: editForm.value!.container_no.trim(),
+      warehouse: editForm.value!.warehouse.trim(),
       loading_date: editForm.value!.loading_date.trim(),
       status: editForm.value!.status,
       feature: feat,

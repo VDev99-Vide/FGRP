@@ -9,6 +9,9 @@ import {
   getRemainingHoursBeforeDelete,
   filterOutExpiredItems,
   groupAndSortForecastData,
+  parseWarehouseValue,
+  formatWarehouseDisplay,
+  resolveFeatureGroupWarehouse,
   ForecastRawItem
 } from './forecast'
 
@@ -228,5 +231,55 @@ describe('groupAndSortForecastData (Phân nhóm PO-SO, Phụ kiện thùng và M
     expect(cont2.featureGroups[0].feature).toBe('1220')
     expect(cont2.featureGroups[0].is_special).toBe(true)
     expect(cont2.totalPkg).toBe(44) // (4400 / 200) + (4400 / 200) = 44 Kiện (tính giống phụ kiện, không gộp chia đôi)
+  })
+
+  it('bóc tách Kho xuất (WH): 1=01;43=60 -> (1 kiện 01 - 43 kiện 60), 1 kho -> giữ số kho 01 hoặc 60', () => {
+    const splitParsed = parseWarehouseValue('1=01;43=60')
+    expect(splitParsed.isSplit).toBe(true)
+    expect(splitParsed.splits).toEqual([
+      { pkg: 1, warehouse: '01' },
+      { pkg: 43, warehouse: '60' },
+    ])
+    expect(formatWarehouseDisplay('1=01;43=60', 'kien')).toBe('(1 kiện 01 - 43 kiện 60)')
+
+    // Chỉ 1 kho -> hiển thị số kho, không tách
+    expect(formatWarehouseDisplay('60', 'kien')).toBe('60')
+    expect(formatWarehouseDisplay('01', 'kien')).toBe('01')
+    expect(formatWarehouseDisplay('1', 'kien')).toBe('01')
+
+    // Cặp mã 1220 (2 dòng cùng ghi 1=01;43=60) không bị nhân đôi
+    const groupWh = resolveFeatureGroupWarehouse(
+      [{ warehouse: '1=01;43=60' }, { warehouse: '1=01;43=60' }],
+      'kien',
+    )
+    expect(groupWh.isMultiWarehouse).toBe(true)
+    expect(groupWh.warehouseLabel).toBe('(1 kiện 01 - 43 kiện 60)')
+  })
+
+  it('tích chọn hoàn thành từng line trong group (PO: 437647 | SO: 2610000172): giữ group ở cả 2 nơi và tự đồng bộ khi hoàn tất', () => {
+    const items: ForecastRawItem[] = [
+      { id: '1', po: '437647', so: '2610000172', item_code: '8838210104', feature: '8382', loading_date: '15/09/2026', qty: 1000, warehouse: '60', pcs_per_pkg: 100, status: 'pending' },
+      { id: '2', po: '437647', so: '2610000172', item_code: '8838310104', feature: '8383', loading_date: '15/09/2026', qty: 1000, warehouse: '60', pcs_per_pkg: 100, status: 'pending' },
+      { id: '3', po: '437647', so: '2610000172', item_code: '8839310104', feature: '8393', loading_date: '15/09/2026', qty: 1000, warehouse: '01', pcs_per_pkg: 100, status: 'ready' },
+    ]
+
+    const grouped = groupAndSortForecastData(items)
+    const pendingGroup = grouped.find(g => g.po === '437647' && g.status === 'pending')
+    const readyGroup = grouped.find(g => g.po === '437647' && g.status === 'ready')
+
+    // Cả 2 nơi đều giữ group PO: 437647 | SO: 2610000172
+    expect(pendingGroup).toBeDefined()
+    expect(pendingGroup!.featureGroups.map(f => f.feature)).toEqual(['8382', '8383'])
+    expect(readyGroup).toBeDefined()
+    expect(readyGroup!.featureGroups.map(f => f.feature)).toEqual(['8393'])
+
+    // Khi 2 mã còn lại chuyển sang ready -> đồng bộ chung 1 group ở Đã xong, xóa ở Chờ chuẩn bị
+    items[0].status = 'ready'
+    items[1].status = 'ready'
+    const groupedAfter = groupAndSortForecastData(items)
+    expect(groupedAfter.find(g => g.po === '437647' && g.status === 'pending')).toBeUndefined()
+    const mergedReady = groupedAfter.find(g => g.po === '437647' && g.status === 'ready')
+    expect(mergedReady).toBeDefined()
+    expect(mergedReady!.featureGroups.map(f => f.feature)).toEqual(['8382', '8383', '8393'])
   })
 })

@@ -52,6 +52,7 @@ export interface ForecastItem {
   feature: string;
   loading_date: string;
   qty: number;
+  warehouse?: string;
   pcs_per_pkg: number;
   pkg: number;
   is_accessory?: boolean;
@@ -68,6 +69,8 @@ export interface ForecastFeatureGroup {
   feature: string;
   items: ForecastItem[];
   totalQty: number;
+  warehouse?: string;
+  warehouseLabel?: string;
   pcs_per_pkg: number;
   pkgCount: number;
   is_accessory: boolean;

@@ -10,6 +10,7 @@ create table if not exists shipping_forecast (
   feature text not null,
   loading_date text not null,
   qty numeric not null default 0,
+  warehouse text not null default '', -- Kho xuất: '01', '60' hoặc '1=01;43=60'
   pcs_per_pkg numeric not null default 0,
   pkg numeric not null default 0,
   is_accessory boolean not null default false,
@@ -36,11 +37,13 @@ create index if not exists idx_shipping_forecast_status_changed_at on shipping_f
 -- (Giải quyết triệt để lỗi: Could not find the 'is_accessory' column of 'shipping_forecast' in the schema cache)
 -- ==========================================
 alter table shipping_forecast 
+  add column if not exists warehouse text not null default '',
   add column if not exists is_accessory boolean not null default false,
   add column if not exists is_special boolean not null default false,
   add column if not exists unit_type text not null default 'kien';
 
 -- Index bổ sung
+create index if not exists idx_shipping_forecast_warehouse on shipping_forecast (warehouse);
 create index if not exists idx_shipping_forecast_accessory on shipping_forecast (is_accessory);
 create index if not exists idx_shipping_forecast_special on shipping_forecast (is_special);
 

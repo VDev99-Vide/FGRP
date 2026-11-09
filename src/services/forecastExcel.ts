@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import {
   extractFeatureFromItemCode,
   formatLoadingDate,
+  formatWarehouseDisplay,
   isSpecialStockCode,
   ForecastRawItem
 } from '@/utils/forecast'
@@ -11,6 +12,7 @@ export interface ColumnMapping {
   item_code: string
   loading_date: string
   qty: string
+  warehouse?: string
   pcs_per_pkg: string
   po: string
   so: string
@@ -22,6 +24,7 @@ export interface ParseExcelResult {
   headers: string[]
   detectedMapping: ColumnMapping
   rows: ForecastRawItem[]
+  rawJsonRows?: Record<string, any>[]
   error?: string
 }
 
@@ -39,6 +42,7 @@ export interface ResolvedPreviewRow extends ForecastRawItem {
   resolvedPackQty: number
   resolvedCartonType: string
   resolvedCartonSpec: string
+  resolvedWarehouseLabel: string
   fromMetadata: boolean
   missingMetadata: boolean
   is1010: boolean
@@ -65,6 +69,7 @@ export function detectColumnMapping(headers: string[]): ColumnMapping {
     item_code: '',
     loading_date: '',
     qty: '',
+    warehouse: '',
     pcs_per_pkg: '',
     po: '',
     so: '',
@@ -103,6 +108,16 @@ export function detectColumnMapping(headers: string[]): ColumnMapping {
     const found = normHeaders.find(h => h.norm === pattern || h.norm.includes(pattern))
     if (found) {
       mapping.qty = found.original
+      break
+    }
+  }
+
+  // 3b. Warehouse / Kho xuất (WH)
+  const whPatterns = ['wh', 'khoxuat', 'warehouse', 'whlocation', 'makho', 'kho']
+  for (const pattern of whPatterns) {
+    const found = normHeaders.find(h => h.norm === pattern || h.norm.includes('khoxuat') || h.norm.includes('warehouse'))
+    if (found) {
+      mapping.warehouse = found.original
       break
     }
   }
@@ -160,10 +175,70 @@ export function detectColumnMapping(headers: string[]): ColumnMapping {
   return mapping
 }
 
-/**
- * Đọc và chuẩn hóa dữ liệu từ file Excel (.xlsx / .xls)
- * Chuẩn mới: chỉ yêu cầu Item code + Loading date + Qty (+ PO/SO). PCS/pkg + Feature resolve từ metadata ở tầng preview.
- */
+export function extractRowsFromJsonWithMapping(
+  jsonRows: Record<string, any>[],
+  mapping: ColumnMapping,
+): ForecastRawItem[] {
+  const rows: ForecastRawItem[] = []
+  let defaultIndex = 1
+
+  jsonRows.forEach(row => {
+    // Trích xuất giá trị dựa trên mapping (chuẩn mới: pcs/pkg optional)
+    const itemCodeRaw = mapping.item_code ? row[mapping.item_code] : ''
+    if (!itemCodeRaw || String(itemCodeRaw).trim() === '') return // Bỏ qua dòng trống mã hàng
+
+    const itemCode = String(itemCodeRaw).trim()
+    const loadingDateRaw = mapping.loading_date ? row[mapping.loading_date] : ''
+    const loadingDate = formatLoadingDate(loadingDateRaw)
+
+    const qtyRaw = mapping.qty ? row[mapping.qty] : 0
+    const qty = Math.abs(parseFloat(String(qtyRaw || 0).replace(/,/g, ''))) || 0
+
+    // Kho xuất (WH)
+    const whRaw = mapping.warehouse ? row[mapping.warehouse] : ''
+    const warehouse = String(whRaw ?? '').trim()
+
+    // PCS/pkg optional (file mới không có -> 0, resolve từ metadata ở preview)
+    const pcsPerPkgRaw = mapping.pcs_per_pkg ? row[mapping.pcs_per_pkg] : 0
+    const pcsPerPkg = Math.abs(parseFloat(String(pcsPerPkgRaw || 0).replace(/,/g, ''))) || 0
+
+    const po = mapping.po ? String(row[mapping.po] || `PO-${defaultIndex}`).trim() : `PO-${defaultIndex}`
+    const so = mapping.so ? String(row[mapping.so] || `SO-${defaultIndex}`).trim() : `SO-${defaultIndex}`
+    const containerNo = mapping.container_no ? String(row[mapping.container_no] || '').trim() : ''
+
+    // Cột nhận diện Accessories / Feature (optional — file mới không có, resolve từ metadata)
+    const featRaw = mapping.feature_or_accessory ? String(row[mapping.feature_or_accessory] || '').trim() : ''
+    const featLower = featRaw.toLowerCase()
+    const isAccessoryFromFile = featLower.includes('acc') // "accessories", "accessory"
+    const isBox = featLower === 'box' || featLower.includes('box')
+    const isSpecial = isSpecialStockCode(itemCode) || featLower.includes('special')
+    // Feature tạm (fallback MID) — sẽ được resolve lại từ metadata ở preview
+    const feature = extractFeatureFromItemCode(itemCode, isAccessoryFromFile)
+    const unitType: 'kien' | 'thung' = isAccessoryFromFile ? 'thung' : 'kien'
+
+    rows.push({
+      po: po || `PO-${defaultIndex}`,
+      so: so || `SO-${defaultIndex}`,
+      container_no: containerNo,
+      item_code: itemCode,
+      feature,
+      loading_date: loadingDate,
+      qty,
+      warehouse,
+      pcs_per_pkg: pcsPerPkg,
+      pkg: 0, // Sẽ được tính toán phân nhóm (theo metadata)
+      is_accessory: isAccessoryFromFile,
+      is_special: isSpecial,
+      is_box: isBox,
+      unit_type: unitType,
+      status: 'pending'
+    })
+
+    defaultIndex++
+  })
+
+  return rows
+}
 export async function parseForecastExcelFile(file: File | ArrayBuffer | Uint8Array): Promise<ParseExcelResult> {
   try {
     let buffer: ArrayBuffer | Uint8Array
@@ -209,6 +284,7 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer | Uint8Arr
         const norm = normalizeHeaderName(String(cell || ''))
         if (norm.includes('code') || norm.includes('item') || norm.includes('po') ||
             norm.includes('so') || norm.includes('qty') || norm.includes('date') ||
+            norm === 'wh' || norm.includes('warehouse') || norm.includes('kho') ||
             norm.includes('pkg') || norm.includes('pack') || norm.includes('feature')) {
           matchCount++
         }
@@ -230,63 +306,13 @@ export async function parseForecastExcelFile(file: File | ArrayBuffer | Uint8Arr
       dateNF: 'dd/mm/yyyy'
     })
 
-    const rows: ForecastRawItem[] = []
-    let defaultIndex = 1
-
-    jsonRows.forEach(row => {
-      // Trích xuất giá trị dựa trên mapping (chuẩn mới: pcs/pkg optional)
-      const itemCodeRaw = detectedMapping.item_code ? row[detectedMapping.item_code] : ''
-      if (!itemCodeRaw || String(itemCodeRaw).trim() === '') return // Bỏ qua dòng trống mã hàng
-
-      const itemCode = String(itemCodeRaw).trim()
-      const loadingDateRaw = detectedMapping.loading_date ? row[detectedMapping.loading_date] : ''
-      const loadingDate = formatLoadingDate(loadingDateRaw)
-
-      const qtyRaw = detectedMapping.qty ? row[detectedMapping.qty] : 0
-      const qty = Math.abs(parseFloat(String(qtyRaw || 0).replace(/,/g, ''))) || 0
-
-      // PCS/pkg optional (file mới không có -> 0, resolve từ metadata ở preview)
-      const pcsPerPkgRaw = detectedMapping.pcs_per_pkg ? row[detectedMapping.pcs_per_pkg] : 0
-      const pcsPerPkg = Math.abs(parseFloat(String(pcsPerPkgRaw || 0).replace(/,/g, ''))) || 0
-
-      const po = detectedMapping.po ? String(row[detectedMapping.po] || `PO-${defaultIndex}`).trim() : `PO-${defaultIndex}`
-      const so = detectedMapping.so ? String(row[detectedMapping.so] || `SO-${defaultIndex}`).trim() : `SO-${defaultIndex}`
-      const containerNo = detectedMapping.container_no ? String(row[detectedMapping.container_no] || '').trim() : ''
-
-      // Cột nhận diện Accessories / Feature (optional — file mới không có, resolve từ metadata)
-      const featRaw = detectedMapping.feature_or_accessory ? String(row[detectedMapping.feature_or_accessory] || '').trim() : ''
-      const featLower = featRaw.toLowerCase()
-      const isAccessoryFromFile = featLower.includes('acc') // "accessories", "accessory"
-      const isBox = featLower === 'box' || featLower.includes('box')
-      const isSpecial = isSpecialStockCode(itemCode) || featLower.includes('special')
-      // Feature tạm (fallback MID) — sẽ được resolve lại từ metadata ở preview
-      const feature = extractFeatureFromItemCode(itemCode, isAccessoryFromFile)
-      const unitType: 'kien' | 'thung' = isAccessoryFromFile ? 'thung' : 'kien'
-
-      rows.push({
-        po: po || `PO-${defaultIndex}`,
-        so: so || `SO-${defaultIndex}`,
-        container_no: containerNo,
-        item_code: itemCode,
-        feature,
-        loading_date: loadingDate,
-        qty,
-        pcs_per_pkg: pcsPerPkg,
-        pkg: 0, // Sẽ được tính toán phân nhóm (theo metadata)
-        is_accessory: isAccessoryFromFile,
-        is_special: isSpecial,
-        is_box: isBox,
-        unit_type: unitType,
-        status: 'pending'
-      })
-
-      defaultIndex++
-    })
+    const rows = extractRowsFromJsonWithMapping(jsonRows, detectedMapping)
 
     return {
       headers: rawHeaders,
       detectedMapping,
-      rows
+      rows,
+      rawJsonRows: jsonRows
     }
   } catch (err: any) {
     return {
@@ -319,16 +345,18 @@ export function resolvePreviewWithMetadata(
         if (ct.includes('phu kien') || ct.includes('phukien') || ct.includes('carton') || ct.includes('plywood') || ct.includes('box')) return true
         return false
       })()
+      const unitType: 'kien' | 'thung' = isAcc ? 'thung' : 'kien'
       return {
         ...r,
         feature: feat,
         pcs_per_pkg: Number(hit.pack_qty) || Number(r.pcs_per_pkg) || 0,
         is_accessory: isAcc,
-        unit_type: isAcc ? 'thung' : 'kien',
+        unit_type: unitType,
         resolvedFeature: feat,
         resolvedPackQty: Number(hit.pack_qty) || 0,
         resolvedCartonType: String(hit.carton_type || ''),
         resolvedCartonSpec: String(hit.carton_spec || ''),
+        resolvedWarehouseLabel: formatWarehouseDisplay(r.warehouse, unitType),
         fromMetadata: true,
         missingMetadata: false,
         is1010: isCode1010(code),
@@ -337,6 +365,7 @@ export function resolvePreviewWithMetadata(
     // Thiếu metadata: thử tra theo feature (dạng cũ) để lấy pack nếu có
     const featFallback = String(r.feature || '').trim()
     const hitFeat = featFallback ? list.find((s) => String(s.feature || s.item_code || '').trim() === featFallback) : undefined
+    const fallbackUnit: 'kien' | 'thung' = r.is_accessory ? 'thung' : 'kien'
     if (hitFeat && Number(hitFeat.pack_qty) > 0) {
       return {
         ...r,
@@ -344,6 +373,7 @@ export function resolvePreviewWithMetadata(
         resolvedPackQty: Number(hitFeat.pack_qty),
         resolvedCartonType: String(hitFeat.carton_type || ''),
         resolvedCartonSpec: String(hitFeat.carton_spec || ''),
+        resolvedWarehouseLabel: formatWarehouseDisplay(r.warehouse, fallbackUnit),
         fromMetadata: true,
         missingMetadata: false,
         is1010: code === '8101010104' || code === '8101020104',
@@ -355,6 +385,7 @@ export function resolvePreviewWithMetadata(
       resolvedPackQty: Number(r.pcs_per_pkg) || 0,
       resolvedCartonType: '',
       resolvedCartonSpec: '',
+      resolvedWarehouseLabel: formatWarehouseDisplay(r.warehouse, fallbackUnit),
       fromMetadata: false,
       missingMetadata: true,
       is1010: isCode1010(code),
@@ -398,6 +429,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '1220190004',
       'Loading date': '17/09/2026',
       'Qty': 4400,
+      'WH': '1=01;43=60',
     },
     {
       'PO': '0N64-0003004870',
@@ -405,6 +437,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '1220200004',
       'Loading date': '17/09/2026',
       'Qty': 4400,
+      'WH': '1=01;43=60',
     },
     {
       'PO': '64853',
@@ -412,6 +445,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '8515210204',
       'Loading date': '14/09/2026',
       'Qty': 1750,
+      'WH': '60',
     },
     {
       'PO': '64853',
@@ -419,6 +453,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '8515220204',
       'Loading date': '14/09/2026',
       'Qty': 1750,
+      'WH': '60',
     },
     {
       'PO': '64853',
@@ -426,6 +461,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '1325730001',
       'Loading date': '14/09/2026',
       'Qty': 1750,
+      'WH': '60',
     },
     {
       'PO': '64853',
@@ -433,6 +469,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '1326830101',
       'Loading date': '14/09/2026',
       'Qty': 1750,
+      'WH': '60',
     },
     {
       'PO': '93957',
@@ -440,6 +477,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '8869510104',
       'Loading date': '12/09/2026',
       'Qty': 1508,
+      'WH': '01',
     },
     {
       'PO': '93957',
@@ -447,6 +485,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '8869520104',
       'Loading date': '12/09/2026',
       'Qty': 1508,
+      'WH': '01',
     },
     {
       'PO': '93957',
@@ -454,6 +493,7 @@ export function downloadForecastSampleTemplate() {
       'LPVN Item code': '1455350001',
       'Loading date': '12/09/2026',
       'Qty': 1700,
+      'WH': '01',
     }
   ]
 

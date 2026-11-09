@@ -133,6 +133,7 @@ end;
 $$;
 
 -- A5. Chuẩn hóa payload kế hoạch xuất hàng
+drop function if exists fg_internal.normalize_forecast_payload(jsonb);
 create or replace function fg_internal.normalize_forecast_payload(payload jsonb)
 returns table(
   po text,
@@ -142,6 +143,7 @@ returns table(
   feature text,
   loading_date text,
   qty numeric,
+  warehouse text,
   pcs_per_pkg numeric,
   pkg numeric,
   is_accessory boolean,
@@ -166,6 +168,12 @@ as $$
       nullif(trim(item->>'feature'), '') as feature_raw,
       coalesce(nullif(trim(item->>'loading_date'), ''), '') as loading_date,
       coalesce(nullif(trim(item->>'qty'), '')::numeric, 0) as qty,
+      coalesce(
+        nullif(trim(item->>'warehouse'), ''),
+        nullif(trim(item->>'wh'), ''),
+        nullif(trim(item->>'kho_xuat'), ''),
+        ''
+      ) as warehouse,
       coalesce(nullif(trim(item->>'pcs_per_pkg'), '')::numeric, 0) as pcs_per_pkg,
       coalesce(nullif(trim(item->>'pkg'), '')::numeric, 0) as pkg,
       coalesce(nullif(trim(item->>'is_accessory'), '')::boolean, false) as is_accessory,
@@ -184,7 +192,7 @@ as $$
         else 'No data'
       end
     ) as feature,
-    loading_date, qty, pcs_per_pkg, pkg, is_accessory, is_special, unit_type, status
+    loading_date, qty, warehouse, pcs_per_pkg, pkg, is_accessory, is_special, unit_type, status
   from src
 $$;
 
@@ -230,10 +238,10 @@ begin
   end if;
 
   insert into public.shipping_forecast
-    (po, so, container_no, item_code, feature, loading_date, qty, pcs_per_pkg, pkg, is_accessory, is_special, unit_type, status)
+    (po, so, container_no, item_code, feature, loading_date, qty, warehouse, pcs_per_pkg, pkg, is_accessory, is_special, unit_type, status)
   select
     t.po, t.so, t.container_no, t.item_code, t.feature, t.loading_date,
-    t.qty, t.pcs_per_pkg, t.pkg, t.is_accessory, t.is_special, t.unit_type, t.status
+    t.qty, t.warehouse, t.pcs_per_pkg, t.pkg, t.is_accessory, t.is_special, t.unit_type, t.status
   from fg_internal.normalize_forecast_payload(payload) t
   where t.item_code is not null and t.item_code <> '';
 

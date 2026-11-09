@@ -39,7 +39,7 @@
             <FileSpreadsheet class="w-5 h-5 text-[#14CA74]" />
             <div>
               <p class="text-xs font-bold text-white">Chưa có file mẫu chuẩn?</p>
-              <p class="text-[10px] text-[#AEB9E1]">Tải file Excel mẫu gồm PO, SO, LPVN Item code, Loading Date, Qty (Feature &amp; PCS/pkg tự lấy từ metadata)</p>
+              <p class="text-[10px] text-[#AEB9E1]">Tải file Excel mẫu gồm PO, SO, LPVN Item code, Loading Date, Qty, WH (VD: 60, 01 hoặc 1=01;43=60)</p>
             </div>
           </div>
           <button
@@ -178,6 +178,17 @@
             </div>
 
             <div>
+              <label class="text-[10px] text-[#AEB9E1] block mb-0.5">Kho xuất (WH: 01, 60, 1=01;43=60)</label>
+              <select
+                v-model="customMapping.warehouse"
+                class="w-full h-[32px] px-2 bg-[#18202D] border border-white/15 rounded text-[11px] text-[#FDB52A] font-semibold outline-none"
+              >
+                <option value="">-- Không có --</option>
+                <option v-for="h in parsedHeaders" :key="h" :value="h">{{ h }}</option>
+              </select>
+            </div>
+
+            <div>
               <label class="text-[10px] text-[#AEB9E1] block mb-0.5">Mã PO</label>
               <select
                 v-model="customMapping.po"
@@ -232,6 +243,7 @@
                   <th class="py-2 px-3 text-center">FEATURE (meta)</th>
                   <th class="py-2 px-3 text-center">LOẠI HÀNG</th>
                   <th class="py-2 px-3 text-right">QTY (PCS)</th>
+                  <th class="py-2 px-3 text-center">KHO XUẤT</th>
                   <th class="py-2 px-3 text-right">PCS/PKG (meta)</th>
                   <th class="py-2 px-3">LOADING DATE</th>
                 </tr>
@@ -266,6 +278,20 @@
                     </span>
                   </td>
                   <td class="py-2 px-3 text-right font-bold text-[#14CA74]">{{ r.qty.toLocaleString() }}</td>
+                  <td class="py-2 px-3 text-center font-mono font-bold">
+                    <span
+                      v-if="r.resolvedWarehouseLabel && r.resolvedWarehouseLabel !== '—'"
+                      :class="[
+                        'px-2 py-0.5 rounded text-[10px] border',
+                        r.resolvedWarehouseLabel.startsWith('(')
+                          ? 'text-[#FDB52A] bg-[#FDB52A]/15 border-[#FDB52A]/30'
+                          : 'text-[#00C2FF] bg-[#00C2FF]/15 border-[#00C2FF]/30'
+                      ]"
+                    >
+                      {{ r.resolvedWarehouseLabel }}
+                    </span>
+                    <span v-else class="text-[#AEB9E1]/50">—</span>
+                  </td>
                   <td class="py-2 px-3 text-right font-mono">{{ r.resolvedPackQty || r.pcs_per_pkg || '—' }}</td>
                   <td class="py-2 px-3 font-mono text-[#AEB9E1]">{{ r.loading_date }}</td>
                 </tr>
@@ -318,6 +344,7 @@ import {
 } from 'lucide-vue-next'
 import {
   parseForecastExcelFile,
+  extractRowsFromJsonWithMapping,
   downloadForecastSampleTemplate,
   resolvePreviewWithMetadata,
   type MetadataSpecForForecast,
@@ -346,18 +373,30 @@ const errorMessage = ref('')
 
 const parsedHeaders = ref<string[]>([])
 const parsedRows = ref<ForecastRawItem[]>([])
+const rawSheetJsonRows = ref<Record<string, any>[]>([])
 const chosen1010Type = ref<string>('thùng đôi')
 
 const customMapping = reactive<ColumnMapping>({
   item_code: '',
   loading_date: '',
   qty: '',
+  warehouse: '',
   pcs_per_pkg: '',
   po: '',
   so: '',
   container_no: '',
   feature_or_accessory: ''
 })
+
+watch(
+  () => ({ ...customMapping }),
+  (newMap) => {
+    if (rawSheetJsonRows.value.length > 0 && newMap.item_code) {
+      parsedRows.value = extractRowsFromJsonWithMapping(rawSheetJsonRows.value, newMap)
+    }
+  },
+  { deep: true },
+)
 
 const resolvedRows = computed<ResolvedPreviewRow[]>(() => {
   return resolvePreviewWithMetadata(parsedRows.value, props.metadataSpecs || [])
@@ -390,6 +429,7 @@ watch(() => props.visible, (v) => {
     // reset khi đóng
     parsedHeaders.value = []
     parsedRows.value = []
+    rawSheetJsonRows.value = []
     selectedFile.value = null
     errorMessage.value = ''
   }
@@ -424,6 +464,7 @@ const processFile = async (file: File) => {
     }
 
     parsedHeaders.value = res.headers
+    rawSheetJsonRows.value = res.rawJsonRows || []
     Object.assign(customMapping, res.detectedMapping)
     parsedRows.value = res.rows
 
@@ -448,6 +489,7 @@ const handleConfirmUpload = () => {
     feature: r.resolvedFeature || r.feature,
     loading_date: r.loading_date,
     qty: r.qty,
+    warehouse: r.warehouse || '',
     pcs_per_pkg: r.resolvedPackQty || r.pcs_per_pkg || 0,
     pkg: 0,
     is_accessory: r.is_accessory,

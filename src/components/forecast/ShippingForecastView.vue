@@ -26,6 +26,14 @@
             <span>NẠP FILE EXCEL</span>
           </button>
           <button 
+            v-if="filteredContainers.length > 0"
+            @click="openChecklistModal(null)"
+            title="Mở Modal chọn tất cả dữ liệu / tích chọn hoàn thành hoặc xóa nhanh theo check-list"
+            class="w-[38px] h-[38px] bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 border border-[#CB3CFF]/40 rounded-[8px] flex items-center justify-center text-[#CB3CFF] hover:text-white transition cursor-pointer active:scale-95"
+          >
+            <CheckSquare class="w-4 h-4" />
+          </button>
+          <button 
             @click="handleManualSync"
             :title="'Đồng bộ trực tiếp Supabase (Lần cuối: ' + lastSync + ')'"
             class="w-[38px] h-[38px] bg-white/5 hover:bg-white/10 border border-white/15 rounded-[8px] flex items-center justify-center text-[#AEB9E1] hover:text-white transition cursor-pointer active:scale-95"
@@ -34,9 +42,15 @@
           </button>
           <button 
             v-if="stats.totalContainers > 0"
-            @click="handleClearAll"
-            title="Xóa toàn bộ dữ liệu xuất hàng trên Supabase"
-            class="w-[38px] h-[38px] bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-[8px] flex items-center justify-center text-red-400 hover:text-red-300 transition cursor-pointer active:scale-95"
+            :disabled="selectedCount === 0"
+            @click="handleTriggerDeleteChecked"
+            :title="selectedCount > 0 ? `Xóa ${selectedLinesCount} line (${selectedCount} mã) đã tích chọn trong check-list` : 'Khóa cứng: Vui lòng tích chọn check-list các dòng cần xóa (hoặc bấm nút Chọn tất cả bên cạnh)'"
+            :class="[
+              'w-[38px] h-[38px] rounded-[8px] flex items-center justify-center border transition',
+              selectedCount > 0
+                ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-400 hover:text-red-200 cursor-pointer active:scale-95 shadow-[0_0_10px_rgba(239,68,68,0.25)]'
+                : 'bg-white/[0.03] border-white/10 text-[#AEB9E1]/30 cursor-not-allowed opacity-50'
+            ]"
           >
             <Trash2 class="w-4 h-4" />
           </button>
@@ -137,12 +151,42 @@
             </button>
           </div>
 
+          <!-- Nút mở Modal Chọn Tất Cả / Thao Tác Nhanh Theo Check-list -->
+          <button
+            v-if="filteredContainers.length > 0"
+            @click="openChecklistModal(null)"
+            class="h-[36px] px-3 rounded-[8px] bg-[#CB3CFF]/15 hover:bg-[#CB3CFF]/25 border border-[#CB3CFF]/40 text-[#CB3CFF] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            title="Mở Modal chọn tất cả dữ liệu để thao tác nhanh Chuẩn bị xong / Hoàn lại hoặc Xóa"
+          >
+            <CheckSquare class="w-3.5 h-3.5" />
+            <span>Chọn nhanh / Tất cả</span>
+          </button>
+
+          <!-- Nút Thao Tác Nhanh Khi Đã Tích Check-list Trên Bảng -->
+          <button
+            v-if="selectedCount > 0 && statusFilter === 'pending'"
+            @click="handleBulkMarkReadyFromChecklist"
+            class="h-[36px] px-3 rounded-[8px] bg-[#00C2FF]/20 hover:bg-[#00C2FF]/35 border border-[#00C2FF]/50 text-[#00C2FF] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+          >
+            <CheckCircle2 class="w-3.5 h-3.5" />
+            <span>Chuẩn bị xong ({{ selectedLinesCount }} line)</span>
+          </button>
+
+          <button
+            v-if="selectedCount > 0 && statusFilter === 'ready'"
+            @click="handleBulkRevertFromChecklist"
+            class="h-[36px] px-3 rounded-[8px] bg-[#FDB52A]/20 hover:bg-[#FDB52A]/35 border border-[#FDB52A]/50 text-[#FDB52A] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+          >
+            <RotateCcw class="w-3.5 h-3.5" />
+            <span>Hoàn lại ({{ selectedLinesCount }} line)</span>
+          </button>
+
           <!-- Smart Search Bar -->
           <div class="relative flex-1 sm:w-64">
             <input 
               type="text" 
               v-model="quickFilterText"
-              placeholder="Tìm PO, SO, Item, Feature, Ngày..." 
+              placeholder="Tìm PO, SO, Item, Feature, Kho, Ngày..." 
               class="w-full h-[36px] px-3 pl-8 bg-[#18202D]/80 backdrop-blur-md border border-white/15 rounded-[8px] text-xs outline-none text-white placeholder-[#AEB9E1]/50 focus:border-[#CB3CFF] focus:ring-1 ring-[#CB3CFF] transition"
             >
             <Search class="w-3.5 h-3.5 text-[#AEB9E1] absolute left-2.5 top-2.5" />
@@ -165,12 +209,13 @@
           <thead class="glass-table-sticky-head shadow-lg">
             <tr>
               <th class="py-3.5 px-3 font-bold text-[11px] tracking-wider uppercase text-center w-[36px]">
-                <input type="checkbox" :checked="isAllVisibleSelected" @change="toggleSelectAllVisible" title="Chọn tất cả dòng đang hiển thị" class="w-3.5 h-3.5 accent-[#CB3CFF] cursor-pointer" />
+                <input type="checkbox" :checked="isAllVisibleSelected" @change="toggleSelectAllVisible" title="Chọn tất cả dữ liệu trong tab hiện tại" class="w-3.5 h-3.5 accent-[#CB3CFF] cursor-pointer" />
               </th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">PO & SO / ĐƠN HÀNG</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">FEATURE</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase">LPVN ITEM CODE</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">TỔNG QTY (PCS)</th>
+              <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">KHO XUẤT</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-right">QUY CÁCH (PCS/PKG · meta)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">SỐ KIỆN / THÙNG (#PKG)</th>
               <th class="py-3.5 px-4 font-bold text-[11px] tracking-wider uppercase text-center">LOADING DATE</th>
@@ -194,7 +239,7 @@
                 ]"
               >
                 <td 
-                  colspan="10" 
+                  colspan="11" 
                   :class="[
                     'py-3 px-4 glass-panel-subtle backdrop-blur-md',
                     row.container.status === 'ready'
@@ -258,15 +303,17 @@
                         Tổng: {{ row.container.summaryPkgLabel }}
                       </span>
 
-                      <!-- THAO TÁC "CHUẨN BỊ XONG" (màu xanh dương để tránh trùng xanh lá Đã xong) -->
+                      <!-- THAO TÁC "CHUẨN BỊ XONG" (nếu đã tích chọn line trong group thì chuyển đúng line đã chọn, chưa tích thì mở modal chọn linh hoạt) -->
                       <div v-if="row.container.status === 'pending'">
                         <button 
                           @click="handleMarkReady(row.container)"
-                          title="Đánh dấu đơn hàng container đã chuẩn bị xong (tự nhảy qua tab Đã xong, xóa thủ công)"
+                          :title="getSelectedFeatureCountInContainer(row.container) > 0 ? `Chuyển ${getSelectedFeatureCountInContainer(row.container)} line đã tích chọn trong group sang Đã xong` : 'Mở modal tích chọn hoàn thành linh hoạt từng line trong group (hoặc cả group)'"
                           class="h-[28px] px-3 rounded-[6px] bg-[#00C2FF]/20 hover:bg-[#00C2FF]/35 border border-[#00C2FF]/50 text-[#00C2FF] hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
                         >
                           <CheckCircle2 class="w-3.5 h-3.5" />
-                          <span>Chuẩn bị xong</span>
+                          <span>
+                            {{ getSelectedFeatureCountInContainer(row.container) > 0 ? `Chuẩn bị xong (${getSelectedFeatureCountInContainer(row.container)}/${row.container.featureGroups.length} line)` : 'Chuẩn bị xong' }}
+                          </span>
                         </button>
                       </div>
 
@@ -281,10 +328,10 @@
 
                         <button 
                           @click="handleRevertPending(row.container)"
-                          title="Khôi phục trạng thái về Chờ chuẩn bị"
+                          :title="getSelectedFeatureCountInContainer(row.container) > 0 ? `Hoàn lại ${getSelectedFeatureCountInContainer(row.container)} line đã tích chọn về Chờ chuẩn bị` : 'Tích chọn line hoặc hoàn lại group về Chờ chuẩn bị'"
                           class="text-[10px] text-[#AEB9E1] hover:text-white underline cursor-pointer"
                         >
-                          Hoàn lại
+                          {{ getSelectedFeatureCountInContainer(row.container) > 0 ? `Hoàn lại (${getSelectedFeatureCountInContainer(row.container)} line)` : 'Hoàn lại' }}
                         </button>
                       </div>
                     </div>
@@ -369,6 +416,22 @@
                   </p>
                 </td>
 
+                <!-- Kho xuất (nằm giữa Tổng Qty và Quy cách) -->
+                <td class="py-3 px-4 text-center font-mono">
+                  <span
+                    v-if="row.featureGroup.warehouseLabel && row.featureGroup.warehouseLabel !== '—'"
+                    :class="[
+                      'px-2.5 py-1 rounded-[6px] text-xs font-bold border inline-flex items-center gap-1',
+                      row.featureGroup.isMultiWarehouse
+                        ? 'bg-[#FDB52A]/15 text-[#FDB52A] border-[#FDB52A]/40 shadow-[0_0_8px_rgba(253,181,42,0.15)]'
+                        : 'bg-[#00C2FF]/15 text-[#00C2FF] border-[#00C2FF]/35'
+                    ]"
+                  >
+                    {{ row.featureGroup.warehouseLabel }}
+                  </span>
+                  <span v-else class="text-[#AEB9E1]/50 text-xs">—</span>
+                </td>
+
                 <!-- Quy cách (Pcs/pkg) -->
                 <td class="py-3 px-4 text-right font-mono text-white/90 text-xs font-semibold">
                   {{ Number(row.featureGroup.pcs_per_pkg || 0).toLocaleString() }}
@@ -437,7 +500,7 @@
 
             <!-- Trạng Thái Trống -->
             <tr v-if="renderedDisplayRows.length === 0">
-              <td colspan="10" class="text-center py-16 text-[#AEB9E1] italic text-xs">
+              <td colspan="11" class="text-center py-16 text-[#AEB9E1] italic text-xs">
                 <div v-if="stats.totalContainers === 0" class="flex flex-col items-center justify-center gap-2.5">
                   <div class="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#AEB9E1]/50 mb-1">
                     <PackageOpen class="w-6 h-6 text-[#AEB9E1]/70" />
@@ -521,23 +584,26 @@
       @delete-group="handleDeleteGroup"
     />
 
-    <!-- 3. Floating UI Confirm Modal Xóa Toàn Bộ (Thay thế hoàn toàn confirm trình duyệt) -->
-    <ConfirmModal 
-      v-model:visible="showClearAllModal"
-      title="Xác nhận xóa toàn bộ dữ liệu xuất hàng"
-      message="Bạn có chắc chắn muốn xóa TOÀN BỘ danh sách xuất hàng dự kiến trên cơ sở dữ liệu Supabase? Thao tác này sẽ xóa sạch dữ liệu và không thể hoàn tác."
-      confirmText="Xác nhận xóa tất cả"
-      cancelText="Hủy bỏ"
-      severity="danger"
-      @confirm="executeClearAll"
+    <!-- 3. Modal Tích Chọn Hoàn Thành Linh Hoạt & Chọn Tất Cả Theo Check-list -->
+    <ForecastChecklistModal
+      v-model:visible="showChecklistModal"
+      :containers="filteredContainers"
+      :target-container="checklistTargetContainer"
+      :selected-ids="selectedIds"
+      :status-mode="statusFilter"
+      :loading="loading"
+      @update:selected-ids="(val) => { selectedIds = val }"
+      @mark-ready="handleChecklistModalMarkReady"
+      @revert-pending="handleChecklistModalRevertPending"
+      @delete-selected="handleChecklistModalDelete"
     />
 
-    <!-- 4. Confirm Modal Xóa hàng loạt đã chọn -->
+    <!-- 4. Confirm Modal Xóa hàng loạt đã chọn theo Check-list -->
     <ConfirmModal
       v-model:visible="showBulkDeleteModal"
-      title="Xác nhận xóa các dòng đã chọn"
-      :message="`Bạn có chắc muốn xóa ${selectedCount} dòng đã chọn khỏi Supabase? Không thể hoàn tác.`"
-      confirmText="Xác nhận xóa"
+      title="Xác nhận xóa các dòng đã tích chọn check-list"
+      :message="`Bạn có chắc muốn xóa ${selectedLinesCount} line (${selectedCount} mã hàng) đã tích chọn trong check-list khỏi Supabase? Không thể hoàn tác.`"
+      confirmText="Xác nhận xóa đã chọn"
       cancelText="Hủy bỏ"
       severity="danger"
       @confirm="executeBulkDelete"
@@ -553,6 +619,8 @@ import {
   Truck, 
   Box, 
   CheckCircle2, 
+  CheckSquare,
+  RotateCcw,
   Search, 
   Calendar, 
   ExternalLink, 
@@ -568,6 +636,7 @@ import { useMetadataPacking } from '@/composables/useMetadataPacking'
 import { ForecastRawItem, ForecastContainerGroup, ForecastFeatureGroup } from '@/utils/forecast'
 import ForecastUploadModal from './ForecastUploadModal.vue'
 import ForecastEditModal from './ForecastEditModal.vue'
+import ForecastChecklistModal from './ForecastChecklistModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const emit = defineEmits<{
@@ -591,9 +660,8 @@ const {
   editForecastItem,
   deleteForecastItem,
   deleteForecastItems,
-  markContainerReady,
-  revertContainerPending,
-  clearAllForecastData
+  markItemsReady,
+  revertItemsPending
 } = useShippingForecast()
 
 const { rows: metaRows, fetchPackingSpecs } = useMetadataPacking()
@@ -611,8 +679,9 @@ const metadataSpecsForPreview = computed(() =>
 // Modals State
 const showUploadModal = ref(false)
 const showEditModal = ref(false)
-const showClearAllModal = ref(false)
+const showChecklistModal = ref(false)
 const showBulkDeleteModal = ref(false)
+const checklistTargetContainer = ref<ForecastContainerGroup | null>(null)
 const editingTargetGroup = ref<ForecastFeatureGroup | null>(null)
 const editingTargetContainer = ref<ForecastContainerGroup | null>(null)
 
@@ -631,6 +700,21 @@ const isFeatureSelected = (fg: ForecastFeatureGroup): boolean => {
   const ids = featureItemIds(fg)
   return ids.length > 0 && ids.every((id) => selectedIds.value.has(id))
 }
+const getSelectedIdsInContainer = (c: ForecastContainerGroup): string[] => {
+  return containerItemIds(c).filter((id) => selectedIds.value.has(id))
+}
+const getSelectedFeatureCountInContainer = (c: ForecastContainerGroup): number => {
+  return (c.featureGroups || []).filter((fg) => isFeatureSelected(fg)).length
+}
+const selectedLinesCount = computed(() => {
+  let count = 0
+  filteredContainers.value.forEach((c) => {
+    c.featureGroups.forEach((fg) => {
+      if (isFeatureSelected(fg)) count++
+    })
+  })
+  return count
+})
 const toggleContainer = (c: ForecastContainerGroup) => {
   const ids = containerItemIds(c)
   const all = ids.every((id) => selectedIds.value.has(id))
@@ -702,7 +786,8 @@ const allDisplayRows = computed<DisplayRowItem[]>(() => {
         groupsToRender = container.featureGroups.filter(fg => {
           const fgStr = [
             fg.feature,
-            ...fg.items.map(it => it.item_code),
+            fg.warehouseLabel,
+            ...fg.items.map(it => `${it.item_code} ${it.warehouse || ''}`),
             fg.is_accessory ? 'accessories phukien thung' : '',
             fg.is_special ? 'special 1220' : ''
           ].join(' ').toLowerCase()
@@ -715,7 +800,7 @@ const allDisplayRows = computed<DisplayRowItem[]>(() => {
 
     // 1. Container Header Row (PO & SO, Cont, Loading Date, Tổng Kiện / Thùng)
     rows.push({
-      _id: `cont-header-${container.containerKey}`,
+      _id: `cont-header-${container.containerKey}-${container.status}`,
       _type: 'container-header',
       container
     })
@@ -723,7 +808,7 @@ const allDisplayRows = computed<DisplayRowItem[]>(() => {
     // 2. Feature Group Rows (Mỗi Feature là 1 dòng duy nhất)
     groupsToRender.forEach(fg => {
       rows.push({
-        _id: `fg-${container.containerKey}-${fg.feature}`,
+        _id: `fg-${container.containerKey}-${container.status}-${fg.feature}`,
         _type: 'feature-row',
         container,
         featureGroup: fg
@@ -796,40 +881,36 @@ const handleManualSync = async () => {
   })
 }
 
-// Xóa toàn bộ dữ liệu xuất hàng trên Supabase (hiển thị UI nổi thay cho confirm)
-const handleClearAll = () => {
-  showClearAllModal.value = true
+// Mở Modal Tích chọn hoàn thành linh hoạt / Chọn tất cả dữ liệu
+const openChecklistModal = (container: ForecastContainerGroup | null = null) => {
+  checklistTargetContainer.value = container
+  showChecklistModal.value = true
 }
 
-const executeClearAll = async () => {
-  try {
-    await clearAllForecastData()
-    clearSelection()
+// Khóa cứng nút xóa: chỉ cho phép xóa các dòng đã chọn trong check-list
+const handleTriggerDeleteChecked = () => {
+  if (selectedCount.value === 0) {
     toast.add({
-      severity: 'success',
-      summary: 'Đã xóa dữ liệu',
-      detail: 'Toàn bộ dữ liệu xuất hàng đã được xóa sạch trên Supabase!',
+      severity: 'warn',
+      summary: 'Chưa chọn dữ liệu',
+      detail: 'Vui lòng tích chọn check-list các dòng cần xóa (hoặc bấm nút Chọn nhanh / Tất cả).',
       life: 3000
     })
-  } catch (err: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Lỗi xóa dữ liệu',
-      detail: err.message,
-      life: 4000
-    })
+    return
   }
+  showBulkDeleteModal.value = true
 }
 
 const executeBulkDelete = async () => {
   try {
     const ids = Array.from(selectedIds.value)
+    if (ids.length === 0) return
     await deleteForecastItems(ids)
     clearSelection()
     toast.add({
       severity: 'success',
       summary: 'Đã xóa các dòng đã chọn',
-      detail: `Đã xóa ${ids.length} dòng khỏi Supabase!`,
+      detail: `Đã xóa ${ids.length} dòng đã tích chọn khỏi Supabase!`,
       life: 3000
     })
   } catch (err: any) {
@@ -842,16 +923,28 @@ const executeBulkDelete = async () => {
   }
 }
 
-// Thao tác "Chuẩn bị xong" (tự nhảy qua tab Đã xong để tránh render lag)
+// Thao tác "Chuẩn bị xong" theo check-list hoặc mở Modal chọn line linh hoạt
 const handleMarkReady = async (container: ForecastContainerGroup) => {
+  const checkedInGroup = getSelectedIdsInContainer(container)
+  const checkedLines = getSelectedFeatureCountInContainer(container)
+
+  // Nếu chưa tích chọn line nào trong group này -> mở Modal tích chọn hoàn thành linh hoạt cho group
+  if (checkedInGroup.length === 0) {
+    openChecklistModal(container)
+    return
+  }
+
   try {
-    await markContainerReady(container.po, container.so)
-    clearSelection()
+    await markItemsReady(checkedInGroup, false)
+    const next = new Set(selectedIds.value)
+    checkedInGroup.forEach((id) => next.delete(id))
+    selectedIds.value = next
+
     toast.add({
       severity: 'success',
-      summary: 'Đã chuẩn bị xong',
-      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] đã sẵn sàng xuất cont (xóa thủ công, không tự xóa).`,
-      life: 4000
+      summary: 'Đã chuẩn bị xong theo line',
+      detail: `Đã chuyển ${checkedLines} line thuộc [PO: ${container.po} | SO: ${container.so}] sang Đã xong (tự đồng bộ cùng group).`,
+      life: 3500
     })
   } catch (err: any) {
     toast.add({
@@ -863,14 +956,26 @@ const handleMarkReady = async (container: ForecastContainerGroup) => {
   }
 }
 
-// Khôi phục trạng thái về pending
+// Khôi phục trạng thái về pending theo check-list hoặc mở Modal chọn line
 const handleRevertPending = async (container: ForecastContainerGroup) => {
+  const checkedInGroup = getSelectedIdsInContainer(container)
+  const checkedLines = getSelectedFeatureCountInContainer(container)
+
+  if (checkedInGroup.length === 0) {
+    openChecklistModal(container)
+    return
+  }
+
   try {
-    await revertContainerPending(container.po, container.so)
+    await revertItemsPending(checkedInGroup, false)
+    const next = new Set(selectedIds.value)
+    checkedInGroup.forEach((id) => next.delete(id))
+    selectedIds.value = next
+
     toast.add({
       severity: 'info',
-      summary: 'Đã hoàn lại',
-      detail: `Đơn hàng [PO: ${container.po} - SO: ${container.so}] chuyển về Chờ chuẩn bị.`,
+      summary: 'Đã hoàn lại theo line',
+      detail: `Đã hoàn lại ${checkedLines} line thuộc [PO: ${container.po} | SO: ${container.so}] về Chờ chuẩn bị.`,
       life: 3000
     })
   } catch (err: any) {
@@ -881,6 +986,75 @@ const handleRevertPending = async (container: ForecastContainerGroup) => {
       life: 4000
     })
   }
+}
+
+// Thao tác hàng loạt từ thanh công cụ hoặc từ Modal Check-list
+const handleBulkMarkReadyFromChecklist = async () => {
+  const ids = Array.from(selectedIds.value)
+  if (ids.length === 0) return
+  await handleChecklistModalMarkReady(ids)
+}
+
+const handleBulkRevertFromChecklist = async () => {
+  const ids = Array.from(selectedIds.value)
+  if (ids.length === 0) return
+  await handleChecklistModalRevertPending(ids)
+}
+
+const handleChecklistModalMarkReady = async (ids: string[]) => {
+  try {
+    const lineCount = selectedLinesCount.value || ids.length
+    await markItemsReady(ids, false)
+    const next = new Set(selectedIds.value)
+    ids.forEach((id) => next.delete(id))
+    selectedIds.value = next
+    showChecklistModal.value = false
+
+    toast.add({
+      severity: 'success',
+      summary: 'Đã chuyển sang Đã xong',
+      detail: `Đã báo hoàn thành ${lineCount} line đã chọn và đồng bộ theo Group PO/SO!`,
+      life: 3500
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi cập nhật',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+
+const handleChecklistModalRevertPending = async (ids: string[]) => {
+  try {
+    const lineCount = selectedLinesCount.value || ids.length
+    await revertItemsPending(ids, false)
+    const next = new Set(selectedIds.value)
+    ids.forEach((id) => next.delete(id))
+    selectedIds.value = next
+    showChecklistModal.value = false
+
+    toast.add({
+      severity: 'info',
+      summary: 'Đã hoàn lại Chờ chuẩn bị',
+      detail: `Đã hoàn lại ${lineCount} line đã chọn và đồng bộ theo Group PO/SO!`,
+      life: 3000
+    })
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Lỗi cập nhật',
+      detail: err.message,
+      life: 4000
+    })
+  }
+}
+
+const handleChecklistModalDelete = (ids: string[]) => {
+  selectedIds.value = new Set(ids)
+  showChecklistModal.value = false
+  showBulkDeleteModal.value = true
 }
 
 // Nút Lọc nhanh header container đã BỎ (T2) — chỉ giữ lọc theo Feature trong hàng.

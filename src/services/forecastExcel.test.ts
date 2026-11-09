@@ -9,12 +9,14 @@ describe('detectColumnMapping (chuẩn mới: PO/SO/Item/Qty/Date, PCS+Feature t
       'LPVN Item code',
       'Loading date',
       'Qty',
+      'WH',
     ]
 
     const mapping = detectColumnMapping(headers)
     expect(mapping.item_code).toBe('LPVN Item code')
     expect(mapping.loading_date).toBe('Loading date')
     expect(mapping.qty).toBe('Qty')
+    expect(mapping.warehouse).toBe('WH')
     expect(mapping.po).toBe('PO')
     expect(mapping.so).toBe('SO')
     // File mới không có PCS/pkg -> để trống, resolve từ metadata
@@ -64,15 +66,17 @@ describe('resolvePreviewWithMetadata (Feature + PCS từ metadata)', () => {
   it('mã có metadata -> resolve đúng, mã thiếu -> tag Thiếu Meta-data', () => {
     const rows = resolvePreviewWithMetadata(
       [
-        { po: 'P', so: 'S', item_code: '8100920004', loading_date: '10/09/2026', qty: 2200, pcs_per_pkg: 0 } as never,
-        { po: 'P', so: 'S', item_code: 'KHONG-CO', loading_date: '10/09/2026', qty: 100, pcs_per_pkg: 0, feature: 'XXXX' } as never,
+        { po: 'P', so: 'S', item_code: '8100920004', loading_date: '10/09/2026', qty: 2200, warehouse: '1=01;43=60', pcs_per_pkg: 0 } as never,
+        { po: 'P', so: 'S', item_code: 'KHONG-CO', loading_date: '10/09/2026', qty: 100, warehouse: '60', pcs_per_pkg: 0, feature: 'XXXX' } as never,
       ],
       specs,
     )
     expect(rows[0].resolvedFeature).toBe('1009')
     expect(rows[0].resolvedPackQty).toBe(220)
+    expect(rows[0].resolvedWarehouseLabel).toBe('(1 kiện 01 - 43 kiện 60)')
     expect(rows[0].missingMetadata).toBe(false)
     expect(rows[1].missingMetadata).toBe(true)
+    expect(rows[1].resolvedWarehouseLabel).toBe('60')
   })
 
   it('phụ kiện resolve từ metadata (không cần cột Feature trong file)', () => {

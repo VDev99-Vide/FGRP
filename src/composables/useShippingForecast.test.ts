@@ -170,4 +170,43 @@ describe('useShippingForecast composable (chuẩn mới: 2 tab, cộng dồn, x�
       expect(composable.forecastItems.value.find((it) => it.id === id)).toBeUndefined()
     })
   })
+
+  it('hoàn thành linh hoạt theo từng line (markItemsReady) và hoàn tác (revertItemsPending) đồng bộ cùng group', async () => {
+    composable.forecastItems.value = [
+      { id: 'demo-line-1', po: '437647', so: '2610000172', item_code: '8838210104', feature: '8382', loading_date: '15/09/2026', qty: 1000, warehouse: '60', pcs_per_pkg: 100, status: 'pending' },
+      { id: 'demo-line-2', po: '437647', so: '2610000172', item_code: '8838310104', feature: '8383', loading_date: '15/09/2026', qty: 1000, warehouse: '60', pcs_per_pkg: 100, status: 'pending' },
+      { id: 'demo-line-3', po: '437647', so: '2610000172', item_code: '8839310104', feature: '8393', loading_date: '15/09/2026', qty: 1000, warehouse: '1=01;43=60', pcs_per_pkg: 100, status: 'pending' },
+    ]
+
+    // Tích chọn chuẩn bị xong 1 mã 8393
+    await composable.markItemsReady(['demo-line-3'])
+
+    // Ở tab Chờ chuẩn bị: vẫn giữ group với 2 line (8382, 8383)
+    composable.statusFilter.value = 'pending'
+    expect(composable.filteredContainers.value.length).toBe(1)
+    expect(composable.filteredContainers.value[0].featureGroups.map((f) => f.feature)).toEqual(['8382', '8383'])
+
+    // Ở tab Đã xong: xuất hiện group với 1 line (8393) và hiển thị kho xuất tách đúng
+    composable.statusFilter.value = 'ready'
+    expect(composable.filteredContainers.value.length).toBe(1)
+    expect(composable.filteredContainers.value[0].featureGroups.map((f) => f.feature)).toEqual(['8393'])
+    expect(composable.filteredContainers.value[0].featureGroups[0].warehouseLabel).toBe('(1 kiện 01 - 43 kiện 60)')
+
+    // Chuyển tiếp 2 mã còn lại sang Đã xong -> tự đồng bộ gộp vào group ở Đã xong, xóa group ở Chờ chuẩn bị
+    await composable.markItemsReady(['demo-line-1', 'demo-line-2'])
+    composable.statusFilter.value = 'pending'
+    expect(composable.filteredContainers.value.length).toBe(0)
+    composable.statusFilter.value = 'ready'
+    expect(composable.filteredContainers.value.length).toBe(1)
+    expect(composable.filteredContainers.value[0].featureGroups.map((f) => f.feature)).toEqual(['8382', '8383', '8393'])
+
+    // Hoàn tác 1 line 8382 về Chờ chuẩn bị
+    await composable.revertItemsPending(['demo-line-1'])
+    composable.statusFilter.value = 'pending'
+    expect(composable.filteredContainers.value.length).toBe(1)
+    expect(composable.filteredContainers.value[0].featureGroups.map((f) => f.feature)).toEqual(['8382'])
+    composable.statusFilter.value = 'ready'
+    expect(composable.filteredContainers.value.length).toBe(1)
+    expect(composable.filteredContainers.value[0].featureGroups.map((f) => f.feature)).toEqual(['8383', '8393'])
+  })
 })

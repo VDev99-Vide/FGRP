@@ -270,6 +270,7 @@ create table if not exists shipping_forecast (
   feature text not null,
   loading_date text not null,
   qty numeric not null default 0,
+  warehouse text not null default '',
   pcs_per_pkg numeric not null default 0,
   pkg numeric not null default 0,
   is_accessory boolean not null default false,
@@ -282,9 +283,12 @@ create table if not exists shipping_forecast (
 );
 
 alter table shipping_forecast 
+  add column if not exists warehouse text not null default '',
   add column if not exists is_accessory boolean not null default false,
   add column if not exists is_special boolean not null default false,
   add column if not exists unit_type text not null default 'kien';
+
+create index if not exists idx_shipping_forecast_warehouse on shipping_forecast (warehouse);
 
 create index if not exists idx_shipping_forecast_po_so on shipping_forecast (po, so);
 create index if not exists idx_shipping_forecast_item_code on shipping_forecast (item_code);

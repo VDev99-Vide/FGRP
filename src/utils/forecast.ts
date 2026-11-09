@@ -17,6 +17,7 @@ export interface ForecastRawItem {
   feature?: string
   loading_date: string // dd/mm/yyyy or ISO
   qty: number
+  warehouse?: string // Kho xuất: '01', '60' hoặc '1=01;43=60'
   pcs_per_pkg: number
   pkg?: number
   is_accessory?: boolean
@@ -31,10 +32,19 @@ export interface ForecastRawItem {
   missingSpec?: boolean
 }
 
+export interface WarehouseSplitItem {
+  pkg: number
+  warehouse: string
+}
+
 export interface ForecastFeatureGroup {
   feature: string
   items: ForecastRawItem[]
   totalQty: number
+  warehouse: string
+  warehouseLabel: string
+  isMultiWarehouse?: boolean
+  warehouseSplits?: WarehouseSplitItem[]
   pcs_per_pkg: number
   pkgCount: number
   is_accessory: boolean
@@ -254,6 +264,208 @@ export function containerKeyOf(po: string, so: string): string {
   return `${String(po || '').trim().toLowerCase()}___${String(so || '').trim().toLowerCase()}`
 }
 
+/**
+ * Chuẩn hóa mã kho: '1' -> '01', '60' -> '60', bỏ tiền tố 'Kho'/'WH' nếu có.
+ */
+export function normalizeWarehouseCode(whInput: any): string {
+  const raw = String(whInput ?? '').trim()
+  if (!raw) return ''
+  const cleaned = raw.replace(/^(kho|wh)\s*/i, '').trim()
+  if (cleaned === '1') return '01'
+  return cleaned
+}
+
+/**
+ * Bóc tách chuỗi Kho xuất (WH) từ Excel / DB:
+ * - Nếu dạng tách kho: "1=01;43=60" (hoặc "(1 kiện 01 - 43 kiện 60)") -> isSplit=true, splits=[{pkg:1, warehouse:'01'}, {pkg:43, warehouse:'60'}]
+ * - Nếu chỉ có 1 kho ("60", "01", hoặc "44=60") -> isSplit=false, singleWh="60" hoặc "01"
+ */
+export function parseWarehouseValue(rawInput: any): {
+  isSplit: boolean
+  singleWh: string
+  splits: WarehouseSplitItem[]
+} {
+  const str = String(rawInput ?? '').trim()
+  if (!str) {
+    return { isSplit: false, singleWh: '', splits: [] }
+  }
+
+  // Bỏ dấu ngoặc đơn bao ngoài nếu có: "(1 kiện 01 - 43 kiện 60)" -> "1 kiện 01 - 43 kiện 60"
+  const unwrapped = str.replace(/^\((.*)\)$/, '$1').trim()
+
+  // Kiểm tra cú pháp tách kho: có dấu '=' hoặc có dạng 'X kiện WH - Y kiện WH'
+  const hasEquals = unwrapped.includes('=')
+  const hasKienSplit = /(\d+(?:\.\d+)?)\s*(?:kiện|kien|thùng|thung)\s*(?:kho\s*)?[0-9a-zA-Z]+/i.test(unwrapped) && /[;\-,|]/.test(unwrapped)
+
+  if (hasEquals || hasKienSplit) {
+    const tokens = unwrapped.split(/[;\-,|]+/).map((t) => t.trim()).filter(Boolean)
+    const parsedSplits: WarehouseSplitItem[] = []
+
+    for (const token of tokens) {
+      const eqMatch = token.match(/^(\d+(?:\.\d+)?)\s*=\s*(.+)$/)
+      if (eqMatch) {
+        const pkg = Number(eqMatch[1]) || 0
+        const wh = normalizeWarehouseCode(eqMatch[2])
+        if (wh && pkg > 0) {
+          const existing = parsedSplits.find((s) => s.warehouse === wh)
+          if (existing) existing.pkg = Math.round((existing.pkg + pkg) * 100) / 100
+          else parsedSplits.push({ pkg, warehouse: wh })
+        }
+        continue
+      }
+
+      const kienMatch = token.match(/^(\d+(?:\.\d+)?)\s*(?:kiện|kien|thùng|thung)?\s*(?:kho\s*)?([0-9a-zA-Z]+)$/i)
+      if (kienMatch) {
+        const pkg = Number(kienMatch[1]) || 0
+        const wh = normalizeWarehouseCode(kienMatch[2])
+        if (wh && pkg > 0) {
+          const existing = parsedSplits.find((s) => s.warehouse === wh)
+          if (existing) existing.pkg = Math.round((existing.pkg + pkg) * 100) / 100
+          else parsedSplits.push({ pkg, warehouse: wh })
+        }
+      }
+    }
+
+    if (parsedSplits.length > 1) {
+      return {
+        isSplit: true,
+        singleWh: '',
+        splits: parsedSplits,
+      }
+    }
+    if (parsedSplits.length === 1) {
+      // Nếu chỉ có 1 kho duy nhất thì hiển thị số kho, không tách
+      return {
+        isSplit: false,
+        singleWh: parsedSplits[0].warehouse,
+        splits: [],
+      }
+    }
+  }
+
+  // Trường hợp 1 kho đơn giản: "60", "01", "1"
+  const singleWh = normalizeWarehouseCode(unwrapped)
+  return {
+    isSplit: false,
+    singleWh,
+    splits: [],
+  }
+}
+
+/**
+ * Định dạng hiển thị Kho xuất cho 1 giá trị WH đơn lẻ:
+ * - Tách kho ("1=01;43=60"): "(1 kiện 01 - 43 kiện 60)"
+ * - 1 kho ("60" hoặc "01"): "60" hoặc "01"
+ */
+export function formatWarehouseDisplay(
+  rawInput: any,
+  unitType: 'kien' | 'thung' = 'kien',
+): string {
+  const parsed = parseWarehouseValue(rawInput)
+  if (parsed.isSplit && parsed.splits.length > 1) {
+    const unitWord = unitType === 'thung' ? 'thùng' : 'kiện'
+    return `(${parsed.splits.map((s) => `${s.pkg} ${unitWord} ${s.warehouse}`).join(' - ')})`
+  }
+  if (parsed.singleWh) {
+    return parsed.singleWh
+  }
+  return '—'
+}
+
+/**
+ * Tổng hợp thông tin Kho xuất cho cả Feature Group (1 hoặc nhiều LPVN Item Code):
+ * - Nếu trong group có khai báo tách kho (VD "1=01;43=60"):
+ *   + Nếu các dòng cùng ghi 1 chuỗi tách kho giống nhau -> dùng trực tiếp (không nhân đôi).
+ *   + Nếu các dòng ghi khác nhau -> cộng gộp theo từng kho.
+ *   + Hiển thị: "(1 kiện 01 - 43 kiện 60)"
+ * - Nếu toàn bộ group chỉ thuộc 1 kho ("01" hoặc "60") -> hiển thị "01" hoặc "60".
+ */
+export function resolveFeatureGroupWarehouse(
+  items: Pick<ForecastRawItem, 'warehouse'>[],
+  unitType: 'kien' | 'thung' = 'kien',
+): {
+  warehouse: string
+  warehouseLabel: string
+  isMultiWarehouse: boolean
+  warehouseSplits: WarehouseSplitItem[]
+} {
+  const rawValues = (items || [])
+    .map((it) => String(it.warehouse ?? '').trim())
+    .filter(Boolean)
+
+  if (rawValues.length === 0) {
+    return {
+      warehouse: '',
+      warehouseLabel: '—',
+      isMultiWarehouse: false,
+      warehouseSplits: [],
+    }
+  }
+
+  const parsedItems = rawValues.map((v) => ({ raw: v, parsed: parseWarehouseValue(v) }))
+  const splitEntries = parsedItems.filter((p) => p.parsed.isSplit && p.parsed.splits.length > 1)
+
+  if (splitEntries.length > 0) {
+    // Kiểm tra xem các dòng split có giống hệt nhau không (VD cặp mã 1220 cùng ghi "1=01;43=60")
+    const canonicalKeys = splitEntries.map((e) =>
+      e.parsed.splits.map((s) => `${s.pkg}=${s.warehouse}`).join(';'),
+    )
+    const uniqueCanonicals = Array.from(new Set(canonicalKeys))
+
+    let finalSplits: WarehouseSplitItem[] = []
+    if (uniqueCanonicals.length === 1) {
+      finalSplits = splitEntries[0].parsed.splits.map((s) => ({ ...s }))
+    } else {
+      // Cộng gộp theo kho nếu mỗi dòng ghi số kiện riêng
+      const agg = new Map<string, number>()
+      splitEntries.forEach((e) => {
+        e.parsed.splits.forEach((s) => {
+          agg.set(s.warehouse, Math.round(((agg.get(s.warehouse) || 0) + s.pkg) * 100) / 100)
+        })
+      })
+      finalSplits = Array.from(agg.entries()).map(([warehouse, pkg]) => ({ pkg, warehouse }))
+    }
+
+    const unitWord = unitType === 'thung' ? 'thùng' : 'kiện'
+    const rawNormalized = finalSplits.map((s) => `${s.pkg}=${s.warehouse}`).join(';')
+    const label = `(${finalSplits.map((s) => `${s.pkg} ${unitWord} ${s.warehouse}`).join(' - ')})`
+
+    return {
+      warehouse: rawNormalized,
+      warehouseLabel: label,
+      isMultiWarehouse: true,
+      warehouseSplits: finalSplits,
+    }
+  }
+
+  // Trường hợp các dòng chỉ có singleWh ('01' hoặc '60')
+  const singleWhs = Array.from(new Set(parsedItems.map((p) => p.parsed.singleWh).filter(Boolean)))
+  if (singleWhs.length === 1) {
+    return {
+      warehouse: singleWhs[0],
+      warehouseLabel: singleWhs[0],
+      isMultiWarehouse: false,
+      warehouseSplits: [],
+    }
+  }
+  if (singleWhs.length > 1) {
+    const joined = singleWhs.join(' - ')
+    return {
+      warehouse: joined,
+      warehouseLabel: joined,
+      isMultiWarehouse: true,
+      warehouseSplits: [],
+    }
+  }
+
+  return {
+    warehouse: '',
+    warehouseLabel: '—',
+    isMultiWarehouse: false,
+    warehouseSplits: [],
+  }
+}
+
 /** Tìm các PO+SO trong rows mới đã tồn tại trong kế hoạch hiện tại (để preview cảnh báo, case-insensitive). */
 export function findDuplicateContainerKeys(
   newRows: Pick<ForecastRawItem, 'po' | 'so'>[],
@@ -346,13 +558,17 @@ export function groupAndSortForecastData(
     return { pack_qty: 0, carton_type: '', carton_spec: '', isSingle: false, missing: false, isEstimated: false }
   }
 
-  // Nhóm cấp 1 theo PO và SO
+  // Nhóm cấp 1 theo PO, SO và trạng thái (pending / ready)
+  // Giúp khi tách lẻ từng line trong group sang Đã xong:
+  // - Các line chưa xong vẫn giữ group ở tab Chờ chuẩn bị
+  // - Các line đã xong tự đồng bộ chung vào group ở tab Đã xong
   const containerMap = new Map<string, ForecastRawItem[]>()
 
   validItems.forEach(item => {
     const po = (item.po || 'UNKNOWN_PO').trim()
     const so = (item.so || 'UNKNOWN_SO').trim()
-    const containerKey = `${po}___${so}`
+    const itemStatus: 'pending' | 'ready' = item.status === 'ready' ? 'ready' : 'pending'
+    const containerKey = `${po}___${so}___${itemStatus}`
 
     // Resolve accessory: nếu metadata nói phụ kiện (theo ma_hang) thì ưu tiên
     let isAcc = Boolean(item.is_accessory)
@@ -517,6 +733,9 @@ export function groupAndSortForecastData(
         totalContainerPkg += featPkg
       }
 
+      // Bóc tách và định dạng Kho xuất cho Feature Group
+      const whInfo = resolveFeatureGroupWarehouse(fItems, unitType)
+
       // Cập nhật #pkg và đơn vị tính vào từng item
       fItems.forEach(it => {
         it.pkg = featPkg
@@ -531,6 +750,10 @@ export function groupAndSortForecastData(
         feature: feat,
         items: fItems,
         totalQty: featQty,
+        warehouse: whInfo.warehouse,
+        warehouseLabel: whInfo.warehouseLabel,
+        isMultiWarehouse: whInfo.isMultiWarehouse,
+        warehouseSplits: whInfo.warehouseSplits,
         pcs_per_pkg: pcsPerPkg,
         pkgCount: featPkg,
         is_accessory: isAccGroup,
