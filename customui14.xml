@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  FGRP - CustomUI14 (Excel 2010 tro len)
+  Namespace 2009/07 => phai nam trong part "customUI/customUI14.xml".
+  Excel 2007 CHI doc part "customUI/customUI.xml" (namespace 2006/01) nen se
+  khong hien tab nay; neu can ho tro 2007 phai tao them ban customUI.xml.
+  Cach gan:
+    1. Mo file .xlsm bang Office RibbonX Editor (office-ribbonx-editor)
+    2. Insert > Office 2010+ Custom UI Part -> dan toan bo file nay -> Save
+  Icon: dat PNG 32x32 vao thu muc "icons" canh file .xlsm, ten = ten macro:
+    icons\FGRP_DayTonKho.png ... (hoac nhung icon qua RibbonX Editor;
+    thieu icon -> tu dung icon co san cua Office)
+  Moi onAction tro dung macro trong FGRP_API.bas (da co tham so Optional control).
+-->
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" loadImage="FGRP_LoadImage">
+  <ribbon startFromScratch="false">
+    <tabs>
+      <tab id="tabFGRP" label="FGRP">
+        <group id="grpFGRP" label="FGRP API">
+          <button id="btnFGRP_TestKetNoi"
+                  label="Kiểm tra kết nối"
+                  size="large"
+                  image="test"
+                  onAction="FGRP_TestKetNoi"
+                  screentip="Kiem tra ket noi Supabase"
+                  supertip="Xac thuc token + xem so dong inventory / master_data / shipping_forecast tren DB." />
+          <separator id="sepFGRP_1" />
+          <button id="btnFGRP_LayDuLieuNhapKho"
+                  label="Nạp TagID và Bin"
+                  size="large"
+                  image="getdata"
+                  onAction="FGRP_LayDuLieuNhapKho"
+                  screentip="Lay du lieu NHAP KHO tu file nguon"
+                  supertip="Chon file nguon (Stock Balance With Batch) -> loc A=8/1220 VA B=01/60 -> ghi sheet TON_KHO (Tag ID, Bin)." />
+          <button id="btnFGRP_LayDuLieuCapNhatNguon"
+                  label="Nạp Nguồn"
+                  size="large"
+                  image="getsource"
+                  onAction="FGRP_LayDuLieuCapNhatNguon"
+                  screentip="Lay du lieu CAP NHAT NGUON tu file nguon"
+                  supertip="Chon file nguon -> chi loc A=8/1220 -> ghi sheet MASTER_DATA (Stock Code, Warehouse, CREATEDATE, BATCH, Qty; bo cot E - BIN)." />
+          <button id="btnFGRP_TimWhKeHoach"
+                  label="Tìm WH Kế hoạch"
+                  size="large"
+                  showLabel="true"
+                  image="Searchdata"
+                  onAction="FGRP_TimWhKeHoach"
+                  screentip="Tim kho xuat (WH) tu PDF Packing List"
+                  supertip="Doi chieu PDF Packing List (Outlook hoac Thu muc) theo PO/SO, Product Code dong 1 va Pack Quantity -> dien cot WH (01, 60 hoac *=WH;*=WH) vao sheet KE_HOACH_XUAT_HANG." />
+          <separator id="sepFGRP_2" />
+          <button id="btnFGRP_DayTonKho"
+                  label="Đẩy dữ liệu"
+                  size="large"
+                  image="Pushdata"
+                  onAction="FGRP_DayTonKho"
+                  screentip="Day TON KHO len DB (that)"
+                  supertip="Ghi THAT: thay the toan bo bang ton kho tren DB bang du lieu sheet TON_KHO." />
+          <button id="btnFGRP_DayCapNhatNguon"
+                  label="Đẩy nguồn"
+                  size="large"
+                  image="Pushsource"
+                  onAction="FGRP_DayCapNhatNguon"
+                  screentip="Day CAP NHAT NGUON len DB (that)"
+                  supertip="Ghi THAT: thay the toan bo bang master_data tren DB bang du lieu sheet MASTER_DATA." />
+          <button id="btnFGRP_DayKeHoachXuatHang"
+                  label="Đẩy kế hoạch"
+                  size="large"
+                  image="pushplan"
+                  onAction="FGRP_DayKeHoachXuatHang"
+                  screentip="Day KE HOACH XUAT HANG len DB (that)"
+                  supertip="Ghi THAT: cong don ke hoach xuat hang (khong xoa du lieu cu) tu sheet KE_HOACH_XUAT_HANG." />
+          <separator id="sepFGRP_3" />
+          <button id="btnFGRP_DayTonKhoThuNghiem"
+                  label="Đẩy thử dữ liệu"
+                  size="large"
+                  image="testpushdata"
+                  onAction="FGRP_DayTonKhoThuNghiem"
+                  screentip="Thu nghiem TON KHO (khong ghi)"
+                  supertip="Dry-run: chi dem so dong hop le, KHONG ghi du lieu." />
+          <button id="btnFGRP_DayCapNhatNguonThuNghiem"
+                  label="Đẩy thử nguồn"
+                  size="large"
+                  image="testpushsource"
+                  onAction="FGRP_DayCapNhatNguonThuNghiem"
+                  screentip="Thu nghiem CAP NHAT NGUON (khong ghi)"
+                  supertip="Dry-run: chi dem so dong hop le, KHONG ghi du lieu." />
+          <button id="btnFGRP_DayKeHoachThuNghiem"
+                  label="Đẩy thử kế hoạch"
+                  size="large"
+                  image="testpushplan"
+                  onAction="FGRP_DayKeHoachThuNghiem"
+                  screentip="Thu nghiem KE HOACH XUAT HANG (khong ghi)"
+                  supertip="Dry-run: chi dem so dong hop le, KHONG ghi du lieu." />
+          <button id="btnFGRP_TaiPdfOutlook"
+                  label="Tải PDF Outlook"
+                  size="large"
+                  showLabel="true"
+                  image="PDF"
+                  onAction="FGRP_TaiToanBoPdfTuOutlook"
+                  screentip="Tai toan bo PDF tu Outlook cua Hong Pham ve SynData (Backup)"
+                  supertip="Che do du phong (Backup): Quet va luu toan bo file PDF tu hop thu Outlook cua Hong Pham ve thu muc SynData de he thong doi chieu truc tiep tu o dia khi quet tu dong khong tim thay." />
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

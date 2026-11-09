@@ -44,6 +44,7 @@ create table if not exists public.shipping_forecast (
   feature text not null,
   loading_date text not null,
   qty numeric not null default 0,
+  warehouse text not null default '',
   pcs_per_pkg numeric not null default 0,
   pkg numeric not null default 0,
   is_accessory boolean not null default false,

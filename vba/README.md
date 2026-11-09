@@ -17,20 +17,32 @@ File này sẽ:
 > rồi sửa hằng `FGRP_TOKEN` trong `vba/FGRP_API.bas` cho khớp.
 
 ### Bước 2: Import module VBA
-1. Mở file Excel (file công cụ) → `Alt + F11` (VBE).
-2. `File → Import File...` → chọn `vba/FGRP_API.bas`.
+1. Mở file Excel (`Đồng bộ dữ liệu Version 2.1.1`) → `Alt + F11` (VBE).
+2. `File → Import File...` → chọn cả 2 file:
+   - `vba/FGRP_API.bas` (hoặc `/workspaces/FGRP/FGRP_API.bas`)
+   - `vba/ModImport.bas` (hoặc `/workspaces/FGRP/ModImport.bas`)
 3. Kiểm tra 3 hằng số CONFIG ở đầu module: `FGRP_URL`, `FGRP_ANON_KEY`, `FGRP_TOKEN`.
+4. Nếu dùng thanh Ribbon (`CustomUI14`), cấu hình mẫu đã có sẵn tại `vba/CustomUI14.xml`.
 
-### Bước 3: Tạo nút bấm (one-click)
+### Bước 3: Tạo nút bấm (one-click trên Ribbon CustomUI14)
 
-**Nhóm lấy dữ liệu từ file nguồn** (mở hộp thoại chọn file, lọc, ghi vào sheet):
+**Nhóm 1 — Lấy dữ liệu từ file nguồn** (mở hộp thoại chọn file, lọc, ghi vào sheet):
 
 | Macro | Chức năng |
 |---|---|
 | `FGRP_LayDuLieuNhapKho` | Chọn file nguồn → lọc kiểu **NHẬP KHO** → ghi sheet `TON_KHO` |
 | `FGRP_LayDuLieuCapNhatNguon` | Chọn file nguồn → lọc kiểu **CẬP NHẬT NGUỒN** → ghi sheet `MASTER_DATA` |
 
-**Nhóm đẩy lên database:**
+**Nhóm 2 — Đối chiếu Kho Xuất (`WH`) từ PDF Packing List (`ModImport.bas`):**
+
+| Macro | Chức năng |
+|---|---|
+| `FGRP_TimWhKeHoach` | Tự động đọc PDF từ thư mục **SynData** (`C:\Users\bbuvqp1\OneDrive - Leggett & Platt, Incorporated\SynData`), nếu thiếu file tự quét Outlook của Hong Pham → tự động điền cột `WH` trên sheet `KE_HOACH_XUAT_HANG` |
+| `FGRP_TaiToanBoPdfTuOutlook` | **Chạy độc lập (chạy lệch)**: Tải toàn bộ file PDF từ email của **Hong Pham <hong.pham@leggett.com>** về thư mục `SynData` trên ổ đĩa. Quá trình tải lưu thẳng xuống đĩa, không nạp vào RAM nên không lo tràn bộ nhớ / mảng lớn |
+| `FGRP_TimWhTuOutlook` | Quét trực tiếp email của Hong Pham trên Outlook (`Inbox` + Subfolders) → tải bổ sung về `SynData` và điền cột `WH` |
+| `FGRP_TimWhTuThuMuc` | Chọn thư mục chứa file PDF trên máy tính → điền cột `WH` |
+
+**Nhóm 3 — Đẩy lên database (`FGRP_API.bas`):**
 
 | Macro | Chức năng |
 |---|---|
@@ -38,8 +50,9 @@ File này sẽ:
 | `FGRP_DayTonKhoThuNghiem` | Chạy thử, **không ghi** dữ liệu (dry-run) |
 | `FGRP_DayCapNhatNguon` | Đẩy **Cập Nhật Nguồn (Master Data)** — **thay thế toàn bộ** |
 | `FGRP_DayCapNhatNguonThuNghiem` | Chạy thử, **không ghi** dữ liệu (dry-run) |
-| `FGRP_DayKeHoachXuatHang` | Đẩy **Kế Hoạch Xuất Hàng** — **cộng dồn**, không xóa dữ liệu cũ |
+| `FGRP_DayKeHoachXuatHang` | Đẩy **Kế Hoạch Xuất Hàng** (gồm cả cột **WH / Kho xuất**: `01`, `60`, hoặc tách kho `*=WH;*=WH` như `1=01;43=60`) — **cộng dồn**, không xóa dữ liệu cũ |
 | `FGRP_DayKeHoachThuNghiem` | Chạy thử, **không ghi** dữ liệu (dry-run) |
+| `FGRP_TaiToanBoPdfTuOutlook` | **Nút "Tải PDF Outlook"** (icon `image="PDF"`, nằm cạnh nhóm "Đẩy thử..."): Tải toàn bộ PDF từ email Hong Pham về SynData (chế độ dự phòng khi quét tự động không thấy) |
 | `FGRP_TestKetNoi` | Kiểm tra kết nối + xem số dòng hiện có trên DB |
 
 ## 2. Lấy dữ liệu từ file nguồn (Stock Balance With Batch)

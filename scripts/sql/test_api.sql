@@ -57,14 +57,14 @@ begin
   if v <> 100 then raise exception 'FAIL: count sau ghi thật = % (kỳ vọng 100)', v; end if;
 end $$;
 
--- 5. Kế hoạch xuất hàng: append (cộng dồn), bỏ dòng thiếu item_code, feature fallback
+-- 5. Kế hoạch xuất hàng: append (cộng dồn), bỏ dòng thiếu item_code, feature fallback, lưu warehouse (WH)
 truncate public.shipping_forecast;
 do $$
 declare
   v integer;
   payload jsonb := '[
-    {"po":"PO-1","so":"SO-1","item_code":"8101010104","loading_date":"19/10/2026","qty":6750},
-    {"po":"PO-1","so":"SO-1","item_code":"1220190004","loading_date":"19/10/2026","qty":"2000","feature":"1220"},
+    {"po":"PO-1","so":"SO-1","item_code":"8101010104","loading_date":"19/10/2026","qty":6750,"warehouse":"60","wh":"60"},
+    {"po":"PO-1","so":"SO-1","item_code":"1220190004","loading_date":"19/10/2026","qty":"2000","warehouse":"1=01;43=60","wh":"1=01;43=60","feature":"1220"},
     {"po":"","so":"","item_code":"","qty":1}
   ]'::jsonb;
 begin
@@ -78,8 +78,10 @@ declare v integer;
 begin
   select count(*) into v from public.shipping_forecast;
   if v <> 4 then raise exception 'FAIL: append count = % (kỳ vọng 4 — cộng dồn)', v; end if;
-  select count(*) into v from public.shipping_forecast where feature = '1010' and item_code = '8101010104';
-  if v <> 2 then raise exception 'FAIL: feature fallback 1010 sai (count=%)', v; end if;
+  select count(*) into v from public.shipping_forecast where feature = '1010' and item_code = '8101010104' and warehouse = '60';
+  if v <> 2 then raise exception 'FAIL: feature fallback 1010 hoặc warehouse=60 sai (count=%)', v; end if;
+  select count(*) into v from public.shipping_forecast where item_code = '1220190004' and warehouse = '1=01;43=60';
+  if v <> 2 then raise exception 'FAIL: warehouse tách kho 1=01;43=60 sai (count=%)', v; end if;
   select count(*) into v from public.shipping_forecast where qty = 6750;
   if v <> 2 then raise exception 'FAIL: qty numeric sai'; end if;
 end $$;

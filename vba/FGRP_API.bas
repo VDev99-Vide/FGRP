@@ -18,6 +18,12 @@ Attribute VB_Name = "FGRP_API"
 '      - FGRP_DayKeHoachThuNghiem  : thu nghiem, KHONG ghi du lieu
 '      - FGRP_TestKetNoi           : kiem tra ket noi + xem so dong tren DB
 '
+'   GAN RIBBON (khong can nut tren sheet):
+'   - Mo file .xlsm bang Office RibbonX Editor -> Insert > Office 2007+ CustomUI
+'     -> dan noi dung vba/CustomUI14.xml -> Save. (Or customUI14.xml into the file.)
+'   - Icon (tuy chon): tao thu muc "icons" canh file .xlsm, dat PNG ten = ten
+'     macro (vi du icons\FGRP_DayTonKho.png). Thieu icon -> dung icon Office.
+'
 ' Quy tac loc tu file nguon (sheet dau tien, dong 1 = tieu de):
 '   - Cot A = Stock Code: chi lay dong bat dau bang "8" hoac "1220"
 '   - NHAP KHO: them dieu kien cot B (Warehouse) = "01" hoac "60"
@@ -27,7 +33,8 @@ Attribute VB_Name = "FGRP_API"
 '
 ' Luu y:
 '   - Cot duoc tu dong nhan dien theo tieu de (Tag ID / Ma kien, Bin / Vi tri;
-'     PO, SO, Container, Item Code / Ma hang, Loading date, Qty, Pkg).
+'     PO, SO, Container, Item Code / Ma hang, Loading date, Qty, WH / Kho xuat, Pkg).
+'   - Cot WH (Kho xuat) ho tro 1 kho ("01", "60") hoac tach kho (*=WH;*=WH, VD: "1=01;43=60").
 '   - Du lieu gui duoi dang JSON thuan ASCII (ky tu tieng Viet duoc escape
 '     \uXXXX) nen khong bi loi font/encoding khi truyen qua HTTPS.
 '   - Ton kho: server se TU CHOI neu file co cung Tag ID + Bin lap lai.
@@ -63,7 +70,7 @@ Private Const CHUNK_SIZE As Long = 1000
 
 ' ================= PUBLIC MACROS =================
 
-Public Sub FGRP_TestKetNoi()
+Public Sub FGRP_TestKetNoi(Optional ByVal control As Object)
   On Error GoTo Fail
   Dim resp As String
   resp = HttpPostRpc("api_healthcheck", "{""p_token"":""" & JsonEscape(FGRP_TOKEN) & """}")
@@ -73,36 +80,81 @@ Fail:
   MsgBox "Ket noi that bai:" & vbCrLf & Err.Description, vbCritical, "FGRP API"
 End Sub
 
-Public Sub FGRP_DayTonKho()
+Public Sub FGRP_DayTonKho(Optional ByVal control As Object)
   PushTonKho False
 End Sub
 
-Public Sub FGRP_DayTonKhoThuNghiem()
+Public Sub FGRP_DayTonKhoThuNghiem(Optional ByVal control As Object)
   PushTonKho True
 End Sub
 
-Public Sub FGRP_DayKeHoachXuatHang()
+Public Sub FGRP_DayKeHoachXuatHang(Optional ByVal control As Object)
   PushKeHoach False
 End Sub
 
-Public Sub FGRP_DayKeHoachThuNghiem()
+Public Sub FGRP_DayKeHoachThuNghiem(Optional ByVal control As Object)
   PushKeHoach True
 End Sub
 
-Public Sub FGRP_LayDuLieuNhapKho()
+Public Sub FGRP_LayDuLieuNhapKho(Optional ByVal control As Object)
   LayDuLieuTuFileNguon True
 End Sub
 
-Public Sub FGRP_LayDuLieuCapNhatNguon()
+Public Sub FGRP_LayDuLieuCapNhatNguon(Optional ByVal control As Object)
   LayDuLieuTuFileNguon False
 End Sub
 
-Public Sub FGRP_DayCapNhatNguon()
+Public Sub FGRP_DayCapNhatNguon(Optional ByVal control As Object)
   PushMasterData False
 End Sub
 
-Public Sub FGRP_DayCapNhatNguonThuNghiem()
+Public Sub FGRP_DayCapNhatNguonThuNghiem(Optional ByVal control As Object)
   PushMasterData True
+End Sub
+
+' ================= RIBBON (CustomUI14) =================
+' Moi macro FGRP_* nhan them tham so Optional "control" => chay duoc tu:
+'   - Ribbon CustomUI14 (onAction, xem vba/CustomUI14.xml)
+'   - Nut tren sheet (khong tham so)
+'   - F8 / Run trong VBE
+'
+' Icon: tao thu muc "icons" nam CANH file Excel cong cu (.xlsm),
+' dat file PNG 32x32 ten = ten macro, vi du:
+'   icons\FGRP_DayTonKho.png
+'   icons\FGRP_LayDuLieuNhapKho.png
+' Thieu file nao thi nut do tu dung icon co san cua Office (khong loi).
+
+Public Sub FGRP_LoadImage(ByVal imageName As String, ByRef returnedImage As Variant)
+  Dim basePath As String, ext As Variant, filePath As String
+  On Error Resume Next
+  Set returnedImage = Nothing
+
+  basePath = ThisWorkbook.path & Application.PathSeparator & "icons" & Application.PathSeparator & imageName
+  For Each ext In Array(".png", ".jpg", ".jpeg", ".bmp", ".gif")
+    filePath = basePath & CStr(ext)
+    If Len(Dir$(filePath)) > 0 Then
+      Set returnedImage = LoadPicture(filePath)
+      If Not returnedImage Is Nothing Then Exit Sub
+    End If
+  Next ext
+
+  ' Fallback icon MSO co san (neu Office khong co id nay thi bo qua, khong loi)
+  Dim msoId As String
+  Select Case LCase$(imageName)
+    Case "fgrp_laydulieunhapkho", "fgrp_laydulieucapnhatnguon", "getdata", "getsource"
+      msoId = "FileOpen"
+    Case "fgrp_timwhkehoach", "fgrp_timwhtuoutlook", "fgrp_timwhtuthumuc", "searchdata"
+      msoId = "ZoomPrintPreview"
+    Case "fgrp_testketnoi", "test"
+      msoId = "RefreshAll"
+    Case "fgrp_daytonkho", "fgrp_daycapnhatnguon", "fgrp_daykehoachxuathang", "pushdata", "pushsource", "pushplan"
+      msoId = "FileSave"
+    Case "fgrp_taitoanbopdftuoutlook", "fgrp_taipdfsyndata", "pdf"
+      msoId = "FileSaveAsPdfOrXps"
+    Case Else
+      msoId = "HappyFace"
+  End Select
+  Set returnedImage = Application.CommandBars.GetImageMso(msoId, 32, 32)
 End Sub
 
 ' ================= TON KHO =================
@@ -121,7 +173,7 @@ Private Sub PushTonKho(ByVal dryRun As Boolean)
   Set ws = ResolveSheet(SHEET_TON_KHO)
   arr = ws.UsedRange.Value2
   If Not IsArray(arr) Then
-    MsgBox "Sheet '" & ws.Name & "' dang trong, khong co du lieu.", vbExclamation, "FGRP API"
+    MsgBox "Sheet '" & ws.name & "' dang trong, khong co du lieu.", vbExclamation, "FGRP API"
     Exit Sub
   End If
 
@@ -130,14 +182,14 @@ Private Sub PushTonKho(ByVal dryRun As Boolean)
   colBin = FindCol(headers, Array("bin", "vitri", "location", "kho", "warehouse", "okho", "vitrikho", "wh"))
 
   If colTag = 0 Then
-    MsgBox "Khong tim thay cot 'Tag ID' (hoac 'Ma kien', 'Batch'...) trong sheet '" & ws.Name & "'." & vbCrLf & _
+    MsgBox "Khong tim thay cot 'Tag ID' (hoac 'Ma kien', 'Batch'...) trong sheet '" & ws.name & "'." & vbCrLf & _
            "Dong tieu de phai nam o dong 1.", vbCritical, "FGRP API"
     Exit Sub
   End If
 
   nRows = UBound(arr, 1)
   If nRows < 2 Then
-    MsgBox "Sheet '" & ws.Name & "' chi co dong tieu de, khong co du lieu.", vbExclamation, "FGRP API"
+    MsgBox "Sheet '" & ws.name & "' chi co dong tieu de, khong co du lieu.", vbExclamation, "FGRP API"
     Exit Sub
   End If
 
@@ -172,7 +224,7 @@ Private Sub PushTonKho(ByVal dryRun As Boolean)
   Application.StatusBar = False
   modeText = IIf(dryRun, "THU NGHIEM (khong ghi du lieu)", "DA GHI VAO DATABASE")
   MsgBox "TON KHO THANH PHAM - " & modeText & vbCrLf & vbCrLf & _
-         "Doc tu sheet: " & ws.Name & vbCrLf & _
+         "Doc tu sheet: " & ws.name & vbCrLf & _
          "So dong hop le gui len: " & totalRead & vbCrLf & _
          "Server xac nhan: " & serverCount & vbCrLf & vbCrLf & _
          "Luu y: du lieu TON KHO moi THAY THE toan bo du lieu cu.", vbInformation, "FGRP API"
@@ -202,57 +254,64 @@ Private Sub PushKeHoach(ByVal dryRun As Boolean)
   Dim ws As Worksheet, arr As Variant
   Dim headers As Variant
   Dim colPo As Long, colSo As Long, colCont As Long, colItem As Long
-  Dim colDate As Long, colQty As Long, colPcs As Long, colPkg As Long
+  Dim colDate As Long, colQty As Long, colWh As Long, colPcs As Long, colPkg As Long
   Dim nRows As Long, i As Long
   Dim buf As String, bufCount As Long
-  Dim totalRead As Long, serverCount As Long
-  Dim modeText As String
+  Dim totalRead As Long, whCount As Long, serverCount As Long
+  Dim modeText As String, whInfoText As String
 
   On Error GoTo Fail
 
   Set ws = ResolveSheet(SHEET_KE_HOACH)
   arr = ws.UsedRange.Value2
   If Not IsArray(arr) Then
-    MsgBox "Sheet '" & ws.Name & "' dang trong, khong co du lieu.", vbExclamation, "FGRP API"
+    MsgBox "Sheet '" & ws.name & "' dang trong, khong co du lieu.", vbExclamation, "FGRP API"
     Exit Sub
   End If
 
   headers = HeaderRowArray(arr)
-  colPo = FindCol(headers, Array("po", "ponumber", "sopo", "donhang", "purchaseorder"))
-  colSo = FindCol(headers, Array("so", "sonumber", "salesorder", "donhangban", "soso"))
-  colCont = FindCol(headers, Array("container", "containerno", "cont", "socontainer"))
-  colItem = FindCol(headers, Array("itemcode", "lpvnitemcode", "lpvn", "item", "mahang", "stockcode", "lpno", "masanpham", "productcode"))
-  colDate = FindCol(headers, Array("loadingdate", "ngayxuat", "ngaygiao", "etd", "dateship", "ngaydi", "ngayloading", "ngayxuat hang"))
-  colQty = FindCol(headers, Array("qty", "quantity", "soluong", "sl", "pcs"))
-  colPcs = FindCol(headers, Array("pcsperpkg", "pcspkg", "pcsperbox", "pcspercarton"))
+  colPo = FindCol(headers, Array("po", "ponumber", "sopo", "donhang", "purchaseorder", "mapo", "purchaseno"))
+  colSo = FindCol(headers, Array("so", "sonumber", "salesorder", "donhangban", "soso", "maso"))
+  colCont = FindCol(headers, Array("container", "containerno", "cont", "socontainer", "contno", "socont"))
+  colItem = FindCol(headers, Array("itemcode", "lpvnitemcode", "lpvn", "item", "mahang", "stockcode", "lpno", "masanpham", "productcode", "partnumber", "partno", "code"))
+  colDate = FindCol(headers, Array("loadingdate", "loading", "ngaydonghang", "ngayxuat", "ngaygiao", "etd", "dateship", "shipdate", "shipmentdate", "ngaydi", "ngayloading", "ngayxuathang", "date", "ngay"))
+  colQty = FindCol(headers, Array("qty", "quantity", "soluong", "sl", "pcs", "tongxuat", "actual", "soluongxuat", "amount", "total"))
+  colWh = FindCol(headers, Array("wh", "khoxuat", "warehouse", "kho", "whlocation", "makho", "makhoxuat", "khoxuathang", "khoxuatwh", "whkhoxuat", "whwhwh", "whse", "location", "vitrikho"))
+  If colWh = 0 Then colWh = FindWhColFallback(headers)
+  colPcs = FindCol(headers, Array("pcsperpkg", "pcspkg", "pcsperbox", "pcspercarton", "quycach", "quycachdonggoi", "packing", "pcsctn", "pcscarton", "pcskien", "packsize", "pkgqty"))
   colPkg = FindCol(headers, Array("pkg", "carton", "thung", "sokien", "kien", "box"))
 
   If colItem = 0 Then
-    MsgBox "Khong tim thay cot 'Item Code' (hoac 'Ma hang', 'LP.No', 'Stock Code'...) trong sheet '" & ws.Name & "'." & vbCrLf & _
+    MsgBox "Khong tim thay cot 'Item Code' (hoac 'Ma hang', 'LP.No', 'Stock Code'...) trong sheet '" & ws.name & "'." & vbCrLf & _
            "Dong tieu de phai nam o dong 1.", vbCritical, "FGRP API"
     Exit Sub
   End If
 
   nRows = UBound(arr, 1)
   If nRows < 2 Then
-    MsgBox "Sheet '" & ws.Name & "' chi co dong tieu de, khong co du lieu.", vbExclamation, "FGRP API"
+    MsgBox "Sheet '" & ws.name & "' chi co dong tieu de, khong co du lieu.", vbExclamation, "FGRP API"
     Exit Sub
   End If
 
   buf = ""
   bufCount = 0
   totalRead = 0
+  whCount = 0
   serverCount = 0
 
   For i = 2 To nRows
     Dim item As String
     item = Trim$(CStr(arr(i, colItem) & ""))
     If Len(item) > 0 Then
-      Dim po As String, so As String, cont As String
-      po = "": so = "": cont = ""
+      Dim po As String, so As String, cont As String, wh As String
+      po = "": so = "": cont = "": wh = ""
       If colPo > 0 Then po = Trim$(CStr(arr(i, colPo) & ""))
       If colSo > 0 Then so = Trim$(CStr(arr(i, colSo) & ""))
       If colCont > 0 Then cont = Trim$(CStr(arr(i, colCont) & ""))
+      If colWh > 0 Then
+        wh = NormalizeForecastWh(arr(i, colWh))
+        If Len(wh) > 0 Then whCount = whCount + 1
+      End If
 
       Dim dateVal As Variant, qtyVal As Variant, pcsVal As Variant, pkgVal As Variant
       dateVal = Empty: qtyVal = Empty: pcsVal = Empty: pkgVal = Empty
@@ -268,6 +327,8 @@ Private Sub PushKeHoach(ByVal dryRun As Boolean)
             """item_code"":""" & JsonEscape(item) & """," & _
             """loading_date"":""" & JsonEscape(DateToDdMmVy(dateVal)) & """," & _
             """qty"":" & NumToJson(qtyVal) & "," & _
+            """warehouse"":""" & JsonEscape(wh) & """," & _
+            """wh"":""" & JsonEscape(wh) & """," & _
             """pcs_per_pkg"":" & NumToJson(pcsVal) & "," & _
             """pkg"":" & NumToJson(pkgVal) & "}"
       bufCount = bufCount + 1
@@ -286,11 +347,18 @@ Private Sub PushKeHoach(ByVal dryRun As Boolean)
     serverCount = serverCount + SendForecastChunk(buf, totalRead, dryRun)
   End If
 
+  If colWh > 0 Then
+    whInfoText = "Da nhan dien (" & Trim$(CStr(headers(colWh))) & " - " & whCount & "/" & totalRead & " dong co WH)"
+  Else
+    whInfoText = "Khong co cot WH trong sheet (gui rong)"
+  End If
+
   Application.StatusBar = False
   modeText = IIf(dryRun, "THU NGHIEM (khong ghi du lieu)", "DA GHI VAO DATABASE (cong don)")
   MsgBox "KE HOACH XUAT HANG - " & modeText & vbCrLf & vbCrLf & _
-         "Doc tu sheet: " & ws.Name & vbCrLf & _
+         "Doc tu sheet: " & ws.name & vbCrLf & _
          "So dong hop le gui len: " & totalRead & vbCrLf & _
+         "Cot Kho xuat (WH): " & whInfoText & vbCrLf & _
          "Server xac nhan: " & serverCount & vbCrLf & vbCrLf & _
          "Luu y: ke hoach xuat hang duoc CONG DON, khong xoa du lieu cu.", vbInformation, "FGRP API"
   Exit Sub
@@ -326,7 +394,7 @@ Private Sub PushMasterData(ByVal dryRun As Boolean)
   Set ws = ResolveSheet(SHEET_MASTER)
   arr = ws.UsedRange.Value2
   If Not IsArray(arr) Then
-    MsgBox "Sheet '" & ws.Name & "' dang trong, khong co du lieu.", vbExclamation, "FGRP API"
+    MsgBox "Sheet '" & ws.name & "' dang trong, khong co du lieu.", vbExclamation, "FGRP API"
     Exit Sub
   End If
 
@@ -338,14 +406,14 @@ Private Sub PushMasterData(ByVal dryRun As Boolean)
   colDate = FindCol(headers, Array("createdate", "date", "ngaytao", "ngaynhap", "creationdate"))
 
   If colBatch = 0 Or colStock = 0 Then
-    MsgBox "Khong tim thay cot 'BATCH' va/hoac 'Stock Code' trong sheet '" & ws.Name & "'." & vbCrLf & _
+    MsgBox "Khong tim thay cot 'BATCH' va/hoac 'Stock Code' trong sheet '" & ws.name & "'." & vbCrLf & _
            "Dong tieu de phai nam o dong 1.", vbCritical, "FGRP API"
     Exit Sub
   End If
 
   nRows = UBound(arr, 1)
   If nRows < 2 Then
-    MsgBox "Sheet '" & ws.Name & "' chi co dong tieu de, khong co du lieu.", vbExclamation, "FGRP API"
+    MsgBox "Sheet '" & ws.name & "' chi co dong tieu de, khong co du lieu.", vbExclamation, "FGRP API"
     Exit Sub
   End If
 
@@ -391,7 +459,7 @@ Private Sub PushMasterData(ByVal dryRun As Boolean)
   Application.StatusBar = False
   modeText = IIf(dryRun, "THU NGHIEM (khong ghi du lieu)", "DA GHI VAO DATABASE")
   MsgBox "CAP NHAT NGUON (MASTER DATA) - " & modeText & vbCrLf & vbCrLf & _
-         "Doc tu sheet: " & ws.Name & vbCrLf & _
+         "Doc tu sheet: " & ws.name & vbCrLf & _
          "So dong hop le gui len: " & totalRead & vbCrLf & _
          "Bo qua (thieu BATCH/Stock Code): " & boQua & vbCrLf & _
          "Server xac nhan: " & serverCount & vbCrLf & vbCrLf & _
@@ -522,7 +590,7 @@ Private Sub LayDuLieuTuFileNguon(ByVal choNhapKho As Boolean)
           "Tong dong du lieu doc: " & (nRows - 1) & vbCrLf & _
           "Dong hop le (A=8/1220 va B=01/60): " & k & vbCrLf & _
           "Bo qua (BATCH rong): " & boQua & vbCrLf & _
-          "Da ghi vao sheet '" & ws.Name & "' (Tag ID, Bin)"
+          "Da ghi vao sheet '" & ws.name & "' (Tag ID, Bin)"
     If dupGroups > 0 Then
       msg = msg & vbCrLf & vbCrLf & _
             "CANH BAO: " & dupRows & " dong du do trung cap Tag ID + Bin (" & dupGroups & " nhom)." & vbCrLf & _
@@ -583,7 +651,7 @@ Private Sub LayDuLieuTuFileNguon(ByVal choNhapKho As Boolean)
            "Sheet nguon: " & sheetNguon & vbCrLf & _
            "Tong dong du lieu doc: " & (nRows - 1) & vbCrLf & _
            "Dong hop le (A bat dau 8/1220): " & k & vbCrLf & _
-           "Da ghi vao sheet '" & ws.Name & "' (Stock Code, Warehouse, CREATEDATE, BATCH, Qty)" & vbCrLf & vbCrLf & _
+           "Da ghi vao sheet '" & ws.name & "' (Stock Code, Warehouse, CREATEDATE, BATCH, Qty)" & vbCrLf & vbCrLf & _
            "Buoc tiep theo: kiem tra roi bam FGRP_DayCapNhatNguonThuNghiem (thu) hoac FGRP_DayCapNhatNguon (that).", _
            vbInformation, "FGRP API"
   End If
@@ -610,7 +678,7 @@ Private Function ReadFirstSheetArr(ByVal path As String, ByRef sheetName As Stri
   Dim wb As Workbook, ws As Worksheet, arr As Variant
   Set wb = Workbooks.Open(Filename:=path, ReadOnly:=True, UpdateLinks:=0, AddToMru:=False)
   Set ws = wb.Worksheets(1)
-  sheetName = ws.Name
+  sheetName = ws.name
   arr = ws.UsedRange.Value2
   wb.Close SaveChanges:=False
   ReadFirstSheetArr = arr
@@ -643,6 +711,57 @@ Private Function NormalizeWh(ByVal v As Variant) As String
   NormalizeWh = s
 End Function
 
+' Chuan hoa cot Kho xuat (WH) cho Ke Hoach Xuat Hang (dong bo voi frontend):
+'   - 1 kho: 1 -> "01", "01" -> "01", 60 -> "60", "Kho 01" -> "01"
+'   - Tach kho (*=WH;*=WH): "1=01;43=60" hoac "1=1;43=60" -> "1=01;43=60"
+Private Function NormalizeForecastWh(ByVal v As Variant) As String
+  Dim s As String
+  If IsEmpty(v) Or IsNull(v) Then Exit Function
+  s = Trim$(CStr(v))
+  If Len(s) = 0 Then Exit Function
+
+  If InStr(1, s, "=") > 0 Then
+    Dim parts As Variant, idx As Long, part As String
+    Dim eqPos As Long, pkgPart As String, whPart As String, out As String
+    parts = Split(s, ";")
+    For idx = LBound(parts) To UBound(parts)
+      part = Trim$(CStr(parts(idx)))
+      If Len(part) > 0 Then
+        eqPos = InStr(1, part, "=")
+        If eqPos > 0 Then
+          pkgPart = Trim$(Left$(part, eqPos - 1))
+          whPart = NormalizeSingleWhCode(Mid$(part, eqPos + 1))
+          part = pkgPart & "=" & whPart
+        Else
+          part = NormalizeSingleWhCode(part)
+        End If
+        If Len(out) > 0 Then out = out & ";"
+        out = out & part
+      End If
+    Next idx
+    NormalizeForecastWh = out
+    Exit Function
+  End If
+
+  NormalizeForecastWh = NormalizeSingleWhCode(s)
+End Function
+
+Private Function NormalizeSingleWhCode(ByVal rawWh As String) As String
+  Dim s As String
+  s = Trim$(rawWh)
+  If Len(s) = 0 Then Exit Function
+  If LCase$(Left$(s, 4)) = "kho " Then
+    s = Trim$(Mid$(s, 5))
+  ElseIf LCase$(Left$(s, 3)) = "wh " Then
+    s = Trim$(Mid$(s, 4))
+  End If
+  If s = "1" Then
+    NormalizeSingleWhCode = "01"
+  Else
+    NormalizeSingleWhCode = s
+  End If
+End Function
+
 Private Function EnsureSheet(ByVal name As String) As Worksheet
   Dim ws As Worksheet
   On Error Resume Next
@@ -650,7 +769,7 @@ Private Function EnsureSheet(ByVal name As String) As Worksheet
   On Error GoTo 0
   If ws Is Nothing Then
     Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    ws.Name = name
+    ws.name = name
   End If
   Set EnsureSheet = ws
 End Function
@@ -788,7 +907,7 @@ Private Function ResolveSheet(ByVal preferredName As String) As Worksheet
   If ws Is Nothing Then
     Set ws = ActiveSheet
     MsgBox "Khong tim thay sheet '" & preferredName & "'." & vbCrLf & _
-           "Tam dung sheet dang mo: '" & ws.Name & "'.", vbExclamation, "FGRP API"
+           "Tam dung sheet dang mo: '" & ws.name & "'.", vbExclamation, "FGRP API"
   End If
   Set ResolveSheet = ws
 End Function
@@ -819,6 +938,21 @@ Private Function FindCol(ByVal headers As Variant, ByVal aliases As Variant) As 
     End If
   Next j
   FindCol = 0
+End Function
+
+' Fallback nhan dien cot WH neu tieu de co kem chu thich (VD: "WH (*=WH;*=WH)", "Kho xuat (WH)")
+Private Function FindWhColFallback(ByVal headers As Variant) As Long
+  Dim j As Long, h As String
+  For j = LBound(headers) To UBound(headers)
+    h = NormHeader(headers(j))
+    If Len(h) > 0 Then
+      If InStr(1, h, "khoxuat") > 0 Or InStr(1, h, "warehouse") > 0 Or Left$(h, 2) = "wh" Then
+        FindWhColFallback = j
+        Exit Function
+      End If
+    End If
+  Next j
+  FindWhColFallback = 0
 End Function
 
 ' Chuan hoa tieu de: chu thuong, bo dau tieng Viet, chi giu a-z 0-9
@@ -856,3 +990,5 @@ Private Function ReplaceChars(ByVal s As String, ByVal codes As Variant, ByVal r
   Next i
   ReplaceChars = res
 End Function
+
+

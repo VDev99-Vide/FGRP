@@ -122,12 +122,12 @@ if (invDry.status < 300 && Number(invDry.text.trim()) === 2) {
   fail('dry-run tồn kho', `status=${invDry.status} body=${invDry.text.slice(0, 160)}`)
 }
 
-console.log('\n[5] DRY-RUN kế hoạch xuất hàng (2 dòng giả)')
+console.log('\n[5] DRY-RUN kế hoạch xuất hàng (2 dòng giả + cột WH tách kho)')
 const fcDry = await rpc('api_import_shipping_forecast', {
   p_token: TOKEN,
   payload: [
-    { po: 'DRY-PO', so: 'DRY-SO', item_code: '8101010104', loading_date: '01/01/2027', qty: 10 },
-    { po: 'DRY-PO', so: 'DRY-SO', item_code: '', loading_date: '', qty: 1 }
+    { po: 'DRY-PO', so: 'DRY-SO', item_code: '8101010104', loading_date: '01/01/2027', qty: 10, warehouse: '1=01;43=60', wh: '1=01;43=60' },
+    { po: 'DRY-PO', so: 'DRY-SO', item_code: '', loading_date: '', qty: 1, warehouse: '60', wh: '60' }
   ],
   p_mode: 'append',
   p_dry_run: true
